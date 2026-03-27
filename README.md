@@ -71,6 +71,7 @@ llmproxy claude:setup --model 2
 llmproxy status
 llmproxy logs
 llmproxy logs --follow
+llmproxy version
 ```
 
 ## Configurare Claude Code
@@ -296,7 +297,11 @@ Supporta `--model <indice>` per impostare `ANTHROPIC_DEFAULT_MODEL` dal catalogo
 ### `llmproxy update`
 
 Aggiorna l'installazione globale di `llmproxy` clonando l'ultima versione della repository GitHub `alessiobacin/llmProxy` e reinstallandola globalmente.
-Avvia il proxy in foreground.
+Dopo l'update rilancia il binario aggiornato con `llmproxy version` per verificare che la nuova installazione sia attiva.
+
+### `llmproxy version`
+
+Stampa la versione corrente della CLI installata.
 
 ### `llmproxy status`
 
@@ -394,7 +399,6 @@ Vedi anche [.env.example](.env.example).
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` | retention dei log JSONL |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | dimensione massima di un file JSONL prima della rotazione |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | numero massimo di file JSONL archiviati per giornata |
-| `MODEL_MAP` | vuoto | override JSON del mapping modelli |
 
 ## Persistenza Dopo Reboot
 

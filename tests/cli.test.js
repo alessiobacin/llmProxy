@@ -352,6 +352,20 @@ test("claude:setup rejects model names and requires a numeric index", async () =
   assert.match(stderr.toString(), /Usa l'indice numerico di `llmproxy models:list`/);
 });
 
+test("version prints the current package version", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-version-"));
+  const stdout = createWritableBuffer();
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+
+  const exitCode = await runCli(["node", "llmproxy", "version"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stdout.toString(), `${pkg.version}\n`);
+});
+
 test("update runs the package manager command for the latest llmproxy release", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-"));
   const stdout = createWritableBuffer();
@@ -362,17 +376,24 @@ test("update runs the package manager command for the latest llmproxy release", 
     stdout,
     commandRunner(command, args) {
       executed.push([command, args]);
+      if (command === "llmproxy") {
+        return { status: 0, stdout: "0.1.0", stderr: "" };
+      }
       return { status: 0, stdout: "updated", stderr: "" };
     },
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(executed, [[
-    "sh",
+  assert.deepEqual(executed, [
     [
-      "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\npnpm add -g \"$package_file\"",
+      "sh",
+      [
+        "-c",
+        "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"",
+      ],
     ],
-  ]]);
+    ["llmproxy", ["version"]],
+  ]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
+  assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
 });

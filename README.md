@@ -292,8 +292,10 @@ Mostra una guida descrittiva dei comandi disponibili, con:
 - a cosa serve ogni comando
 - quando usarlo
 - il flusso consigliato per prima configurazione, servizio persistente, fallback provider e aggiornamenti
+- una sezione troubleshooting con i problemi piu` comuni
 
 Supporta anche `llmproxy help <comando>` per vedere una scheda piu` dettagliata del singolo comando.
+La scheda del singolo comando include sintassi, descrizione, quando usarlo ed un esempio pratico.
 
 ### `llmproxy service:restart`
 

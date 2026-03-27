@@ -380,6 +380,7 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);
   assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);
   assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
+  assert.match(stdout.toString(), /Problemi comuni:/);
 });
 
 test("help <command> prints detailed guidance for a specific command", async () => {
@@ -395,6 +396,8 @@ test("help <command> prints detailed guidance for a specific command", async () 
   assert.match(stdout.toString(), /llmproxy claude:setup \[--model <indice>\]/);
   assert.match(stdout.toString(), /Quando usarlo:/);
   assert.match(stdout.toString(), /Scrive \.claude\/settings\.json/);
+  assert.match(stdout.toString(), /Esempio:/);
+  assert.match(stdout.toString(), /llmproxy claude:setup --model 2/);
 });
 
 test("--help is an alias for help", async () => {

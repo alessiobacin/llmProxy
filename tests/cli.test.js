@@ -366,6 +366,22 @@ test("version prints the current package version", async () => {
   assert.equal(stdout.toString(), `${pkg.version}\n`);
 });
 
+test("help prints a short description for each command", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /llmproxy login\s+autentica GitHub Copilot/i);
+  assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);
+  assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);
+  assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
+});
+
 test("update runs the package manager command for the latest llmproxy release", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-"));
   const stdout = createWritableBuffer();
@@ -385,9 +401,34 @@ test("update runs the package manager command for the latest llmproxy release", 
     "sh",
     [
       "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    ln -sf \"$new_bin\" \"$installed_bin\"\n  fi\ndone\nversion_bin=\"$new_bin\"\nfirst_bin=$(printf '%s\\n' \"$existing_bins\" | head -n 1)\nif [ -n \"$first_bin\" ] && [ -x \"$first_bin\" ]; then\n  version_bin=\"$first_bin\"\nfi\nversion_output=$(\"$version_bin\" version)\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\"\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\"\n  fi\ndone\nversion_output=$(\"$new_bin\" version)\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
     ],
   ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
+});
+
+test("uninstall removes both npm and pnpm global installs", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-"));
+  const stdout = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "uninstall"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(executed, [[
+    "sh",
+    [
+      "-c",
+      "set -e\nnpm uninstall -g llmproxy >/dev/null 2>&1 || true\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\"\nfi",
+    ],
+  ]]);
+  assert.match(stdout.toString(), /Disinstallazione completata/);
 });

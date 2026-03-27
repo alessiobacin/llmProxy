@@ -71,6 +71,7 @@ llmproxy claude:setup --model 2
 llmproxy status
 llmproxy logs
 llmproxy logs --follow
+llmproxy help
 llmproxy version
 ```
 
@@ -284,6 +285,14 @@ Non e` un demone di sistema globale: parte nel contesto dell'utente.
 
 Ferma il servizio persistente nativo.
 
+### `llmproxy help`
+
+Mostra una guida descrittiva dei comandi disponibili, con:
+
+- a cosa serve ogni comando
+- quando usarlo
+- il flusso consigliato per prima configurazione, servizio persistente, fallback provider e aggiornamenti
+
 ### `llmproxy service:restart`
 
 Riavvia il servizio persistente nativo.
@@ -298,10 +307,16 @@ Supporta `--model <indice>` per impostare `ANTHROPIC_DEFAULT_MODEL` dal catalogo
 
 Aggiorna l'installazione globale di `llmproxy` clonando l'ultima versione della repository GitHub `alessiobacin/llmProxy` e reinstallandola globalmente.
 Dopo l'update rilancia il binario aggiornato con `llmproxy version` per verificare che la nuova installazione sia attiva.
+Durante l'update viene mantenuta una sola installazione globale attiva e vengono rimossi eventuali wrapper globali duplicati di `pnpm`.
 
 ### `llmproxy version`
 
 Stampa la versione corrente della CLI installata.
+
+### `llmproxy uninstall`
+
+Rimuove `llmproxy` dalle installazioni globali supportate e pulisce eventuali wrapper residui.
+Usalo quando vuoi disinstallare completamente la CLI dal sistema.
 
 ### `llmproxy status`
 

@@ -376,24 +376,18 @@ test("update runs the package manager command for the latest llmproxy release", 
     stdout,
     commandRunner(command, args) {
       executed.push([command, args]);
-      if (command === "llmproxy") {
-        return { status: 0, stdout: "0.1.0", stderr: "" };
-      }
-      return { status: 0, stdout: "updated", stderr: "" };
+      return { status: 0, stdout: "changed 69 packages in 3s\n__LLMPROXY_VERSION__=0.1.0\n", stderr: "" };
     },
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(executed, [
+  assert.deepEqual(executed, [[
+    "sh",
     [
-      "sh",
-      [
-        "-c",
-        "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"",
-      ],
+      "-c",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nactive_bin=$(command -v llmproxy || true)\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nif [ -n \"$active_bin\" ] && [ \"$active_bin\" != \"$new_bin\" ]; then\n  cp \"$new_bin\" \"$active_bin\"\n  chmod +x \"$active_bin\"\nfi\nif [ -n \"$active_bin\" ] && [ -x \"$active_bin\" ]; then\n  version_output=$(\"$active_bin\" version)\nelse\n  version_output=$(\"$new_bin\" version)\nfi\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
     ],
-    ["llmproxy", ["version"]],
-  ]);
+  ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
 });

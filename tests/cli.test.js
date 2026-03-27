@@ -382,6 +382,48 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
 });
 
+test("help <command> prints detailed guidance for a specific command", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-command-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "claude:setup"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /llmproxy claude:setup \[--model <indice>\]/);
+  assert.match(stdout.toString(), /Quando usarlo:/);
+  assert.match(stdout.toString(), /Scrive \.claude\/settings\.json/);
+});
+
+test("--help is an alias for help", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-alias-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "--help"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Comandi principali:/);
+});
+
+test("--version is an alias for version", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-version-alias-"));
+  const stdout = createWritableBuffer();
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+
+  const exitCode = await runCli(["node", "llmproxy", "--version"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stdout.toString(), `${pkg.version}\n`);
+});
+
 test("update runs the package manager command for the latest llmproxy release", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-"));
   const stdout = createWritableBuffer();

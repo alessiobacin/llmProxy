@@ -293,6 +293,8 @@ Mostra una guida descrittiva dei comandi disponibili, con:
 - quando usarlo
 - il flusso consigliato per prima configurazione, servizio persistente, fallback provider e aggiornamenti
 
+Supporta anche `llmproxy help <comando>` per vedere una scheda piu` dettagliata del singolo comando.
+
 ### `llmproxy service:restart`
 
 Riavvia il servizio persistente nativo.
@@ -312,6 +314,13 @@ Durante l'update viene mantenuta una sola installazione globale attiva e vengono
 ### `llmproxy version`
 
 Stampa la versione corrente della CLI installata.
+
+Puoi usare anche gli alias `llmproxy --version` e `llmproxy -v`.
+
+### Alias utili
+
+- `llmproxy --help` e `llmproxy -h` equivalgono a `llmproxy help`
+- `llmproxy --version` e `llmproxy -v` equivalgono a `llmproxy version`
 
 ### `llmproxy uninstall`
 

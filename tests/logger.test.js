@@ -18,8 +18,23 @@ test("request logger writes audit entries with request and project metadata", ()
     requestId: "req_123",
     projectPath: "/Users/example/project-alpha",
     projectPathSource: "header",
-    model: "claude-sonnet-4.5",
+    projectName: "yt-monitor",
+    projectNameSource: "package.json",
+    requestedModel: "glm-5",
+    effectiveModel: "claude-sonnet-4.5",
     stream: true,
+  });
+
+  logger.logProviderResult({
+    requestId: "req_123",
+    provider: "default",
+    endpoint: "chat",
+    success: true,
+    status: 200,
+    requestedModel: "glm-5",
+    effectiveModel: "claude-sonnet-4.5",
+    actualModel: "claude-sonnet-4.5",
+    projectName: "yt-monitor",
   });
 
   const files = fs.readdirSync(root);
@@ -27,8 +42,11 @@ test("request logger writes audit entries with request and project metadata", ()
 
   const content = fs.readFileSync(path.join(root, files[0]), "utf8");
   assert.match(content, /req_123/);
-  assert.match(content, /project-alpha/);
+  assert.match(content, /yt-monitor/);
+  assert.match(content, /glm-5/);
   assert.match(content, /claude-sonnet-4.5/);
+  assert.match(content, /provider_result/);
+  assert.match(content, /"provider":"default"/);
 });
 
 test("request logger rotates JSONL logs when they exceed the configured size", () => {

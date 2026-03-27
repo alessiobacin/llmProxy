@@ -36,7 +36,7 @@ llmproxy run
 Per default il server parte su:
 
 ```text
-http://127.0.0.1:4141
+http://127.0.0.1:3015
 ```
 
 ### 4. Aggiungere un provider Copilot di fallback
@@ -96,7 +96,7 @@ Se preferisci configurare a mano, usa una sezione `env` simile a questa:
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "proxy-local",
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:4141",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
     "ANTHROPIC_DEFAULT_MODEL": "claude-opus-4.5",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
@@ -109,7 +109,7 @@ Se preferisci configurare a mano, usa una sezione `env` simile a questa:
 - `ANTHROPIC_AUTH_TOKEN`
   Con `llmProxy` puo` essere un valore fittizio non vuoto, per esempio `proxy-local`.
 - `ANTHROPIC_BASE_URL`
-  Deve puntare al proxy `llmProxy`. Il default di questo package e` `http://127.0.0.1:4141`.
+  Deve puntare al proxy `llmProxy`. Il default di questo package e` `http://127.0.0.1:3015`.
 - `ANTHROPIC_DEFAULT_MODEL`
   Deve essere un modello supportato da GitHub Copilot. Puoi ricavarlo da `llmproxy models:list`.
 - `API_TIMEOUT_MS`
@@ -130,7 +130,7 @@ Esempio minimo:
 ```json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:4141",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
     "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-4.5"
   }
 }
@@ -419,7 +419,7 @@ Vedi anche [.env.example](.env.example).
 
 | Variabile | Default | Uso |
 | --- | --- | --- |
-| `PORT` | `4141` | porta del proxy |
+| `PORT` | `3015` | porta del proxy |
 | `HOST` | `127.0.0.1` | host bind del server |
 | `LLMPROXY_HOME` | auto | cartella dati runtime |
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` | retention dei log JSONL |

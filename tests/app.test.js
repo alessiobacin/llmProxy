@@ -99,7 +99,7 @@ test("messages endpoint proxies a non-stream Copilot response into Anthropic for
     assert.equal(payload.type, "message");
     assert.equal(payload.role, "assistant");
     assert.equal(payload.content[0].text, "pong from copilot");
-    assert.equal(payload.model, "claude-sonnet-4-5");
+    assert.equal(payload.model, "claude-sonnet-4.5");
   });
 });
 
@@ -180,6 +180,22 @@ test("messages endpoint falls back to a supported Copilot model when the client 
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
   tokenStore.save({ access_token: "token-xyz" });
   const requestBodies = [];
+  const loggerCalls = [];
+  const logger = {
+    logIncomingRequest(entry) {
+      loggerCalls.push({ type: "incoming", entry });
+    },
+    logProviderAttempt(entry) {
+      loggerCalls.push({ type: "attempt", entry });
+    },
+    logProviderResult(entry) {
+      loggerCalls.push({ type: "result", entry });
+    },
+  };
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  fs.mkdirSync(workspaceRoot, { recursive: true });
+  fs.writeFileSync(path.join(workspaceRoot, "package.json"), JSON.stringify({ name: "yt-monitor" }, null, 2));
 
   const fetchFn = async (_url, options = {}) => {
     requestBodies.push(JSON.parse(String(options.body || "{}")));
@@ -205,6 +221,7 @@ test("messages endpoint falls back to a supported Copilot model when the client 
     dataRoot: tempRoot,
     tokenStore,
     fetchFn,
+    logger,
   });
 
   await withServer(app, async (baseUrl) => {
@@ -212,6 +229,7 @@ test("messages endpoint falls back to a supported Copilot model when the client 
       method: "POST",
       headers: {
         "content-type": "application/json",
+        "x-project-path": workspaceRoot,
       },
       body: JSON.stringify({
         model: "glm-5",
@@ -229,6 +247,123 @@ test("messages endpoint falls back to a supported Copilot model when the client 
     assert.equal(response.status, 200);
     assert.equal(requestBodies.length, 1);
     assert.equal(requestBodies[0].model, "claude-sonnet-4.5");
+    const payload = await response.json();
+    assert.equal(payload.model, "claude-sonnet-4.5");
+
+    const incoming = loggerCalls.find((call) => call.type === "incoming");
+    const attempt = loggerCalls.find((call) => call.type === "attempt");
+    const result = loggerCalls.find((call) => call.type === "result" && call.entry.success);
+    assert.ok(incoming);
+    assert.ok(attempt);
+    assert.ok(result);
+    assert.equal(incoming.entry.projectName, "yt-monitor");
+    assert.equal(incoming.entry.requestedModel, "glm-5");
+    assert.equal(incoming.entry.effectiveModel, "claude-sonnet-4.5");
+    assert.equal(attempt.entry.provider, "default");
+    assert.equal(attempt.entry.requestedModel, "glm-5");
+    assert.equal(attempt.entry.effectiveModel, "claude-sonnet-4.5");
+    assert.equal(result.entry.actualModel, "claude-sonnet-4.5");
+    assert.equal(result.entry.projectName, "yt-monitor");
+  });
+});
+
+test("messages endpoint prefers the Claude project-configured model over the incoming requested model", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-project-model-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-xyz" });
+  const requestBodies = [];
+  const loggerCalls = [];
+  const logger = {
+    logIncomingRequest(entry) {
+      loggerCalls.push({ type: "incoming", entry });
+    },
+    logProviderAttempt(entry) {
+      loggerCalls.push({ type: "attempt", entry });
+    },
+    logProviderResult(entry) {
+      loggerCalls.push({ type: "result", entry });
+    },
+  };
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(workspaceRoot, "package.json"), JSON.stringify({ name: "yt-monitor" }, null, 2));
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:3015",
+      ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(tempRoot, "copilot-models.json"), JSON.stringify({
+    updatedAt: "2026-03-27T00:00:00.000Z",
+    models: ["gpt-5.4", "claude-sonnet-4.5"],
+  }, null, 2));
+
+  const fetchFn = async (_url, options = {}) => {
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "gpt-5.4",
+          choices: [
+            {
+              message: { content: "configured model ok" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 11, completion_tokens: 5 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+    logger,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "glm-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "gpt-5.4");
+    assert.equal(requestBodies.length, 1);
+    assert.equal(requestBodies[0].model, "gpt-5.4");
+
+    const incoming = loggerCalls.find((call) => call.type === "incoming");
+    const attempt = loggerCalls.find((call) => call.type === "attempt");
+    const result = loggerCalls.find((call) => call.type === "result" && call.entry.success);
+    assert.ok(incoming);
+    assert.ok(attempt);
+    assert.ok(result);
+    assert.equal(incoming.entry.configuredModel, "gpt-5.4");
+    assert.equal(incoming.entry.effectiveModel, "gpt-5.4");
+    assert.equal(attempt.entry.effectiveModel, "gpt-5.4");
+    assert.equal(result.entry.actualModel, "gpt-5.4");
   });
 });
 

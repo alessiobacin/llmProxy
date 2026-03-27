@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
-const { detectProjectContext } = require("../lib/project-context");
+const { detectProjectContext, resolveProjectMetadata, resolveClaudeProjectSettings } = require("../lib/project-context");
 
 test("detectProjectContext prefers explicit header project path", () => {
   const result = detectProjectContext({
@@ -31,4 +34,37 @@ test("detectProjectContext extracts path from system prompt when headers are mis
 
   assert.equal(result.projectPath, "/Users/example/project-alpha");
   assert.equal(result.source, "system");
+});
+
+test("resolveProjectMetadata reads the nearest package.json name from the project tree", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-project-context-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, "package.json"), JSON.stringify({ name: "yt-monitor" }, null, 2));
+
+  const result = resolveProjectMetadata(nestedDir);
+
+  assert.equal(result.projectName, "yt-monitor");
+  assert.equal(result.projectNameSource, "package.json");
+});
+
+test("resolveClaudeProjectSettings reads the configured model from the nearest Claude settings", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.configuredModel, "gpt-5.4");
+  assert.equal(result.configuredModelSource, "settings.json");
 });

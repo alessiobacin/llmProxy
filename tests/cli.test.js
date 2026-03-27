@@ -37,7 +37,7 @@ test("claude:setup creates .claude/settings.json for the current project", async
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
   assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
-  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:4141");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "claude-sonnet-4.5");
   assert.equal(settings.env.API_TIMEOUT_MS, "3000000");
   assert.equal(settings.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, "1");
@@ -80,6 +80,29 @@ test("claude:setup merges env settings without overwriting unrelated project set
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://0.0.0.0:4242");
   assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
   assert.match(stdout.toString(), /http:\/\/0\.0\.0\.0:4242/);
+});
+
+test("claude:setup loads HOST and PORT from the llmproxy package .env file", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-dotenv-project-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-dotenv-runtime-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-dotenv-package-"));
+  const stdout = createWritableBuffer();
+
+  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=3015\nHOST=127.0.0.1\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    packageRoot,
+    stdout,
+  });
+
+  const settingsFile = path.join(tempRoot, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
+  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:3015/);
 });
 
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {

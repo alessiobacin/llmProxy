@@ -36,6 +36,7 @@ test("claude:setup creates .claude/settings.json for the current project", async
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
+  assert.equal(settings.model, "claude-sonnet-4.5");
   assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "claude-sonnet-4.5");
@@ -101,6 +102,7 @@ test("claude:setup loads HOST and PORT from the llmproxy package .env file", asy
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
 
   assert.equal(exitCode, 0);
+  assert.equal(settings.model, "claude-sonnet-4.5");
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:3015/);
 });
@@ -353,6 +355,7 @@ test("claude:setup resolves model indexes from the live Copilot catalog", async 
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
 
   assert.equal(exitCode, 0);
+  assert.equal(settings.model, "o3");
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "o3");
   assert.match(stdout.toString(), /Default model: o3/);
 });

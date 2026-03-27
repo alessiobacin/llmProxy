@@ -90,10 +90,11 @@ Il comando crea o aggiorna `.claude/settings.json` nella cartella corrente facen
 L'opzione `--model` accetta l'indice numerico preso da `llmproxy models:list`.
 Quando sei autenticato, `llmproxy models:list` legge il catalogo live da GitHub Copilot e lo salva in cache locale, quindi l'indice riflette i modelli realmente disponibili per il tuo account.
 
-Se preferisci configurare a mano, usa una sezione `env` simile a questa:
+Se preferisci configurare a mano, imposta sia il campo top-level `model` sia la sezione `env` in modo coerente:
 
 ```json
 {
+  "model": "claude-opus-4.5",
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "proxy-local",
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
@@ -105,6 +106,9 @@ Se preferisci configurare a mano, usa una sezione `env` simile a questa:
 ```
 
 ### Significato delle variabili
+
+- `model`
+  E` il modello che Claude Code considera attivo nella sessione e quello mostrato nell'interfaccia. Deve corrispondere al modello che vuoi instradare verso `llmProxy`.
 
 - `ANTHROPIC_AUTH_TOKEN`
   Con `llmProxy` puo` essere un valore fittizio non vuoto, per esempio `proxy-local`.
@@ -122,6 +126,7 @@ Se preferisci configurare a mano, usa una sezione `env` simile a questa:
 Se stavi gia` usando un proxy locale o una configurazione precedente di Claude Code, qui ci sono le differenze importanti:
 
 - `ANTHROPIC_BASE_URL` deve puntare al servizio `llmProxy`
+- `model` e `ANTHROPIC_DEFAULT_MODEL` devono avere lo stesso valore se vuoi che interfaccia Claude Code, request canonica e log coincidano
 - `ANTHROPIC_DEFAULT_MODEL` deve essere un modello GitHub Copilot valido
 - non serve PM2: il servizio persistente viene gestito dal service manager nativo (`launchd` o `systemd --user`)
 
@@ -129,6 +134,7 @@ Esempio minimo:
 
 ```json
 {
+  "model": "claude-sonnet-4.5",
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
     "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-4.5"

@@ -361,9 +361,12 @@ test("messages endpoint prefers the Claude project-configured model over the inc
     assert.ok(attempt);
     assert.ok(result);
     assert.equal(incoming.entry.configuredModel, "gpt-5.4");
+    assert.equal(incoming.entry.requestedModel, "gpt-5.4");
     assert.equal(incoming.entry.effectiveModel, "gpt-5.4");
+    assert.equal(attempt.entry.requestedModel, "gpt-5.4");
     assert.equal(attempt.entry.effectiveModel, "gpt-5.4");
     assert.equal(result.entry.actualModel, "gpt-5.4");
+    assert.equal(result.entry.requestedModel, "gpt-5.4");
   });
 });
 

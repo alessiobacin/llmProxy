@@ -68,3 +68,24 @@ test("resolveClaudeProjectSettings reads the configured model from the nearest C
   assert.equal(result.configuredModel, "gpt-5.4");
   assert.equal(result.configuredModelSource, "settings.json");
 });
+
+test("resolveClaudeProjectSettings prefers the top-level Claude model when present", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-model-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "gpt-5.3-codex",
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.configuredModel, "gpt-5.3-codex");
+  assert.equal(result.configuredModelSource, "settings.json:model");
+});

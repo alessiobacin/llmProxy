@@ -1,0 +1,378 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const { runCli } = require("../lib/cli");
+
+function createWritableBuffer() {
+  let output = "";
+  return {
+    write(chunk) {
+      output += String(chunk);
+    },
+    toString() {
+      return output;
+    },
+  };
+}
+
+test("claude:setup creates .claude/settings.json for the current project", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-project-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+  });
+
+  const settingsFile = path.join(tempRoot, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:4141");
+  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "claude-sonnet-4.5");
+  assert.equal(settings.env.API_TIMEOUT_MS, "3000000");
+  assert.equal(settings.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, "1");
+  assert.match(stdout.toString(), /settings\.json/);
+});
+
+test("claude:setup merges env settings without overwriting unrelated project settings", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-merge-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
+  const claudeDir = path.join(tempRoot, ".claude");
+  const settingsFile = path.join(claudeDir, "settings.json");
+  const stdout = createWritableBuffer();
+
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(settingsFile, JSON.stringify({
+    permissions: {
+      allow: ["Bash(node:*)"],
+    },
+    env: {
+      EXISTING_FLAG: "keep-me",
+      ANTHROPIC_BASE_URL: "http://old-host:9999",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    env: {
+      PORT: "4242",
+      HOST: "0.0.0.0",
+    },
+    stdout,
+  });
+
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(settings.permissions, { allow: ["Bash(node:*)"] });
+  assert.equal(settings.env.EXISTING_FLAG, "keep-me");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://0.0.0.0:4242");
+  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
+  assert.match(stdout.toString(), /http:\/\/0\.0\.0\.0:4242/);
+});
+
+test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-"));
+  const stdout = createWritableBuffer();
+  const fetchPayloads = [
+    {
+      verification_uri: "https://github.com/login/device",
+      user_code: "ABCD-EFGH",
+      device_code: "device-code-1",
+      interval: 0,
+    },
+    {
+      access_token: "backup-token",
+      token_type: "bearer",
+      scope: "read:user",
+    },
+  ];
+
+  const fetchFn = async () => ({
+    ok: true,
+    async json() {
+      return fetchPayloads.shift();
+    },
+  });
+
+  const addExitCode = await runCli(["node", "llmproxy", "provider:add", "backup", "--name", "Backup Copilot"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+    sleep: async () => {},
+  });
+
+  const listStdout = createWritableBuffer();
+  const listExitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout: listStdout,
+  });
+
+  assert.equal(addExitCode, 0);
+  assert.equal(listExitCode, 0);
+  assert.match(stdout.toString(), /Login completato/);
+  assert.match(listStdout.toString(), /1\. backup \(Backup Copilot\)/);
+});
+
+test("provider:order moves providers to the requested fallback position", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-order-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("primary", { access_token: "token-primary", token_type: "bearer", scope: "read:user" }, { name: "Primary" });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:order", "backup", "1"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 0);
+  assert.deepEqual(reloaded.listProviders().map((provider) => provider.id), ["backup", "primary"]);
+  assert.match(stdout.toString(), /backup/);
+});
+
+test("provider:rename updates the provider display name", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-rename-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Old Name" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:rename", "backup", "New Backup Name"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 0);
+  assert.equal(reloaded.getProvider("backup").name, "New Backup Name");
+  assert.match(stdout.toString(), /New Backup Name/);
+});
+
+test("provider:status shows ordered providers and identifies the active one", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-status-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("primary", { access_token: "token-primary", token_type: "bearer", scope: "read:user" }, { name: "Primary" });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+  tokenStore.moveProvider("backup", 1);
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:status"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Active provider: backup/);
+  assert.match(stdout.toString(), /1\. backup \(Backup\) \[active\]/);
+  assert.match(stdout.toString(), /2\. primary \(Primary\)/);
+});
+
+test("status shows configured fallback provider order", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-status-extended-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("primary", { access_token: "token-primary", token_type: "bearer", scope: "read:user" }, { name: "Primary" });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+  tokenStore.moveProvider("backup", 1);
+
+  const exitCode = await runCli(["node", "llmproxy", "status"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+    serviceManager: {
+      kind: "launchd",
+      status() {
+        return { ok: true, active: true, stdout: "", stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Fallback order: backup, primary/);
+  assert.match(stdout.toString(), /Active provider: backup/);
+});
+
+test("logs prints structured request logs when service stdout and stderr are empty", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-logs-"));
+  const logsDir = path.join(runtimeRoot, "logs");
+  const stdout = createWritableBuffer();
+
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.writeFileSync(path.join(logsDir, "service.out.log"), "", "utf8");
+  fs.writeFileSync(path.join(logsDir, "service.err.log"), "", "utf8");
+  fs.writeFileSync(
+    path.join(logsDir, "requests-2026-03-27.jsonl"),
+    `${JSON.stringify({ event: "request_in", model: "glm-5" })}\n${JSON.stringify({ event: "provider_result", error: "model_not_supported" })}\n`,
+    "utf8",
+  );
+
+  const exitCode = await runCli(["node", "llmproxy", "logs"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /request_in/);
+  assert.match(stdout.toString(), /glm-5/);
+  assert.match(stdout.toString(), /model_not_supported/);
+});
+
+test("models:list prints a numbered list of available models", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-list-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "models:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /1\. /);
+  assert.match(stdout.toString(), /claude-sonnet-4\.5|claude-opus-4\.5|gpt-5/);
+});
+
+test("models:list uses the live Copilot model catalog when authenticated", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-live-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-live", token_type: "bearer", scope: "read:user" });
+
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        data: [
+          { id: "gpt-4.1", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+          { id: "o3", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+        ],
+      };
+    },
+  });
+
+  const exitCode = await runCli(["node", "llmproxy", "models:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /1\. gpt-4\.1/);
+  assert.match(stdout.toString(), /2\. o3/);
+});
+
+test("claude:setup accepts a model index from the numbered model list", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-select-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup", "--model", "2"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const settingsFile = path.join(tempRoot, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.notEqual(settings.env.ANTHROPIC_DEFAULT_MODEL, "");
+  assert.match(stdout.toString(), /Default model:/);
+  assert.match(stdout.toString(), new RegExp(settings.env.ANTHROPIC_DEFAULT_MODEL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("claude:setup resolves model indexes from the live Copilot catalog", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-live-select-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-live", token_type: "bearer", scope: "read:user" });
+
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        data: [
+          { id: "gpt-4.1", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+          { id: "o3", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+        ],
+      };
+    },
+  });
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup", "--model", "2"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+    fetchFn,
+  });
+
+  const settingsFile = path.join(tempRoot, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "o3");
+  assert.match(stdout.toString(), /Default model: o3/);
+});
+
+test("claude:setup rejects model names and requires a numeric index", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-name-rejected-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup", "--model", "gpt-4.1"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Usa l'indice numerico di `llmproxy models:list`/);
+});
+
+test("update runs the package manager command for the latest llmproxy release", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-"));
+  const stdout = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      return { status: 0, stdout: "updated", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(executed, [[
+    "sh",
+    [
+      "-c",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\npnpm add -g \"$tmpdir/repo\"",
+    ],
+  ]]);
+  assert.match(stdout.toString(), /Aggiornamento completato/);
+});

@@ -360,6 +360,84 @@ test("claude:setup resolves model indexes from the live Copilot catalog", async 
   assert.match(stdout.toString(), /Default model: o3/);
 });
 
+test("install:persistent installs the current package globally and starts the persistent macOS service", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-macos-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "darwin",
+    stdout,
+    stderr,
+    commandRunner(command, args, spawnOptions) {
+      commandCalls.push({ command, args, spawnOptions });
+      return {
+        status: 0,
+        stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/local/bin/llmproxy\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.equal(commandCalls.length, 1);
+  assert.equal(commandCalls[0].command, "sh");
+  assert.equal(commandCalls[0].spawnOptions.encoding, "utf8");
+  assert.match(commandCalls[0].args[1], /case "\$platform" in/);
+  assert.match(commandCalls[0].args[1], /darwin\|linux\)/);
+  assert.match(commandCalls[0].args[1], /npm install -g '\/tmp\/llmproxy-package'/);
+  assert.match(commandCalls[0].args[1], /"\$global_bin" service:start/);
+  assert.match(stdout.toString(), /Installazione persistente completata/);
+  assert.match(stdout.toString(), /\/usr\/local\/bin\/llmproxy/);
+});
+
+test("install:persistent prints linger guidance on Linux", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linux-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "linux",
+    stdout,
+    commandRunner() {
+      return {
+        status: 0,
+        stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /loginctl enable-linger/);
+});
+
+test("install:persistent fails fast on unsupported platforms", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-win-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "win32",
+    stdout,
+    stderr,
+    commandRunner() {
+      throw new Error("commandRunner should not be called");
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Piattaforma non supportata/);
+});
+
 test("claude:setup rejects model names and requires a numeric index", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-name-rejected-"));
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));

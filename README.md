@@ -3,6 +3,23 @@
 `llmProxy` e` un package standalone che espone un proxy GitHub Copilot Anthropic-compatible su `/v1/messages` e una CLI globale per login, avvio, status, log, servizio persistente e fallback tra piu` account GitHub Copilot.
 ## Quick Start
 
+### Bootstrap persistente consigliato
+
+Se vuoi installare la CLI in modo persistente con un solo comando, il flusso consigliato e` questo:
+
+```bash
+npm run install:persistent
+```
+
+Il bootstrap:
+
+- rileva automaticamente l'OS supportato (`macOS` o `Linux`)
+- installa globalmente la CLI corrente con `npm install -g`
+- rimuove eventuali wrapper globali duplicati
+- lancia `llmproxy service:start` tramite il binario globale appena installato
+
+In questo modo il servizio persistente punta sempre all'installazione globale definitiva partendo dal checkout locale del repository.
+
 ### 1. Verifica setup runtime
 
 ```bash
@@ -53,6 +70,12 @@ llmproxy provider:rename backup "Backup EU"
 
 ```bash
 llmproxy service:start
+```
+
+Oppure, se vuoi fare installazione globale + attivazione del servizio in un solo passo:
+
+```bash
+npm run install:persistent
 ```
 
 Su macOS questo crea e carica un `LaunchAgent` utente.
@@ -444,6 +467,8 @@ Questo significa:
 - non richiede PM2
 - non parte prima del login dell'utente
 
+Se usi `npm run install:persistent`, il comando installa prima la CLI globalmente e poi registra lo stesso `LaunchAgent`, quindi il riavvio continua a funzionare anche dopo reboot.
+
 ### Linux
 
 Il comando `llmproxy service:start` installa un servizio `systemd --user`.
@@ -452,6 +477,18 @@ Nota pratica:
 
 - in molti ambienti il servizio utente parte quando l'utente effettua login
 - se serve persistenza anche senza login grafico o shell, puo` essere necessario configurare `linger`
+
+Con il bootstrap one-shot:
+
+```bash
+npm run install:persistent
+```
+
+la CLI viene prima installata globalmente e poi il servizio `systemd --user` viene abilitato. Per garantire riavvio anche senza login utente, abilita anche:
+
+```bash
+sudo loginctl enable-linger $USER
+```
 
 ## Logging
 

@@ -175,6 +175,82 @@ test("messages endpoint falls back to the next Copilot provider when the first o
   });
 });
 
+test("messages endpoint falls back to the next Copilot provider when the first one is blocked by safety policy", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-safety-fallback-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("primary", { access_token: "token-primary", token_type: "bearer", scope: "read:user" }, { name: "Primary" });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+
+  const attempts = [];
+  const fetchFn = async (_url, options = {}) => {
+    const authHeader = options.headers?.Authorization || "";
+    attempts.push(authHeader);
+
+    if (authHeader === "Bearer token-primary") {
+      return {
+        ok: false,
+        status: 400,
+        async text() {
+          return JSON.stringify({
+            error: {
+              message: "This request has been flagged for potentially high-risk cyber activity. Learn more here: https://platform.openai.com/docs/guides/safety-checks/cybersecurity",
+              code: "invalid_request_body",
+            },
+          });
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "gpt-5.4",
+          choices: [
+            {
+              message: { content: "served by backup after safety block" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 11, completion_tokens: 4 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.4",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.content[0].text, "served by backup after safety block");
+    assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
+  });
+});
+
 test("messages endpoint falls back to a supported Copilot model when the client sends an unsupported model", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-model-fallback-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

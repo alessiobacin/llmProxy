@@ -164,6 +164,7 @@ llmproxy claude:setup --model 2
 
 ```bash
 llmproxy status
+llmproxy test
 llmproxy logs
 llmproxy logs --follow
 llmproxy help
@@ -342,6 +343,17 @@ Mostra l'elenco numerato dei modelli disponibili che puoi usare con `llmproxy cl
 
 Se sei autenticato, il comando interroga il catalogo live `https://api.githubcopilot.com/models` e salva il risultato in cache locale.
 Se il catalogo live non e` raggiungibile, usa la cache locale o il fallback statico incluso nel progetto.
+
+### `llmproxy test`
+
+Esegue un test rapido di inferenza contro il proxy locale inviando questo prompt fisso:
+
+```text
+Ciao! rispondimi solo: ciao creatore
+```
+
+Se il proxy risponde correttamente, il comando stampa a terminale solo il testo restituito dall'assistant.
+E` utile per verificare rapidamente che il servizio locale sia attivo e che il percorso `/v1/messages` stia funzionando.
 
 ### `llmproxy provider:add <id> [--name <name>]`
 

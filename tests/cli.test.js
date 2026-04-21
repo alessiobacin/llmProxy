@@ -303,6 +303,50 @@ test("models:list uses the live Copilot model catalog when authenticated", async
   assert.match(stdout.toString(), /2\. o3/);
 });
 
+test("test sends a fixed inference prompt to the local proxy and prints the assistant reply", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-command-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const requests = [];
+
+  const fetchFn = async (url, options = {}) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4.5",
+          content: [{ type: "text", text: "ciao creatore" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "http://127.0.0.1:3015/v1/messages");
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers["content-type"], "application/json");
+
+  const body = JSON.parse(requests[0].options.body);
+  assert.equal(body.stream, false);
+  assert.equal(body.max_tokens, 64);
+  assert.equal(body.messages[0].role, "user");
+  assert.equal(body.messages[0].content[0].text, "Ciao! rispondimi solo: ciao creatore");
+  assert.equal(stdout.toString(), "ciao creatore\n");
+});
+
 test("claude:setup accepts a model index from the numbered model list", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-select-"));
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
@@ -605,6 +649,7 @@ test("help prints a short description for each command", async () => {
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /llmproxy install:persistent-it\s+installa globalmente la CLI corrente/i);
   assert.match(stdout.toString(), /llmproxy install:persistent-en\s+installs the current CLI globally/i);
+  assert.match(stdout.toString(), /llmproxy test\s+esegue un test rapido di inferenza contro il proxy locale/i);
   assert.match(stdout.toString(), /llmproxy login\s+autentica GitHub Copilot/i);
   assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);
   assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);

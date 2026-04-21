@@ -10,7 +10,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "install:persistent": "node bin/llmproxy.js install:persistent",
+    "install:persistent": "node bin/llmproxy.js install:persistent-it",
+    "install:persistent-it": "node bin/llmproxy.js install:persistent-it",
+    "install:persistent-en": "node bin/llmproxy.js install:persistent-en",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

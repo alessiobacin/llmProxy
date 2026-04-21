@@ -360,13 +360,13 @@ test("claude:setup resolves model indexes from the live Copilot catalog", async 
   assert.match(stdout.toString(), /Default model: o3/);
 });
 
-test("install:persistent installs the current package globally and starts the persistent macOS service", async () => {
+test("install:persistent-it installs the current package globally and starts the persistent macOS service in Italian", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-macos-"));
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const commandCalls = [];
 
-  const exitCode = await runCli(["node", "llmproxy", "install:persistent"], {
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
     dataRoot: runtimeRoot,
     packageRoot: "/tmp/llmproxy-package",
     platform: "darwin",
@@ -395,11 +395,38 @@ test("install:persistent installs the current package globally and starts the pe
   assert.match(stdout.toString(), /\/usr\/local\/bin\/llmproxy/);
 });
 
-test("install:persistent prints linger guidance on Linux", async () => {
+test("install:persistent-en installs the current package globally and starts the persistent macOS service in English", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-macos-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "darwin",
+    stdout,
+    stderr,
+    commandRunner() {
+      return {
+        status: 0,
+        stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/local/bin/llmproxy\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.match(stdout.toString(), /Persistent installation completed/);
+  assert.match(stdout.toString(), /Global binary: \/usr\/local\/bin\/llmproxy/);
+  assert.match(stdout.toString(), /Persistent service enabled with launchd/);
+});
+
+test("install:persistent-it prints linger guidance on Linux", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linux-"));
   const stdout = createWritableBuffer();
 
-  const exitCode = await runCli(["node", "llmproxy", "install:persistent"], {
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
     dataRoot: runtimeRoot,
     packageRoot: "/tmp/llmproxy-package",
     platform: "linux",
@@ -417,12 +444,35 @@ test("install:persistent prints linger guidance on Linux", async () => {
   assert.match(stdout.toString(), /loginctl enable-linger/);
 });
 
-test("install:persistent fails fast on unsupported platforms", async () => {
+test("install:persistent-en prints linger guidance on Linux in English", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-linux-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "linux",
+    stdout,
+    commandRunner() {
+      return {
+        status: 0,
+        stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Linux note:/);
+  assert.match(stdout.toString(), /loginctl enable-linger/);
+});
+
+test("install:persistent-it fails fast on unsupported platforms", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-win-"));
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
 
-  const exitCode = await runCli(["node", "llmproxy", "install:persistent"], {
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
     dataRoot: runtimeRoot,
     packageRoot: "/tmp/llmproxy-package",
     platform: "win32",
@@ -436,6 +486,79 @@ test("install:persistent fails fast on unsupported platforms", async () => {
   assert.equal(exitCode, 1);
   assert.equal(stdout.toString(), "");
   assert.match(stderr.toString(), /Piattaforma non supportata/);
+});
+
+test("install:persistent-en fails fast on unsupported platforms in English", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-win-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "win32",
+    stdout,
+    stderr,
+    commandRunner() {
+      throw new Error("commandRunner should not be called");
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Unsupported platform for persistent installation: win32/);
+});
+
+test("install remains an alias for install:persistent-en", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-alias-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "install"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "darwin",
+    stdout,
+    stderr,
+    commandRunner(command, args, spawnOptions) {
+      commandCalls.push({ command, args, spawnOptions });
+      return {
+        status: 0,
+        stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/local/bin/llmproxy\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.equal(commandCalls.length, 1);
+  assert.equal(commandCalls[0].command, "sh");
+  assert.match(stdout.toString(), /Persistent installation completed/);
+  assert.match(stdout.toString(), /Global binary: \/usr\/local\/bin\/llmproxy/);
+  assert.match(stdout.toString(), /Persistent service enabled with launchd/);
+});
+
+test("install reports unsupported platform errors in English", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-english-win-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "install"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "win32",
+    stdout,
+    stderr,
+    commandRunner() {
+      throw new Error("commandRunner should not be called");
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Unsupported platform for persistent installation: win32/);
 });
 
 test("claude:setup rejects model names and requires a numeric index", async () => {
@@ -480,11 +603,20 @@ test("help prints a short description for each command", async () => {
   });
 
   assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /llmproxy install:persistent-it\s+installa globalmente la CLI corrente/i);
+  assert.match(stdout.toString(), /llmproxy install:persistent-en\s+installs the current CLI globally/i);
   assert.match(stdout.toString(), /llmproxy login\s+autentica GitHub Copilot/i);
   assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);
   assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);
   assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
   assert.match(stdout.toString(), /Problemi comuni:/);
+});
+
+test("package scripts expose install:persistent-it and install:persistent-en", async () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+
+  assert.equal(pkg.scripts["install:persistent-it"], "node bin/llmproxy.js install:persistent-it");
+  assert.equal(pkg.scripts["install:persistent-en"], "node bin/llmproxy.js install:persistent-en");
 });
 
 test("help <command> prints detailed guidance for a specific command", async () => {
@@ -502,6 +634,52 @@ test("help <command> prints detailed guidance for a specific command", async () 
   assert.match(stdout.toString(), /Scrive \.claude\/settings\.json/);
   assert.match(stdout.toString(), /Esempio:/);
   assert.match(stdout.toString(), /llmproxy claude:setup --model 2/);
+});
+
+test("help install prints English guidance for the English install command", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-install-english-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "install"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /^llmproxy install/m);
+  assert.match(stdout.toString(), /Description: English alias for install:persistent/i);
+  assert.match(stdout.toString(), /When to use: Use it when you want a shorter, English-first command/i);
+  assert.match(stdout.toString(), /Example: llmproxy install/i);
+});
+
+test("help install:persistent-en prints English guidance", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-install-persistent-en-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "install:persistent-en"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /^llmproxy install:persistent-en/m);
+  assert.match(stdout.toString(), /Description: Installs the current CLI globally/i);
+  assert.match(stdout.toString(), /When to use: Use it when you want the explicit English install path/i);
+});
+
+test("help install:persistent-it prints Italian guidance", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-install-persistent-it-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "install:persistent-it"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /^llmproxy install:persistent-it/m);
+  assert.match(stdout.toString(), /Descrizione: Installa globalmente la CLI corrente/i);
+  assert.match(stdout.toString(), /Quando usarlo: Usalo come percorso esplicito in italiano/i);
 });
 
 test("--help is an alias for help", async () => {

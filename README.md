@@ -3,13 +3,79 @@
 `llmProxy` e` un package standalone che espone un proxy GitHub Copilot Anthropic-compatible su `/v1/messages` e una CLI globale per login, avvio, status, log, servizio persistente e fallback tra piu` account GitHub Copilot.
 ## Quick Start
 
-### Bootstrap persistente consigliato
+### 0. Clonare la repository
 
-Se vuoi installare la CLI in modo persistente con un solo comando, il flusso consigliato e` questo:
+Se parti da zero, clona la repository in locale ed entra nella cartella del progetto:
 
 ```bash
-npm run install:persistent
+git clone https://github.com/alessiobacin/llmProxy.git
+cd llmProxy
 ```
+
+Poi installa le dipendenze del checkout locale:
+
+```bash
+pnpm install
+```
+
+Se non hai `pnpm`, puoi usare anche:
+
+```bash
+npm install
+```
+
+### Bootstrap persistente consigliato
+
+Se vuoi installare la CLI in modo persistente con un solo comando, puoi scegliere esplicitamente tra variante italiana e variante inglese.
+
+### Installare `llmProxy` in italiano o in inglese
+
+#### Variante italiana
+
+Usa questi comandi se vuoi che il percorso di installazione continui a mostrare messaggi e spiegazioni in italiano:
+
+```bash
+npm run install:persistent-it
+```
+
+Se la CLI e` gia` disponibile nel `PATH`, puoi usare anche:
+
+```bash
+llmproxy install:persistent-it
+```
+
+#### Variante inglese
+
+Usa questi comandi se vuoi che il percorso di installazione mostri messaggi, help ed errori in inglese:
+
+Se preferisci usare un comando CLI in inglese direttamente dal checkout locale, puoi ottenere lo stesso risultato con:
+
+```bash
+node bin/llmproxy.js install
+```
+
+Se `llmproxy` e` gia` disponibile nel `PATH`, puoi usare direttamente:
+
+```bash
+llmproxy install
+```
+
+`llmproxy install` e` un alias di `llmproxy install:persistent-en`.
+Se vuoi anche la scheda comando in inglese, usa:
+
+```bash
+llmproxy help install
+```
+
+In breve:
+
+- italiano: `npm run install:persistent-it` oppure `llmproxy install:persistent-it`
+- inglese: `npm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install` oppure `llmproxy install`
+
+Compatibilita`:
+
+- `npm run install:persistent` continua a puntare al percorso italiano
+- `llmproxy install:persistent` continua a funzionare come alias legacy del percorso italiano
 
 Il bootstrap:
 
@@ -75,7 +141,13 @@ llmproxy service:start
 Oppure, se vuoi fare installazione globale + attivazione del servizio in un solo passo:
 
 ```bash
-npm run install:persistent
+npm run install:persistent-it
+```
+
+Per lo stesso flusso in inglese:
+
+```bash
+npm run install:persistent-en
 ```
 
 Su macOS questo crea e carica un `LaunchAgent` utente.
@@ -342,6 +414,75 @@ Aggiorna l'installazione globale di `llmproxy` clonando l'ultima versione della 
 Dopo l'update rilancia il binario aggiornato con `llmproxy version` per verificare che la nuova installazione sia attiva.
 Durante l'update viene mantenuta una sola installazione globale attiva e vengono rimossi eventuali wrapper globali duplicati di `pnpm`.
 
+### `llmproxy install:persistent-it`
+
+Percorso esplicito in italiano per l'installazione persistente.
+
+Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
+
+```bash
+npm run install:persistent-it
+```
+
+Se la CLI e` gia` installata globalmente, puoi usare:
+
+```bash
+llmproxy install:persistent-it
+```
+
+Il comando installa globalmente la CLI corrente e attiva il servizio persistente nativo per l'OS.
+Quando usi questo comando, l'output del comando, le spiegazioni della help dedicata e i messaggi di errore di questo percorso vengono mostrati in italiano.
+
+### `llmproxy install:persistent-en`
+
+Percorso esplicito in inglese per l'installazione persistente.
+
+Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
+
+```bash
+npm run install:persistent-en
+```
+
+Oppure:
+
+```bash
+node bin/llmproxy.js install:persistent-en
+```
+
+Se la CLI e` gia` installata globalmente, puoi usare:
+
+```bash
+llmproxy install:persistent-en
+```
+
+Il comando installa globalmente la CLI corrente e attiva il servizio persistente nativo per l'OS.
+Quando usi questo comando, l'output del comando, le spiegazioni della help dedicata e i messaggi di errore di questo percorso vengono mostrati in inglese.
+
+### `llmproxy install`
+
+Alias inglese breve di `llmproxy install:persistent-en`.
+
+Scelta rapida:
+
+- se vuoi il percorso in italiano, usa `llmproxy install:persistent-it`
+- se vuoi il percorso in inglese esplicito, usa `llmproxy install:persistent-en`
+- se vuoi il percorso in inglese breve, usa `llmproxy install`
+
+Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
+
+```bash
+node bin/llmproxy.js install
+```
+
+Se la CLI e` gia` installata globalmente, puoi usare:
+
+```bash
+llmproxy install
+```
+
+Il comando installa globalmente la CLI corrente e attiva il servizio persistente nativo per l'OS.
+Quando usi questo alias, l'output del comando, le spiegazioni della help dedicata e i messaggi di errore di questo percorso vengono mostrati in inglese.
+
 ### `llmproxy version`
 
 Stampa la versione corrente della CLI installata.
@@ -351,6 +492,8 @@ Puoi usare anche gli alias `llmproxy --version` e `llmproxy -v`.
 ### Alias utili
 
 - `llmproxy --help` e `llmproxy -h` equivalgono a `llmproxy help`
+- `llmproxy install` equivale a `llmproxy install:persistent-en`
+- `llmproxy install:persistent` equivale al percorso legacy italiano `llmproxy install:persistent-it`
 - `llmproxy --version` e `llmproxy -v` equivalgono a `llmproxy version`
 
 ### `llmproxy uninstall`

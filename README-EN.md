@@ -250,6 +250,25 @@ Minimal example:
 
 ## HTTP Endpoints
 
+In addition to the core endpoints (`/health`, `/auth/status`, `/auth/logout`, `/v1/messages`), `llmProxy` also exposes REST endpoints for runtime CLI commands.
+
+Standard response format for runtime REST endpoints:
+
+```json
+{
+  "success": true,
+  "exitCode": 0,
+  "command": "status",
+  "data": {
+    "output": "...",
+    "error": "..."
+  },
+  "timestamp": "2026-04-24T12:00:00.000Z"
+}
+```
+
+`success=true` means `exitCode=0`. For application-level command failures, the API returns `400` with `success=false`.
+
 ### Health
 
 ```http
@@ -275,6 +294,67 @@ GET /auth/status
 
 ```http
 POST /auth/logout
+```
+
+### Runtime API (CLI via REST)
+
+```http
+GET  /api/version
+GET  /api/help
+GET  /api/help?command=status
+GET  /api/setup
+
+POST /api/auth/login
+POST /api/auth/logout
+
+GET  /api/service/status
+POST /api/service/start
+POST /api/service/stop
+POST /api/service/restart
+
+GET  /api/logs
+GET  /api/logs/stream
+GET  /api/models
+POST /api/test
+POST /api/claude/setup
+
+GET    /api/providers
+GET    /api/providers/status
+POST   /api/providers/{id}/login
+POST   /api/providers/order
+POST   /api/providers/{id}/rename
+DELETE /api/providers/{id}
+```
+
+Operational notes:
+
+- `GET /api/logs` is a snapshot (static tail).
+- `GET /api/logs/stream` is live streaming via Server-Sent Events (SSE).
+- optional `intervalMs` query on `/api/logs/stream` (minimum 200ms).
+- `POST /api/claude/setup` accepts JSON body:
+
+```json
+{
+  "projectPath": "/absolute/project/path",
+  "model": "2"
+}
+```
+
+- `POST /api/providers/order` accepts:
+
+```json
+{
+  "id": "backup",
+  "position": 1
+}
+```
+
+- `POST /api/providers/{id}/rename` accepts:
+
+```json
+{
+  "name": "Backup EU"
+}
 ```
 
 ### Anthropic-compatible proxy
@@ -309,6 +389,31 @@ To improve logging for the calling project, add this header when possible:
 ```http
 x-project-path: /absolute/path/to/project
 ```
+
+### CLI -> REST mapping (runtime)
+
+| CLI | REST |
+| --- | --- |
+| `llmproxy version` | `GET /api/version` |
+| `llmproxy help [cmd]` | `GET /api/help[?command=cmd]` |
+| `llmproxy setup` | `GET /api/setup` |
+| `llmproxy login` | `POST /api/auth/login` |
+| `llmproxy logout` | `POST /api/auth/logout` |
+| `llmproxy status` | `GET /api/service/status` |
+| `llmproxy service:start` | `POST /api/service/start` |
+| `llmproxy service:stop` | `POST /api/service/stop` |
+| `llmproxy service:restart` | `POST /api/service/restart` |
+| `llmproxy logs` | `GET /api/logs` |
+| `llmproxy logs --follow` | `GET /api/logs/stream` |
+| `llmproxy models:list` | `GET /api/models` |
+| `llmproxy test` | `POST /api/test` |
+| `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
+| `llmproxy provider:list` | `GET /api/providers` |
+| `llmproxy provider:status` | `GET /api/providers/status` |
+| `llmproxy provider:add <id> --name <name>` | `POST /api/providers/{id}/login` |
+| `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
+| `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
+| `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 
 ## CLI Commands
 

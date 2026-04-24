@@ -506,3 +506,207 @@ test("messages endpoint preserves a cached dynamic Copilot model", async () => {
     assert.equal(requestBodies[0].model, "gpt-4.1");
   });
 });
+
+test("runtime CLI commands are exposed via REST endpoints", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-runtime-api-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("default", { access_token: "token-default", token_type: "bearer", scope: "read:user" }, { name: "Default" });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+
+  const serviceCalls = [];
+  const serviceManager = {
+    kind: "launchd",
+    install() {
+      serviceCalls.push("install");
+      return { stdoutPath: path.join(tempRoot, "logs", "service.out.log"), stderrPath: path.join(tempRoot, "logs", "service.err.log") };
+    },
+    stop() {
+      serviceCalls.push("stop");
+      return { ok: true, stdout: "", stderr: "" };
+    },
+    status() {
+      serviceCalls.push("status");
+      return { ok: true, active: true, stdout: "service-ok", stderr: "" };
+    },
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    serviceManager,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          data: [
+            { id: "gpt-4.1", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+            { id: "o3", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+          ],
+        };
+      },
+    }),
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const versionResponse = await fetch(`${baseUrl}/api/version`);
+    const versionPayload = await versionResponse.json();
+    assert.equal(versionResponse.status, 200);
+    assert.equal(versionPayload.success, true);
+    assert.equal(typeof versionPayload.data.version, "string");
+
+    const helpResponse = await fetch(`${baseUrl}/api/help?command=status`);
+    const helpPayload = await helpResponse.json();
+    assert.equal(helpResponse.status, 200);
+    assert.equal(helpPayload.success, true);
+    assert.match(helpPayload.data.output, /llmproxy status/);
+
+    const setupResponse = await fetch(`${baseUrl}/api/setup`);
+    const setupPayload = await setupResponse.json();
+    assert.equal(setupResponse.status, 200);
+    assert.equal(setupPayload.success, true);
+    assert.match(setupPayload.data.output, /Runtime root:/);
+
+    const statusResponse = await fetch(`${baseUrl}/api/service/status`);
+    const statusPayload = await statusResponse.json();
+    assert.equal(statusResponse.status, 200);
+    assert.equal(statusPayload.success, true);
+    assert.match(statusPayload.data.output, /Service active: yes/);
+
+    const startResponse = await fetch(`${baseUrl}/api/service/start`, { method: "POST" });
+    const startPayload = await startResponse.json();
+    assert.equal(startResponse.status, 200);
+    assert.equal(startPayload.success, true);
+
+    const restartResponse = await fetch(`${baseUrl}/api/service/restart`, { method: "POST" });
+    const restartPayload = await restartResponse.json();
+    assert.equal(restartResponse.status, 200);
+    assert.equal(restartPayload.success, true);
+
+    const modelsResponse = await fetch(`${baseUrl}/api/models`);
+    const modelsPayload = await modelsResponse.json();
+    assert.equal(modelsResponse.status, 200);
+    assert.equal(modelsPayload.success, true);
+    assert.match(modelsPayload.data.output, /gpt-4\.1/);
+
+    const providersResponse = await fetch(`${baseUrl}/api/providers`);
+    const providersPayload = await providersResponse.json();
+    assert.equal(providersResponse.status, 200);
+    assert.equal(providersPayload.success, true);
+    assert.match(providersPayload.data.output, /default/);
+
+    const providerStatusResponse = await fetch(`${baseUrl}/api/providers/status`);
+    const providerStatusPayload = await providerStatusResponse.json();
+    assert.equal(providerStatusResponse.status, 200);
+    assert.equal(providerStatusPayload.success, true);
+    assert.match(providerStatusPayload.data.output, /Active provider:/);
+
+    const providerOrderResponse = await fetch(`${baseUrl}/api/providers/order`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "backup", position: 1 }),
+    });
+    const providerOrderPayload = await providerOrderResponse.json();
+    assert.equal(providerOrderResponse.status, 200);
+    assert.equal(providerOrderPayload.success, true);
+
+    const providerRenameResponse = await fetch(`${baseUrl}/api/providers/backup/rename`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Backup EU" }),
+    });
+    const providerRenamePayload = await providerRenameResponse.json();
+    assert.equal(providerRenameResponse.status, 200);
+    assert.equal(providerRenamePayload.success, true);
+
+    const providerRemoveResponse = await fetch(`${baseUrl}/api/providers/backup`, { method: "DELETE" });
+    const providerRemovePayload = await providerRemoveResponse.json();
+    assert.equal(providerRemoveResponse.status, 200);
+    assert.equal(providerRemovePayload.success, true);
+  });
+
+  assert.ok(serviceCalls.includes("status"));
+  assert.ok(serviceCalls.includes("install"));
+  assert.ok(serviceCalls.includes("stop"));
+});
+
+test("claude setup is exposed via REST endpoint", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-claude-api-"));
+  const projectRoot = path.join(tempRoot, "project-a");
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-xyz", token_type: "bearer", scope: "read:user" });
+  fs.mkdirSync(projectRoot, { recursive: true });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          data: [
+            { id: "gpt-4.1", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+            { id: "o3", object: "model", model_picker_enabled: true, policy: { state: "enabled" } },
+          ],
+        };
+      },
+    }),
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const setupResponse = await fetch(`${baseUrl}/api/claude/setup`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ projectPath: projectRoot, model: "2" }),
+    });
+    const setupPayload = await setupResponse.json();
+
+    assert.equal(setupResponse.status, 200);
+    assert.equal(setupPayload.success, true);
+    assert.match(setupPayload.data.output, /Configurazione Claude scritta/);
+  });
+
+  const settingsFile = path.join(projectRoot, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  assert.equal(settings.model, "o3");
+  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "o3");
+});
+
+test("logs stream endpoint exposes live logs over SSE", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-logs-sse-"));
+  const logsDir = path.join(tempRoot, "logs");
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.writeFileSync(path.join(logsDir, "service.out.log"), "linea-sse-iniziale\n", "utf8");
+  fs.writeFileSync(path.join(logsDir, "service.err.log"), "", "utf8");
+
+  const app = createApp({ dataRoot: tempRoot });
+
+  await withServer(app, async (baseUrl) => {
+    const controller = new AbortController();
+    const response = await fetch(`${baseUrl}/api/logs/stream?intervalMs=50`, {
+      signal: controller.signal,
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(String(response.headers.get("content-type") || ""), /text\/event-stream/);
+    assert.ok(response.body);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    for (let index = 0; index < 20; index += 1) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      if (buffer.includes("event: log") && buffer.includes("linea-sse-iniziale")) {
+        break;
+      }
+    }
+
+    controller.abort();
+    assert.match(buffer, /event: log/);
+    assert.match(buffer, /linea-sse-iniziale/);
+  });
+});

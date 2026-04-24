@@ -6,6 +6,8 @@
 
 - Italian: [README-IT.md](README-IT.md)
 - English: [README-EN.md](README-EN.md)
+- Runtime CLI via REST (IT): [README-IT.md#endpoint-http](README-IT.md#endpoint-http)
+- Runtime CLI via REST (EN): [README-EN.md#http-endpoints](README-EN.md#http-endpoints)
 
 ## Quick Links
 

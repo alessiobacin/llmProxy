@@ -619,6 +619,15 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     assert.equal(providerRenameResponse.status, 200);
     assert.equal(providerRenamePayload.success, true);
 
+    const providerApiKeyResponse = await fetch(`${baseUrl}/api/providers/openrouter/api-key`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey: "sk-or-test", name: "OpenRouter" }),
+    });
+    const providerApiKeyPayload = await providerApiKeyResponse.json();
+    assert.equal(providerApiKeyResponse.status, 200);
+    assert.equal(providerApiKeyPayload.success, true);
+
     const providerRemoveResponse = await fetch(`${baseUrl}/api/providers/backup`, { method: "DELETE" });
     const providerRemovePayload = await providerRemoveResponse.json();
     assert.equal(providerRemoveResponse.status, 200);

@@ -1,0 +1,397 @@
+{
+  "info": {
+    "name": "llmProxy - Full API + CLI Equivalent Coverage",
+    "description": "Collection completa per validare tutti gli endpoint esposti da llmProxy, inclusi quelli equivalenti ai comandi CLI e gli endpoint LLM v1/v1/llm.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "c8db0cd0-8475-4b5a-91be-6af0d28fe914"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:3015" },
+    { "key": "traceId", "value": "trace-postman-001" },
+    { "key": "hierarchyContextProject", "value": "{\"scope_type\":\"project\",\"scope_id\":\"p-1\",\"master_company\":\"mc-1\",\"tenant_id\":\"t-1\",\"client_id\":\"c-1\",\"project_id\":\"p-1\",\"roles\":[\"admin\"]}" },
+    { "key": "hierarchyContextMissingFields", "value": "{\"scope_type\":\"project\",\"scope_id\":\"p-1\",\"tenant_id\":\"t-1\"}" },
+    { "key": "providerId", "value": "copilot" },
+    { "key": "providerName", "value": "Copilot Primary" },
+    { "key": "providerOrderPosition", "value": "1" },
+    { "key": "providerEntryId", "value": "project:p-1:copilot" },
+    { "key": "projectPath", "value": "/Users/alessiobacin/Development/llmProxy" },
+    { "key": "helpCommand", "value": "install:persistent-en" }
+  ],
+  "item": [
+    {
+      "name": "01 - Runtime Base Endpoints",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        },
+        {
+          "name": "GET /auth/status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/status"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        },
+        {
+          "name": "POST /auth/logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 - API endpoints equivalent to CLI commands",
+      "item": [
+        {
+          "name": "GET /api/version  (CLI: version)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/version" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});", "pm.test('Payload success flag exists', function () {", "  pm.expect(pm.response.json()).to.have.property('success');", "});"] } }]
+        },
+        {
+          "name": "GET /api/help  (CLI: help)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/help" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        },
+        {
+          "name": "GET /api/help?command={{helpCommand}}  (CLI: help <command>)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/help?command={{helpCommand}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "help"],
+              "query": [{ "key": "command", "value": "{{helpCommand}}" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        },
+        {
+          "name": "GET /api/setup  (CLI: setup)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/setup" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/auth/login  (CLI: login)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/login" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/auth/logout  (CLI: logout)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/logout" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        },
+        {
+          "name": "GET /api/service/status  (CLI: status)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/service/status" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/service/start  (CLI: service:start)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/service/start" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/service/stop  (CLI: service:stop)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/service/stop" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/service/restart  (CLI: service:restart)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/service/restart" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "GET /api/logs  (CLI: logs)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/logs" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});"] } }]
+        },
+        {
+          "name": "GET /api/logs/stream  (SSE)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/event-stream" }],
+            "url": "{{baseUrl}}/api/logs/stream"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});", "pm.test('Content-Type includes text/event-stream', function () {", "  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream');", "});"] } }]
+        },
+        {
+          "name": "GET /api/models  (CLI: models:list)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/models" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/test  (CLI: test)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/test" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/claude/setup  (CLI: claude:setup)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"gpt-4.1\",\n  \"projectPath\": \"{{projectPath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/claude/setup"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/providers/:id/login  (CLI: provider:add)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{providerName}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/providers/{{providerId}}/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/providers/:id/api-key  (CLI: provider:add --api-key / provider:key)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{providerName}}\",\n  \"apiKey\": \"sk-provider-key\"\n}"
+            },
+            "url": "{{baseUrl}}/api/providers/{{providerId}}/api-key"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "GET /api/providers  (CLI: provider:list)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/providers" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "GET /api/providers/status  (CLI: provider:status)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/providers/status" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/providers/order  (CLI: provider:order)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{providerId}}\",\n  \"position\": \"{{providerOrderPosition}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/providers/order"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/providers/:id/rename  (CLI: provider:rename)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{providerName}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/providers/{{providerId}}/rename"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "DELETE /api/providers/:id  (CLI: provider:remove)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/providers/{{providerId}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 - LLM Compatibility (Standalone-friendly)",
+      "item": [
+        {
+          "name": "POST /v1/messages",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"gpt-4.1\",\n  \"max_tokens\": 64,\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Ciao da Postman\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/messages"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /v1/chat/completions",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Hello from Postman\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/chat/completions"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+        }
+      ]
+    },
+    {
+      "name": "04 - LLM Platform API (/v1/llm/*)",
+      "item": [
+        {
+          "name": "GET /v1/llm/health",
+          "request": { "method": "GET", "url": "{{baseUrl}}/v1/llm/health" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});", "pm.test('Has mode and manifest_version', function () {", "  const body = pm.response.json();", "  pm.expect(body).to.have.property('mode');", "  pm.expect(body).to.have.property('manifest_version');", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/messages (valid billing context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Hierarchy-Context", "value": "{{hierarchyContextProject}}" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"max_tokens\": 64,\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"platform ping\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/messages"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/messages (missing hierarchy context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"expect hierarchy error\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/messages"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', function () {", "  pm.response.to.have.status(400);", "});", "pm.test('Error code is HIERARCHY_CONTEXT_REQUIRED', function () {", "  pm.expect(pm.response.json().error.code).to.eql('HIERARCHY_CONTEXT_REQUIRED');", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/messages (invalid billing context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Hierarchy-Context", "value": "{{hierarchyContextMissingFields}}" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"expect invalid hierarchy error\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/messages"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', function () {", "  pm.response.to.have.status(400);", "});", "pm.test('Error code is HIERARCHY_CONTEXT_INVALID', function () {", "  pm.expect(pm.response.json().error.code).to.eql('HIERARCHY_CONTEXT_INVALID');", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/chat/completions (valid billing context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Hierarchy-Context", "value": "{{hierarchyContextProject}}" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"chat completion platform ping\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/chat/completions"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/chat/completions (missing hierarchy context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"expect hierarchy error\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/chat/completions"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', function () {", "  pm.response.to.have.status(400);", "});", "pm.test('Error code is HIERARCHY_CONTEXT_REQUIRED', function () {", "  pm.expect(pm.response.json().error.code).to.eql('HIERARCHY_CONTEXT_REQUIRED');", "});"] } }]
+        },
+        {
+          "name": "GET /v1/llm/providers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1/llm/providers?scope_type=project&scope_id=p-1&provider=copilot",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "llm", "providers"],
+              "query": [
+                { "key": "scope_type", "value": "project" },
+                { "key": "scope_id", "value": "p-1" },
+                { "key": "provider", "value": "copilot" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200', function () {", "  pm.response.to.have.status(200);", "});", "pm.test('entries field exists', function () {", "  pm.expect(pm.response.json()).to.have.property('entries');", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/providers",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Hierarchy-Context", "value": "{{hierarchyContextProject}}" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"scope_type\": \"project\",\n  \"scope_id\": \"p-1\",\n  \"default_model\": \"gpt-4.1\",\n  \"credentials\": {\n    \"api_key\": \"demo-key\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/providers"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 201', function () {", "  pm.response.to.have.status(201);", "});", "pm.test('Store created provider entry id for delete step', function () {", "  const body = pm.response.json();", "  if (body && body.id) {", "    pm.collectionVariables.set('providerEntryId', body.id);", "  }", "});"] } }]
+        },
+        {
+          "name": "DELETE /v1/llm/providers/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-Hierarchy-Context", "value": "{{hierarchyContextProject}}" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "url": "{{baseUrl}}/v1/llm/providers/{{providerEntryId}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 204 or 404', function () {", "  pm.expect([204, 404]).to.include(pm.response.code);", "});"] } }]
+        }
+      ]
+    }
+  ]
+}

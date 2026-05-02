@@ -1,0 +1,204 @@
+openapi: 3.0.3
+info:
+  title: llmProxy API
+  version: 0.2.2
+  description: |
+    Deterministic LLM transport tool (architecture v8, tool #45).
+
+    Two control planes:
+    - Standalone: configured and operated via the `llmproxy` CLI. Filesystem token store.
+      HierarchyContext is optional. `/v1/messages` is used directly by Claude Code.
+    - Platform: configured and operated via this HTTP API. HierarchyContext is required
+      on platform endpoints. Metering records are emitted via the configured sink.
+
+    llmProxy never runs LLM-driven logic. It transports requests, manages provider
+    fallback, and produces deterministic audit and metering records.
+servers:
+  - url: http://127.0.0.1:3015
+    description: Local standalone proxy
+  - url: https://llmproxy.platform.local
+    description: Platform deployment
+tags:
+  - name: runtime
+    description: LLM transport runtime endpoints.
+  - name: platform
+    description: Platform-facing endpoints. Require HierarchyContext.
+  - name: control-plane
+    description: CLI-over-REST wrappers retained for backward compatibility.
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  parameters:
+    HierarchyContextHeader:
+      in: header
+      name: X-Hierarchy-Context
+      required: false
+      schema:
+        type: string
+        description: JSON-encoded HierarchyContext. Required in platform mode.
+    MeteringContextHeader:
+      in: header
+      name: X-Metering-Context
+      required: false
+      schema:
+        type: string
+        description: JSON-encoded MeteringContext.
+    TraceIdHeader:
+      in: header
+      name: X-Trace-Id
+      required: false
+      schema:
+        type: string
+  schemas:
+    HierarchyContext:
+      type: object
+      properties:
+        agency_id: {type: string, nullable: true}
+        client_id: {type: string, nullable: true}
+        project_id: {type: string, nullable: true}
+        user_id: {type: string, nullable: true}
+        roles: {type: array, items: {type: string}}
+        scope_type:
+          type: string
+          enum: [master, agency, client, project, user]
+        scope_id: {type: string}
+      required: [scope_type, scope_id]
+    MeteringContext:
+      type: object
+      properties:
+        caller_module: {type: string}
+        operation_id: {type: string}
+        request_purpose: {type: string}
+        cost_accounting_required: {type: boolean}
+    AnthropicMessagesRequest:
+      type: object
+      properties:
+        model: {type: string}
+        messages: {type: array, items: {type: object}}
+        max_tokens: {type: integer}
+        stream: {type: boolean}
+        system: {oneOf: [{type: string}, {type: array}]}
+      required: [model, messages]
+    AnthropicMessagesResponse:
+      type: object
+      properties:
+        id: {type: string}
+        type: {type: string, enum: [message]}
+        role: {type: string, enum: [assistant]}
+        model: {type: string}
+        content: {type: array, items: {type: object}}
+        stop_reason: {type: string, nullable: true}
+        usage:
+          type: object
+          properties:
+            input_tokens: {type: integer}
+            output_tokens: {type: integer}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - PROVIDER_UNAVAILABLE
+                - RATE_LIMIT
+                - INVALID_MODEL
+                - AUTH_REQUIRED
+                - HIERARCHY_CONTEXT_REQUIRED
+                - METERING_SINK_FAILED
+            message: {type: string}
+            trace_id: {type: string}
+            provider_attempts: {type: array, items: {type: object}}
+paths:
+  /health:
+    get:
+      tags: [runtime]
+      summary: Liveness and authentication status (standalone).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {type: boolean}
+                  authenticated: {type: boolean}
+  /v1/messages:
+    post:
+      tags: [runtime]
+      summary: Anthropic-compatible Messages endpoint.
+      description: |
+        Primary runtime endpoint. Used by Claude Code in standalone mode. In platform mode
+        the same endpoint accepts HierarchyContext and routes metering through the configured sink.
+      parameters:
+        - $ref: '#/components/parameters/HierarchyContextHeader'
+        - $ref: '#/components/parameters/MeteringContextHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnthropicMessagesRequest'
+      responses:
+        "200":
+          description: Provider response translated to Anthropic format.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnthropicMessagesResponse'
+            text/event-stream:
+              schema:
+                type: string
+        "400": {description: Invalid request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        "401": {description: Auth required, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        "503": {description: All providers exhausted, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /v1/llm/messages:
+    post:
+      tags: [platform]
+      summary: Platform-facing alias of /v1/messages.
+      description: |
+        Functionally identical to /v1/messages but enforces HierarchyContext when the proxy is
+        running in platform mode (`LLMPROXY_MODE=platform`).
+      parameters:
+        - $ref: '#/components/parameters/HierarchyContextHeader'
+        - $ref: '#/components/parameters/MeteringContextHeader'
+        - $ref: '#/components/parameters/TraceIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnthropicMessagesRequest'
+      responses:
+        "200":
+          description: Provider response translated to Anthropic format.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnthropicMessagesResponse'
+        "400": {description: HierarchyContext missing or invalid, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /v1/llm/health:
+    get:
+      tags: [platform]
+      summary: Platform-facing health and capability descriptor.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {type: boolean}
+                  mode: {type: string, enum: [standalone, platform]}
+                  authenticated: {type: boolean}
+                  providers: {type: array, items: {type: string}}
+                  manifest_version: {type: string}

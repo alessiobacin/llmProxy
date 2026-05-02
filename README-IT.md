@@ -2,6 +2,8 @@
 
 `llmProxy` e` un package standalone che espone un proxy GitHub Copilot Anthropic-compatible su `/v1/messages` e una CLI globale per login, avvio, status, log, servizio persistente e fallback tra piu` account GitHub Copilot.
 
+> **Modalità v8 platform**: llmProxy può funzionare anche come Tool #45 della v8 architecture esponendo `/v1/llm/messages` e `/v1/llm/health` con HierarchyContext / MeteringContext obbligatori. Imposta `LLMPROXY_MODE=platform`. Dettagli completi in [docs/CHANGELOG-v8-platform-tool.md](docs/CHANGELOG-v8-platform-tool.md).
+
 ## Quick Start
 
 ### 0. Clonare la repository
@@ -321,6 +323,7 @@ POST /api/claude/setup
 GET    /api/providers
 GET    /api/providers/status
 POST   /api/providers/{id}/login
+POST   /api/providers/{id}/api-key
 POST   /api/providers/order
 POST   /api/providers/{id}/rename
 DELETE /api/providers/{id}
@@ -354,6 +357,15 @@ Note operative:
 ```json
 {
   "name": "Backup EU"
+}
+```
+
+- `POST /api/providers/{id}/api-key` imposta una credenziale API-key per un provider noto (non-Copilot):
+
+```json
+{
+  "api_key": "sk-...",
+  "name": "La mia chiave OpenRouter"
 }
 ```
 
@@ -410,7 +422,9 @@ x-project-path: /assoluto/percorso/del/progetto
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
 | `llmproxy provider:list` | `GET /api/providers` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
-| `llmproxy provider:add <id> --name <name>` | `POST /api/providers/{id}/login` |
+| `llmproxy provider:add <id> [--name <n>]` | `POST /api/providers/{id}/login` |
+| `llmproxy provider:add <id> --api-key <key>` | `POST /api/providers/{id}/api-key` |
+| `llmproxy provider:key <id> --api-key <key>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
@@ -461,17 +475,52 @@ Ciao! rispondimi solo: ciao creatore
 Se il proxy risponde correttamente, il comando stampa a terminale solo il testo restituito dall'assistant.
 E` utile per verificare rapidamente che il servizio locale sia attivo e che il percorso `/v1/messages` stia funzionando.
 
-### `llmproxy provider:add <id> [--name <name>]`
+### `llmproxy provider:add <id> [--name <name>] [--api-key <key>]`
 
-Esegue un nuovo login GitHub Copilot e salva un provider aggiuntivo identificato da `id`.
+Aggiunge un provider identificato da `<id>`. Il comportamento dipende dal tipo di provider:
+
+- **Provider Copilot OAuth** (id sconosciuti o `copilot`): avvia il device flow di GitHub Copilot.
+- **Provider con API-key** (es. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `zai`): salva direttamente la `--api-key` fornita, senza flusso browser.
+
+Provider noti con API-key:
+
+| id | Servizio |
+|---|---|
+| `openrouter` | OpenRouter |
+| `openai` | OpenAI |
+| `anthropic` | Anthropic |
+| `groq` | Groq |
+| `deepseek` | DeepSeek |
+| `mistral` | Mistral AI |
+| `xai` | xAI / Grok |
+| `perplexity` | Perplexity AI |
+| `together` | Together AI |
+| `fireworks` | Fireworks AI |
+| `kimi` | Kimi (Moonshot) |
+| `zai` / `z.ai` | Z.ai |
+
+Esempio:
+
+```bash
+llmproxy provider:add openrouter --api-key sk-or-...
+llmproxy provider:add groq --api-key gsk_...
+```
+
+### `llmproxy provider:key <id> --api-key <key>`
+
+Imposta o sostituisce la credenziale API-key per un provider con API-key già registrato, senza rieseguire il device flow OAuth.
+
+```bash
+llmproxy provider:key openrouter --api-key sk-or-nuova-chiave
+```
 
 ### `llmproxy provider:list`
 
-Mostra l'ordine attuale di fallback dei provider Copilot configurati.
+Mostra l'ordine attuale di fallback dei provider configurati.
 
 ### `llmproxy provider:status`
 
-Mostra il provider attivo e la lista ordinata dei provider Copilot con indicazione del fallback corrente.
+Mostra il provider attivo e la lista ordinata dei provider con indicazione del fallback corrente.
 
 ### `llmproxy provider:order <id> <position>`
 
@@ -629,17 +678,21 @@ Mostra:
 - provider attivo
 - ordine di fallback configurato
 
-### `llmproxy provider:add <id> [--name <name>]`
+### `llmproxy provider:add <id> [--name <name>] [--api-key <key>]`
 
-Esegue un nuovo login GitHub Copilot e salva un provider aggiuntivo identificato da `id`.
+Aggiunge un provider. Per i provider Copilot OAuth, avvia il device flow. Per i provider con API-key (openrouter, groq, anthropic, openai, deepseek, mistral, xai, perplexity, together, fireworks, kimi, zai), salva direttamente la `--api-key` fornita.
+
+### `llmproxy provider:key <id> --api-key <key>`
+
+Imposta o sostituisce la credenziale API-key per un provider gi\u00e0 registrato.
 
 ### `llmproxy provider:list`
 
-Mostra l'ordine attuale di fallback dei provider Copilot configurati.
+Mostra l'ordine attuale di fallback dei provider configurati.
 
 ### `llmproxy provider:status`
 
-Mostra il provider attivo e la lista ordinata dei provider Copilot con indicazione del fallback corrente.
+Mostra il provider attivo e la lista ordinata dei provider con indicazione del fallback corrente.
 
 ### `llmproxy provider:order <id> <position>`
 

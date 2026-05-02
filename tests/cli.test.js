@@ -150,6 +150,48 @@ test("provider:add performs a dedicated Copilot login and provider:list shows fa
   assert.match(listStdout.toString(), /1\. backup \(Backup Copilot\)/);
 });
 
+test("provider:add supports api-key providers like openrouter", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-apikey-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--name", "OpenRouter", "--api-key", "sk-or-test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const provider = tokenStore.getProvider("openrouter");
+
+  assert.equal(exitCode, 0);
+  assert.ok(provider);
+  assert.equal(provider.access_token, "sk-or-test");
+  assert.equal(provider.auth_type, "api_key");
+  assert.equal(provider.provider, "openrouter");
+  assert.match(stdout.toString(), /Provider configurato con API key/);
+});
+
+test("provider:key updates api key for an existing provider", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-key-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "sk-old",
+    token_type: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+  }, { name: "OpenRouter" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:key", "openrouter", "--api-key", "sk-new"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 0);
+  assert.equal(reloaded.getProvider("openrouter").access_token, "sk-new");
+  assert.match(stdout.toString(), /API key aggiornata/);
+});
+
 test("provider:order moves providers to the requested fallback position", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-order-"));
   const stdout = createWritableBuffer();

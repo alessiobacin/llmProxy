@@ -581,6 +581,8 @@ Updates the global `llmproxy` installation by cloning the latest version from th
 After the update, it relaunches the updated binary with `llmproxy version` to verify that the new installation is active.
 During the update, only one active global installation is kept, and any duplicate `pnpm` wrappers are removed.
 
+On Linux systems where npm global is under `/usr/local` (owned by root), the command automatically detects the permission error and retries with `sudo`. There is no need to manually run `sudo llmproxy update`.
+
 ### `llmproxy install:persistent-it`
 
 Explicit Italian path for persistent installation.

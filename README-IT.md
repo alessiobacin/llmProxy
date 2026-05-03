@@ -581,6 +581,8 @@ Aggiorna l'installazione globale di `llmproxy` clonando l'ultima versione della 
 Dopo l'update rilancia il binario aggiornato con `llmproxy version` per verificare che la nuova installazione sia attiva.
 Durante l'update viene mantenuta una sola installazione globale attiva e vengono rimossi eventuali wrapper globali duplicati di `pnpm`.
 
+Su sistemi Linux dove npm globale è sotto `/usr/local` (di proprietà di root), il comando rileva automaticamente l'errore di permessi e ritenta con `sudo`. Non è necessario lanciare manualmente `sudo llmproxy update`.
+
 ### `llmproxy install:persistent-it`
 
 Percorso esplicito in italiano per l'installazione persistente.

@@ -234,7 +234,7 @@ test("/v1/llm/chat/completions succeeds with complete billing hierarchy context"
   });
 });
 
-test("/v1/llm/messages with body.provider=openrouter returns 501 when no adapter implemented", async () => {
+test("/v1/llm/messages with body.provider=openrouter requires a configured provider credential", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-platform-prov-2-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
   tokenStore.save({ access_token: "t" });
@@ -256,8 +256,8 @@ test("/v1/llm/messages with body.provider=openrouter returns 501 when no adapter
       },
       body: JSON.stringify({ provider: "openrouter", model: "x", messages: [{ role: "user", content: "hi" }] }),
     });
-    assert.equal(res.status, 501);
+    assert.equal(res.status, 401);
     const body = await res.json();
-    assert.equal(body.error.code, "PROVIDER_NOT_IMPLEMENTED");
+    assert.equal(body.error.type, "authentication_error");
   });
 });

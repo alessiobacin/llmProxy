@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { createApp } = require("../lib/app");
+const { API_KEY_PROVIDER_CONFIGS } = require("../lib/copilot-proxy");
 const { createTokenStore } = require("../lib/token-store");
 
 async function withServer(app, callback) {
@@ -343,6 +344,424 @@ test("messages endpoint falls back to a supported Copilot model when the client 
   });
 });
 
+test("messages endpoint falls back from Copilot to Z.ai for GLM models", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-zai-fallback-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+  }, { name: "Copilot" });
+  tokenStore.saveProvider("zai", {
+    access_token: "token-zai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "zai",
+    auth_type: "api_key",
+  }, { name: "Z.ai" });
+
+  const calls = [];
+  const fetchFn = async (url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push({ url: String(url), auth: options.headers?.Authorization || "", model: body.model });
+
+    if (String(url).includes("githubcopilot.com")) {
+      return {
+        ok: false,
+        status: 400,
+        async text() {
+          return "invalid model: glm-5 is not supported";
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "glm-5",
+          choices: [
+            {
+              message: { content: "served by z.ai" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 9, completion_tokens: 4 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": "/Users/example/project-glm",
+      },
+      body: JSON.stringify({
+        model: "glm-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "glm-5");
+    assert.equal(payload.content[0].text, "served by z.ai");
+    assert.deepEqual(calls, [
+      {
+        url: "https://api.githubcopilot.com/chat/completions",
+        auth: "Bearer token-copilot",
+        model: "glm-5",
+      },
+      {
+        url: "https://api.z.ai/api/paas/v4/chat/completions",
+        auth: "Bearer token-zai",
+        model: "glm-5",
+      },
+    ]);
+  });
+});
+
+test("messages endpoint can fall back to every configurable API-key provider", async (t) => {
+  for (const [providerId, providerConfig] of Object.entries(API_KEY_PROVIDER_CONFIGS)) {
+    await t.test(providerId, async () => {
+      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `llmproxy-app-${providerId}-fallback-`));
+      const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+      tokenStore.saveProvider("copilot", {
+        access_token: "token-copilot",
+        token_type: "bearer",
+        scope: "read:user",
+        provider: "copilot",
+        auth_type: "oauth",
+      }, { name: "Copilot" });
+      tokenStore.saveProvider(providerId, {
+        access_token: `token-${providerId}`,
+        token_type: "api_key",
+        scope: "api_key",
+        provider: providerId,
+        auth_type: "api_key",
+      }, { name: providerConfig.displayName });
+
+      const calls = [];
+      const fetchFn = async (url, options = {}) => {
+        const body = JSON.parse(String(options.body || "{}"));
+        calls.push({ url: String(url), auth: options.headers?.Authorization || options.headers?.["x-api-key"] || "", model: body.model });
+
+        if (String(url).includes("githubcopilot.com")) {
+          return {
+            ok: false,
+            status: 400,
+            async text() {
+              return "The requested model is not supported.";
+            },
+          };
+        }
+
+        if (providerConfig.protocol === "anthropic-messages") {
+          return {
+            ok: true,
+            status: 200,
+            async json() {
+              return {
+                id: "msg_provider",
+                type: "message",
+                role: "assistant",
+                content: [{ type: "text", text: `served by ${providerId}` }],
+                model: body.model,
+                stop_reason: "end_turn",
+                stop_sequence: null,
+                usage: { input_tokens: 3, output_tokens: 2 },
+              };
+            },
+          };
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          async json() {
+            return {
+              model: body.model,
+              choices: [
+                {
+                  message: { content: `served by ${providerId}` },
+                  finish_reason: "stop",
+                },
+              ],
+              usage: { prompt_tokens: 3, completion_tokens: 2 },
+            };
+          },
+        };
+      };
+
+      const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+      await withServer(app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/v1/messages`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-project-path": "/Users/example/project-provider",
+          },
+          body: JSON.stringify({
+            model: "provider-native-model",
+            stream: false,
+            max_tokens: 64,
+            messages: [
+              {
+                role: "user",
+                content: [{ type: "text", text: "Ping" }],
+              },
+            ],
+          }),
+        });
+
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        assert.equal(payload.model, "provider-native-model");
+        assert.equal(payload.content[0].text, `served by ${providerId}`);
+        assert.equal(calls.length, 2);
+        assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
+        assert.equal(calls[1].model, "provider-native-model");
+      });
+    });
+  }
+});
+
+test("messages endpoint tries a provider default model before moving to the next provider", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-provider-default-model-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+  tokenStore.saveProvider("zai", {
+    access_token: "token-zai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "zai",
+    auth_type: "api_key",
+    default_model: "glm-5",
+  }, { name: "Z.ai" });
+
+  const calls = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push(body.model);
+    if (body.model === "gpt-5.4") {
+      return {
+        ok: false,
+        status: 400,
+        async text() {
+          return "model_not_supported";
+        },
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: "served by provider default" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 1, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": "/Users/example/project-default-model",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.4",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "kimi-k2.5");
+    assert.equal(payload.content[0].text, "served by provider default");
+    assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
+  });
+});
+
+test("messages endpoint honors provider/model fallback lists from Claude settings", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-provider-model-list-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+  tokenStore.saveProvider("zai", {
+    access_token: "token-zai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "zai",
+    auth_type: "api_key",
+    default_model: "glm-5",
+  }, { name: "Z.ai" });
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "gpt-5.4",
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_DEFAULT_MODEL: "kimi-k2.5,zai-glm-5",
+    },
+  }, null, 2));
+
+  const calls = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push(body.model);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: `served ${body.model}` }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 1, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "ignored-by-settings",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "kimi-k2.5");
+    assert.deepEqual(calls, ["kimi-k2.5"]);
+  });
+});
+
+test("messages endpoint uses default models for providers not listed in Claude settings", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-unlisted-provider-default-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Copilot" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "ignored",
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
+    },
+  }, null, 2));
+
+  const calls = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push(body.model);
+    if (body.model === "gpt-5.4") {
+      return { ok: false, status: 429, async text() { return "rate limit"; } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: "served by kimi default" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 1, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-project-path": workspaceRoot },
+      body: JSON.stringify({
+        model: "ignored-by-settings",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "kimi-k2.5");
+    assert.equal(payload.content[0].text, "served by kimi default");
+    assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
+  });
+});
+
 test("messages endpoint prefers the Claude project-configured model over the incoming requested model", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-project-model-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
@@ -622,7 +1041,7 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     const providerApiKeyResponse = await fetch(`${baseUrl}/api/providers/openrouter/api-key`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ apiKey: "sk-or-test", name: "OpenRouter" }),
+      body: JSON.stringify({ apiKey: "sk-or-test", name: "OpenRouter", model: "openai/gpt-4o" }),
     });
     const providerApiKeyPayload = await providerApiKeyResponse.json();
     assert.equal(providerApiKeyResponse.status, 200);

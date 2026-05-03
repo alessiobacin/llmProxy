@@ -153,10 +153,12 @@ test("provider:add performs a dedicated Copilot login and provider:list shows fa
 test("provider:add supports api-key providers like openrouter", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-apikey-"));
   const stdout = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--name", "OpenRouter", "--api-key", "sk-or-test"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--name", "OpenRouter", "--api-key", "sk-or-test", "--model", "openai/gpt-4o"], {
     dataRoot: runtimeRoot,
     stdout,
+    fetchFn,
   });
 
   const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
@@ -167,7 +169,44 @@ test("provider:add supports api-key providers like openrouter", async () => {
   assert.equal(provider.access_token, "sk-or-test");
   assert.equal(provider.auth_type, "api_key");
   assert.equal(provider.provider, "openrouter");
+  assert.equal(provider.default_model, "openai/gpt-4o");
   assert.match(stdout.toString(), /Provider configurato con API key/);
+});
+
+test("provider:add rejects api-key providers when the default model probe fails", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-probe-fails-"));
+  const stderr = createWritableBuffer();
+  const fetchFn = async () => ({
+    ok: false,
+    status: 400,
+    async text() {
+      return "model_not_supported";
+    },
+  });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--api-key", "sk-or-test", "--model", "bad-model"], {
+    dataRoot: runtimeRoot,
+    stderr,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 1);
+  assert.equal(tokenStore.getProvider("openrouter"), null);
+  assert.match(stderr.toString(), /Test provider fallito/);
+});
+
+test("provider:add requires a default model for api-key providers", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-model-required-"));
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--api-key", "sk-or-test"], {
+    dataRoot: runtimeRoot,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /richiede --model/);
 });
 
 test("provider:key updates api key for an existing provider", async () => {
@@ -179,11 +218,14 @@ test("provider:key updates api key for an existing provider", async () => {
     token_type: "api_key",
     provider: "openrouter",
     auth_type: "api_key",
+    default_model: "openai/gpt-4o",
   }, { name: "OpenRouter" });
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
 
   const exitCode = await runCli(["node", "llmproxy", "provider:key", "openrouter", "--api-key", "sk-new"], {
     dataRoot: runtimeRoot,
     stdout,
+    fetchFn,
   });
 
   const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
@@ -383,10 +425,60 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
 
   const body = JSON.parse(requests[0].options.body);
   assert.equal(body.stream, false);
-  assert.equal(body.max_tokens, 64);
+  assert.equal(body.max_tokens, 256);
+  assert.equal(body.model, "claude-sonnet-4.5");
   assert.equal(body.messages[0].role, "user");
-  assert.equal(body.messages[0].content[0].text, "Ciao! rispondimi solo: ciao creatore");
-  assert.equal(stdout.toString(), "ciao creatore\n");
+  assert.equal(body.messages[0].content[0].text, "Rispondi solo: llmproxy-test-auto");
+  assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\) ciao creatore/);
+});
+
+test("test probes every configured provider with its default model", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-providers-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Copilot" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+
+  const requestBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    requestBodies.push(body);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: body.model,
+          content: [{ type: "text", text: `ok ${body.provider}` }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"], ["kimi", "kimi-k2.5"]]);
+  assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
+  assert.match(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
 
 test("claude:setup accepts a model index from the numbered model list", async () => {
@@ -815,7 +907,7 @@ test("update runs the package manager command for the latest llmproxy release", 
     "sh",
     [
       "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\"\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\"\n  fi\ndone\nversion_output=$(\"$new_bin\" version)\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nnpm install -g \"$package_file\"\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\"\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\"\n  fi\ndone\n\"$new_bin\" service:restart >/dev/null\nversion_output=$(\"$new_bin\" version)\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
     ],
   ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);

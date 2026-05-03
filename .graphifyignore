@@ -1,0 +1,9 @@
+# graphify-out contiene dati privati (token, cache, graph)
+graphify-out/
+
+# dipendenze e artefatti di build
+node_modules/
+pnpm-lock.yaml
+
+# postman environments possono contenere credenziali
+postman/*.postman_environment.json

@@ -121,9 +121,117 @@ components:
                 - AUTH_REQUIRED
                 - HIERARCHY_CONTEXT_REQUIRED
                 - METERING_SINK_FAILED
+                - NOT_AVAILABLE
+                - INVALID_PARAM
+                - METERING_READ_ERROR
             message: {type: string}
             trace_id: {type: string}
             provider_attempts: {type: array, items: {type: object}}
+    MeteringRecord:
+      type: object
+      description: |
+        A single metering record emitted for each proxied inference request.
+        All fields are nullable unless explicitly marked required.
+      properties:
+        event_schema_version: {type: string, example: "2026.1"}
+        event_version: {type: integer, example: 1}
+        idempotency_key: {type: string, nullable: true}
+        timestamp: {type: string, format: date-time, description: "ISO 8601 UTC timestamp of when the request completed."}
+        request_id: {type: string, nullable: true, description: "Proxy-generated unique request identifier (req_<16 hex chars>)."}
+        trace_id: {type: string, nullable: true, description: "Caller-supplied X-Trace-Id, useful for correlating with upstream logs."}
+        provider: {type: string, nullable: true, description: "Provider actually used (e.g. copilot, openai, anthropic)."}
+        provider_attempts:
+          type: array
+          description: "Ordered list of provider attempts, including fallbacks."
+          items:
+            type: object
+            properties:
+              provider: {type: string}
+              model: {type: string, nullable: true}
+              success: {type: boolean}
+              error_code: {type: string, nullable: true}
+              duration_ms: {type: number, nullable: true}
+        fallback_count: {type: integer, description: "Number of provider fallbacks that occurred (0 = first provider succeeded)."}
+        model_requested: {type: string, nullable: true}
+        model_used: {type: string, nullable: true}
+        endpoint: {type: string, nullable: true, description: "Route path that received the request (e.g. /v1/llm/messages)."}
+        duration_ms: {type: number, nullable: true, description: "Total wall-clock time in milliseconds from request receipt to response sent."}
+        success: {type: boolean}
+        error_code: {type: string, nullable: true}
+        prompt_tokens: {type: integer, nullable: true}
+        completion_tokens: {type: integer, nullable: true}
+        total_tokens: {type: integer, nullable: true}
+        tokens_input: {type: integer, nullable: true, description: "Alias for prompt_tokens (v10 column name)."}
+        tokens_output: {type: integer, nullable: true, description: "Alias for completion_tokens (v10 column name)."}
+        master_company: {type: string, nullable: true}
+        tenant_id: {type: string, nullable: true}
+        client_id: {type: string, nullable: true}
+        project_id: {type: string, nullable: true}
+        user_id: {type: string, nullable: true}
+        scope_type: {type: string, nullable: true}
+        scope_id: {type: string, nullable: true}
+        master_user_id: {type: string, nullable: true}
+        tenant_user_id: {type: string, nullable: true}
+        client_user_id: {type: string, nullable: true}
+        project_user_id: {type: string, nullable: true}
+        company_id: {type: string, nullable: true, description: "Alias for master_company (v10 column name)."}
+        caller_module: {type: string, nullable: true}
+        operation_id: {type: string, nullable: true}
+        request_purpose: {type: string, nullable: true}
+        cost_accounting_required: {type: boolean}
+        custom_dimensions: {type: object, nullable: true, additionalProperties: true}
+        agent: {type: string, nullable: true}
+        mansione: {type: string, nullable: true}
+        task_id: {type: string, nullable: true}
+        hierarchy_context: {type: object, nullable: true, description: "Full HierarchyContext object as parsed from the request header."}
+        metering_context: {type: object, nullable: true, description: "Full MeteringContext object as parsed from the request header."}
+    MeteringStats:
+      type: object
+      description: Aggregate statistics computed over a set of metering records.
+      properties:
+        filtered_total:
+          type: integer
+          description: Total number of records matching the applied filters.
+        total_requests: {type: integer}
+        success_count: {type: integer}
+        error_count: {type: integer}
+        total_tokens_input: {type: integer}
+        total_tokens_output: {type: integer}
+        total_tokens: {type: integer}
+        avg_tokens_input: {type: integer, nullable: true, description: "Average input tokens per request. null if no records."}
+        avg_tokens_output: {type: integer, nullable: true, description: "Average output tokens per request. null if no records."}
+        avg_duration_ms: {type: number, nullable: true, description: "Mean latency across all records with a duration_ms value."}
+        p50_duration_ms: {type: number, nullable: true, description: "50th-percentile (median) latency."}
+        p95_duration_ms: {type: number, nullable: true, description: "95th-percentile latency."}
+        earliest_timestamp: {type: string, format: date-time, nullable: true}
+        latest_timestamp: {type: string, format: date-time, nullable: true}
+        by_provider:
+          type: object
+          description: "Per-provider breakdown. Keys are provider names."
+          additionalProperties:
+            type: object
+            properties:
+              requests: {type: integer}
+              tokens_input: {type: integer}
+              tokens_output: {type: integer}
+        by_scope_type:
+          type: object
+          description: "Per-scope_type breakdown."
+          additionalProperties:
+            type: object
+            properties:
+              requests: {type: integer}
+              tokens_input: {type: integer}
+              tokens_output: {type: integer}
+        by_project_id:
+          type: object
+          description: "Per-project_id breakdown. Useful for per-project cost reporting."
+          additionalProperties:
+            type: object
+            properties:
+              requests: {type: integer}
+              tokens_input: {type: integer}
+              tokens_output: {type: integer}
 paths:
   /health:
     get:
@@ -211,3 +319,204 @@ paths:
                   authenticated: {type: boolean}
                   providers: {type: array, items: {type: string}}
                   manifest_version: {type: string}
+  /v1/llm/metering:
+    get:
+      tags: [platform]
+      summary: Query raw metering records.
+      description: |
+        Returns a paginated list of metering records emitted by the proxy since the sink was
+        first activated. Each record describes a single inference request and contains:
+
+        - **When**: `timestamp`, `duration_ms`
+        - **Who**: full billing hierarchy (`master_company`, `tenant_id`, `client_id`, `project_id`,
+          `scope_type`, `scope_id`) and per-level user IDs
+          (`master_user_id`, `tenant_user_id`, `client_user_id`, `project_user_id`, `user_id`)
+        - **What**: `model_requested`, `model_used`, `provider`, `endpoint`
+        - **How many tokens**: `tokens_input`, `tokens_output` (and `prompt_tokens`,
+          `completion_tokens` as aliases)
+        - **Outcome**: `success`, `error_code`, `fallback_count`, `provider_attempts`
+        - **Metering context**: `caller_module`, `operation_id`, `request_purpose`,
+          `cost_accounting_required`, `custom_dimensions`, `agent`, `mansione`, `task_id`
+
+        Only available when the proxy is running in platform mode (`LLMPROXY_MODE=platform`).
+        The JSONL sink is activated automatically in platform mode.
+
+        Records are stored in `~/Library/Application Support/llmProxy/logs/metering.jsonl`
+        (macOS) or the platform-equivalent path. This endpoint reads from that file on every
+        request — no in-memory cache.
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+          description: Maximum number of records to return.
+        - in: query
+          name: offset
+          schema: {type: integer, minimum: 0, default: 0}
+          description: Number of records to skip (for pagination).
+        - in: query
+          name: order
+          schema: {type: string, enum: [desc, asc], default: desc}
+          description: "`desc` returns the newest records first (default). `asc` returns oldest first."
+        - in: query
+          name: from
+          schema: {type: string, format: date-time}
+          description: Return only records with `timestamp >= from`. ISO 8601 string.
+        - in: query
+          name: to
+          schema: {type: string, format: date-time}
+          description: Return only records with `timestamp <= to`. ISO 8601 string.
+        - in: query
+          name: success
+          schema: {type: string, enum: ["true", "false"]}
+          description: Filter by request outcome.
+        - in: query
+          name: project_id
+          schema: {type: string}
+          description: Exact-match filter on `project_id`.
+        - in: query
+          name: tenant_id
+          schema: {type: string}
+          description: Exact-match filter on `tenant_id`.
+        - in: query
+          name: client_id
+          schema: {type: string}
+          description: Exact-match filter on `client_id`.
+        - in: query
+          name: master_company
+          schema: {type: string}
+          description: Exact-match filter on `master_company`.
+        - in: query
+          name: scope_type
+          schema: {type: string, enum: [master, agency, client, project, user]}
+          description: Exact-match filter on `scope_type`.
+        - in: query
+          name: scope_id
+          schema: {type: string}
+          description: Exact-match filter on `scope_id`.
+        - in: query
+          name: provider
+          schema: {type: string}
+          description: Exact-match filter on `provider`.
+        - in: query
+          name: user_id
+          schema: {type: string}
+          description: Exact-match filter on `user_id` (generic scope alias).
+        - in: query
+          name: master_user_id
+          schema: {type: string}
+          description: Exact-match filter on `master_user_id`.
+        - in: query
+          name: tenant_user_id
+          schema: {type: string}
+          description: Exact-match filter on `tenant_user_id`.
+        - in: query
+          name: client_user_id
+          schema: {type: string}
+          description: Exact-match filter on `client_user_id`.
+        - in: query
+          name: project_user_id
+          schema: {type: string}
+          description: Exact-match filter on `project_user_id`.
+        - in: query
+          name: request_id
+          schema: {type: string}
+          description: Exact-match filter on `request_id`.
+      responses:
+        "200":
+          description: Paginated list of metering records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records, total, limit, offset, order]
+                properties:
+                  records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MeteringRecord'
+                  total:
+                    type: integer
+                    description: Total number of records matching the applied filters (before pagination).
+                  limit:
+                    type: integer
+                    description: Effective limit applied to this response.
+                  offset:
+                    type: integer
+                    description: Effective offset applied to this response.
+                  order:
+                    type: string
+                    enum: [desc, asc]
+        "400": {description: Invalid query parameter, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        "404": {description: Not available (proxy not in platform mode)}
+        "500": {description: Failed to read metering JSONL file}
+  /v1/llm/metering/stats:
+    get:
+      tags: [platform]
+      summary: Aggregate statistics over metering records.
+      description: |
+        Computes aggregate statistics over the full set of records matching the supplied
+        filters. Useful for dashboards, cost reporting, and capacity planning.
+
+        Accepts the same filter parameters as `GET /v1/llm/metering`.
+        Pagination parameters (`limit`, `offset`, `order`) are accepted but ignored —
+        statistics are computed over the entire filtered set.
+
+        Returned breakdowns (`by_provider`, `by_scope_type`, `by_project_id`) each contain
+        per-key objects with `requests`, `tokens_input`, and `tokens_output`.
+
+        Only available in platform mode.
+      parameters:
+        - in: query
+          name: from
+          schema: {type: string, format: date-time}
+          description: Filter records with `timestamp >= from`.
+        - in: query
+          name: to
+          schema: {type: string, format: date-time}
+          description: Filter records with `timestamp <= to`.
+        - in: query
+          name: success
+          schema: {type: string, enum: ["true", "false"]}
+        - in: query
+          name: project_id
+          schema: {type: string}
+        - in: query
+          name: tenant_id
+          schema: {type: string}
+        - in: query
+          name: client_id
+          schema: {type: string}
+        - in: query
+          name: master_company
+          schema: {type: string}
+        - in: query
+          name: scope_type
+          schema: {type: string, enum: [master, agency, client, project, user]}
+        - in: query
+          name: scope_id
+          schema: {type: string}
+        - in: query
+          name: provider
+          schema: {type: string}
+        - in: query
+          name: master_user_id
+          schema: {type: string}
+        - in: query
+          name: tenant_user_id
+          schema: {type: string}
+        - in: query
+          name: client_user_id
+          schema: {type: string}
+        - in: query
+          name: project_user_id
+          schema: {type: string}
+      responses:
+        "200":
+          description: Aggregate statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeteringStats'
+        "400": {description: Invalid query parameter, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        "404": {description: Not available (proxy not in platform mode)}
+        "500": {description: Failed to read metering JSONL file}

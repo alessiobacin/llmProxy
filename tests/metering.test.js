@@ -10,6 +10,10 @@ const {
   createJsonlMeteringSink,
   emitMetering,
   redactObject,
+  readJsonlFile,
+  queryMeteringRecords,
+  computeMeteringStats,
+  matchesFilters,
 } = require("../lib/metering");
 
 test("buildMeteringRecord normalizes provider attempts and totals", () => {
@@ -122,4 +126,210 @@ test("redactObject scrubs sensitive keys recursively", () => {
   assert.equal(out.payload.content, "[redacted]");
   assert.equal(out.payload.tools, "[redacted]");
   assert.equal(out.payload.nested.access_token, "[redacted]");
+});
+
+// ---------------------------------------------------------------------------
+// readJsonlFile
+// ---------------------------------------------------------------------------
+
+test("readJsonlFile returns empty array when file does not exist", () => {
+  const result = readJsonlFile("/nonexistent/path/that/does/not/exist.jsonl");
+  assert.deepEqual(result, []);
+});
+
+test("readJsonlFile parses valid JSONL and skips malformed lines", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-rjsonl-"));
+  const filePath = path.join(dir, "test.jsonl");
+  fs.writeFileSync(filePath, '{"a":1}\n{bad json}\n{"a":2}\n\n', "utf8");
+  const result = readJsonlFile(filePath);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].a, 1);
+  assert.equal(result[1].a, 2);
+});
+
+// ---------------------------------------------------------------------------
+// matchesFilters
+// ---------------------------------------------------------------------------
+
+test("matchesFilters returns true when no filters applied", () => {
+  assert.equal(matchesFilters({ timestamp: "2026-05-01T10:00:00Z", project_id: "p-1" }, {}), true);
+});
+
+test("matchesFilters applies from/to range", () => {
+  const rec = { timestamp: "2026-05-02T12:00:00Z" };
+  assert.equal(matchesFilters(rec, { from: "2026-05-01T00:00:00Z", to: "2026-05-03T00:00:00Z" }), true);
+  assert.equal(matchesFilters(rec, { from: "2026-05-03T00:00:00Z" }), false);
+  assert.equal(matchesFilters(rec, { to: "2026-05-01T00:00:00Z" }), false);
+});
+
+test("matchesFilters applies success filter", () => {
+  assert.equal(matchesFilters({ success: true }, { success: true }), true);
+  assert.equal(matchesFilters({ success: true }, { success: false }), false);
+  assert.equal(matchesFilters({ success: false }, { success: false }), true);
+  // records without explicit success field default to true
+  assert.equal(matchesFilters({}, { success: true }), true);
+  assert.equal(matchesFilters({}, { success: false }), false);
+});
+
+test("matchesFilters applies string equality filters", () => {
+  const rec = { project_id: "p-1", provider: "copilot", scope_type: "project" };
+  assert.equal(matchesFilters(rec, { project_id: "p-1" }), true);
+  assert.equal(matchesFilters(rec, { project_id: "p-2" }), false);
+  assert.equal(matchesFilters(rec, { provider: "copilot", scope_type: "project" }), true);
+  assert.equal(matchesFilters(rec, { provider: "openai" }), false);
+});
+
+// ---------------------------------------------------------------------------
+// queryMeteringRecords
+// ---------------------------------------------------------------------------
+
+test("queryMeteringRecords returns all records when no filters", () => {
+  const records = [
+    { timestamp: "2026-05-01T10:00:00Z", project_id: "p-1" },
+    { timestamp: "2026-05-02T10:00:00Z", project_id: "p-2" },
+    { timestamp: "2026-05-03T10:00:00Z", project_id: "p-1" },
+  ];
+  const result = queryMeteringRecords(records, { order: "asc" });
+  assert.equal(result.total, 3);
+  assert.equal(result.records.length, 3);
+  assert.equal(result.order, "asc");
+});
+
+test("queryMeteringRecords desc order returns newest first", () => {
+  const records = [
+    { timestamp: "2026-05-01T10:00:00Z" },
+    { timestamp: "2026-05-02T10:00:00Z" },
+    { timestamp: "2026-05-03T10:00:00Z" },
+  ];
+  const result = queryMeteringRecords(records, { order: "desc" });
+  assert.equal(result.records[0].timestamp, "2026-05-03T10:00:00Z");
+  assert.equal(result.records[2].timestamp, "2026-05-01T10:00:00Z");
+});
+
+test("queryMeteringRecords applies limit and offset", () => {
+  const records = Array.from({ length: 10 }, (_, i) => ({ idx: i }));
+  const result = queryMeteringRecords(records, { limit: 3, offset: 4, order: "asc" });
+  assert.equal(result.records.length, 3);
+  assert.equal(result.records[0].idx, 4);
+  assert.equal(result.total, 10); // total is pre-pagination count
+  assert.equal(result.limit, 3);
+  assert.equal(result.offset, 4);
+});
+
+test("queryMeteringRecords filters by project_id", () => {
+  const records = [
+    { project_id: "p-1", timestamp: "2026-05-01T10:00:00Z" },
+    { project_id: "p-2", timestamp: "2026-05-01T11:00:00Z" },
+    { project_id: "p-1", timestamp: "2026-05-01T12:00:00Z" },
+  ];
+  const result = queryMeteringRecords(records, { filters: { project_id: "p-1" }, order: "asc" });
+  assert.equal(result.total, 2);
+  assert.equal(result.records.every((r) => r.project_id === "p-1"), true);
+});
+
+test("queryMeteringRecords caps limit at 1000", () => {
+  const records = [];
+  const result = queryMeteringRecords(records, { limit: 99999 });
+  assert.equal(result.limit, 1000);
+});
+
+// ---------------------------------------------------------------------------
+// computeMeteringStats
+// ---------------------------------------------------------------------------
+
+test("computeMeteringStats on empty array returns zeroes and nulls", () => {
+  const stats = computeMeteringStats([]);
+  assert.equal(stats.total_requests, 0);
+  assert.equal(stats.success_count, 0);
+  assert.equal(stats.error_count, 0);
+  assert.equal(stats.total_tokens, 0);
+  assert.equal(stats.avg_duration_ms, null);
+  assert.equal(stats.p50_duration_ms, null);
+  assert.equal(stats.p95_duration_ms, null);
+  assert.equal(stats.earliest_timestamp, null);
+  assert.equal(stats.latest_timestamp, null);
+  assert.deepEqual(stats.by_provider, {});
+});
+
+test("computeMeteringStats aggregates token counts, latency, and breakdowns", () => {
+  const records = [
+    {
+      success: true,
+      tokens_input: 100,
+      tokens_output: 20,
+      duration_ms: 500,
+      timestamp: "2026-05-01T10:00:00Z",
+      provider: "copilot",
+      scope_type: "project",
+      project_id: "p-1",
+    },
+    {
+      success: true,
+      tokens_input: 200,
+      tokens_output: 40,
+      duration_ms: 1000,
+      timestamp: "2026-05-02T10:00:00Z",
+      provider: "copilot",
+      scope_type: "project",
+      project_id: "p-1",
+    },
+    {
+      success: false,
+      tokens_input: 50,
+      tokens_output: 0,
+      duration_ms: 200,
+      timestamp: "2026-05-03T10:00:00Z",
+      provider: "openai",
+      scope_type: "project",
+      project_id: "p-2",
+    },
+  ];
+  const stats = computeMeteringStats(records);
+  assert.equal(stats.total_requests, 3);
+  assert.equal(stats.success_count, 2);
+  assert.equal(stats.error_count, 1);
+  assert.equal(stats.total_tokens_input, 350);
+  assert.equal(stats.total_tokens_output, 60);
+  assert.equal(stats.total_tokens, 410);
+  assert.equal(stats.avg_tokens_input, 117); // Math.round(350/3)
+  assert.equal(stats.avg_duration_ms, 567);  // Math.round(1700/3)
+  assert.equal(typeof stats.p50_duration_ms, "number");
+  assert.equal(typeof stats.p95_duration_ms, "number");
+  assert.equal(stats.earliest_timestamp, "2026-05-01T10:00:00Z");
+  assert.equal(stats.latest_timestamp, "2026-05-03T10:00:00Z");
+  assert.equal(stats.by_provider["copilot"].requests, 2);
+  assert.equal(stats.by_provider["openai"].requests, 1);
+  assert.equal(stats.by_project_id["p-1"].requests, 2);
+  assert.equal(stats.by_project_id["p-2"].requests, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Sink query() method
+// ---------------------------------------------------------------------------
+
+test("createNoopMeteringSink.query returns paginated results", async () => {
+  const sink = createNoopMeteringSink();
+  for (let i = 0; i < 5; i++) {
+    await sink.record({ idx: i, project_id: "p-1", timestamp: `2026-05-0${i + 1}T10:00:00Z` });
+  }
+  const result = sink.query({ limit: 2, offset: 0, order: "asc" });
+  assert.equal(result.total, 5);
+  assert.equal(result.records.length, 2);
+  assert.equal(result.records[0].idx, 0);
+});
+
+test("createJsonlMeteringSink.query reads and filters JSONL file", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-sink-q-"));
+  const filePath = path.join(dir, "meter.jsonl");
+  const sink = createJsonlMeteringSink({ filePath });
+  await sink.record({ request_id: "r-1", project_id: "p-1", success: true, tokens_input: 10, tokens_output: 5, timestamp: "2026-05-01T10:00:00Z" });
+  await sink.record({ request_id: "r-2", project_id: "p-2", success: false, tokens_input: 20, tokens_output: 0, timestamp: "2026-05-02T10:00:00Z" });
+  await sink.record({ request_id: "r-3", project_id: "p-1", success: true, tokens_input: 30, tokens_output: 8, timestamp: "2026-05-03T10:00:00Z" });
+
+  const allResult = sink.query({ order: "asc" });
+  assert.equal(allResult.total, 3);
+
+  const filteredResult = sink.query({ filters: { project_id: "p-1" }, order: "asc" });
+  assert.equal(filteredResult.total, 2);
+  assert.equal(filteredResult.records.every((r) => r.project_id === "p-1"), true);
 });

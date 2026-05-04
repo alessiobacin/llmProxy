@@ -364,6 +364,128 @@ Standard response format for runtime REST endpoints:
 
 `success=true` means `exitCode=0`. For application-level command failures, the API returns `400` with `success=false`.
 
+### Metering query API (platform mode)
+
+When the proxy runs in platform mode (`LLMPROXY_MODE=platform`), every proxied request is appended as a JSON line to the metering sink file. Two HTTP endpoints let you query that data without having to parse the file directly.
+
+#### `GET /v1/llm/metering` — paginated record list
+
+Returns raw metering records. Each record is an audit-ready snapshot of a single inference request:
+
+| Field | Description |
+|---|---|
+| `timestamp` | UTC ISO 8601, when the response was sent |
+| `request_id` | Proxy-generated unique ID (`req_<16 hex chars>`) |
+| `trace_id` | Caller-supplied `X-Trace-Id`, for correlation |
+| `provider` / `model_used` | What actually served the request |
+| `duration_ms` | Wall-clock latency from receipt to response |
+| `success` / `error_code` | Outcome |
+| `tokens_input` / `tokens_output` | Token counts |
+| `fallback_count` | How many providers were tried before success |
+| `master_company` / `tenant_id` / `client_id` / `project_id` | Billing hierarchy |
+| `scope_type` / `scope_id` | Current billing scope |
+| `master_user_id` / `tenant_user_id` / `client_user_id` / `project_user_id` | Per-level end-user IDs |
+| `caller_module` / `operation_id` / `custom_dimensions` | Metering context dimensions |
+| `agent` / `mansione` / `task_id` | Agent-level dimensions (from `custom_dimensions`) |
+
+**Query parameters** (all optional):
+
+| Parameter | Type | Description |
+|---|---|---|
+| `limit` | integer 1–1000 | Records per page (default `100`) |
+| `offset` | integer ≥ 0 | Skip N records (default `0`) |
+| `order` | `desc` \| `asc` | Newest first (default) or oldest first |
+| `from` | ISO 8601 | Filter: `timestamp >= from` |
+| `to` | ISO 8601 | Filter: `timestamp <= to` |
+| `success` | `true` \| `false` | Filter by outcome |
+| `project_id` | string | Exact-match filter |
+| `tenant_id` | string | Exact-match filter |
+| `client_id` | string | Exact-match filter |
+| `master_company` | string | Exact-match filter |
+| `scope_type` | string | Exact-match filter |
+| `scope_id` | string | Exact-match filter |
+| `provider` | string | Exact-match filter |
+| `master_user_id` / `tenant_user_id` / `client_user_id` / `project_user_id` / `user_id` | string | Exact-match per-level user filter |
+| `request_id` | string | Look up a single specific request |
+
+**Example — last 20 requests for a project:**
+
+```http
+GET /v1/llm/metering?project_id=p-1&limit=20&order=desc
+```
+
+**Example — failed requests in a time window:**
+
+```http
+GET /v1/llm/metering?success=false&from=2026-05-01T00:00:00Z&to=2026-05-01T23:59:59Z
+```
+
+**Response shape:**
+
+```json
+{
+  "records": [ /* array of MeteringRecord */ ],
+  "total": 142,
+  "limit": 20,
+  "offset": 0,
+  "order": "desc"
+}
+```
+
+`total` is the count of all records matching the filters (not just the current page). Use `offset` for pagination:
+
+```
+page 1: offset=0,  limit=20  → records 0–19
+page 2: offset=20, limit=20  → records 20–39
+```
+
+#### `GET /v1/llm/metering/stats` — aggregate statistics
+
+Accepts the same filter parameters as the list endpoint (pagination params are ignored). Returns aggregate statistics over the entire filtered record set:
+
+**Example — cost summary for a project, current month:**
+
+```http
+GET /v1/llm/metering/stats?project_id=p-1&from=2026-05-01T00:00:00Z
+```
+
+**Response shape:**
+
+```json
+{
+  "filtered_total": 1284,
+  "total_requests": 1284,
+  "success_count": 1279,
+  "error_count": 5,
+  "total_tokens_input": 4820000,
+  "total_tokens_output": 612000,
+  "total_tokens": 5432000,
+  "avg_tokens_input": 3754,
+  "avg_tokens_output": 477,
+  "avg_duration_ms": 1823,
+  "p50_duration_ms": 1640,
+  "p95_duration_ms": 4210,
+  "earliest_timestamp": "2026-05-01T08:12:43.000Z",
+  "latest_timestamp": "2026-05-04T17:58:02.000Z",
+  "by_provider": {
+    "copilot": { "requests": 1001, "tokens_input": 3800000, "tokens_output": 490000 },
+    "openai":  { "requests":  283, "tokens_input": 1020000, "tokens_output": 122000 }
+  },
+  "by_scope_type": {
+    "project": { "requests": 1284, "tokens_input": 4820000, "tokens_output": 612000 }
+  },
+  "by_project_id": {
+    "p-1": { "requests": 1284, "tokens_input": 4820000, "tokens_output": 612000 }
+  }
+}
+```
+
+**Notes:**
+- Both endpoints return `404` if the proxy is not in platform mode.
+- The JSONL file is read on every HTTP request — no in-memory cache is maintained.
+- Records are appended in chronological order; `order=desc` reverses the slice after filtering.
+- Fields are redacted of sensitive content (message bodies, API keys) before being written to disk, so the stored records do not contain prompt text.
+
 ### Health
 
 ```http

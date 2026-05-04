@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const { createApp } = require("../lib/app");
 const { createTokenStore } = require("../lib/token-store");
+const { createNoopMeteringSink } = require("../lib/metering");
 
 async function withServer(app, callback) {
   const server = await new Promise((resolve) => {
@@ -383,5 +384,141 @@ test("/v1/llm/messages with body.provider=openrouter requires a configured provi
     assert.equal(res.status, 401);
     const body = await res.json();
     assert.equal(body.error.type, "authentication_error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Metering query endpoints
+// ---------------------------------------------------------------------------
+
+test("GET /v1/llm/metering returns 404 in standalone mode", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-standalone-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  // standalone mode (default) — meteringSink has no query method
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "standalone", fetchFn: makeFetchFn() });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering`);
+    assert.equal(res.status, 404);
+  });
+});
+
+test("GET /v1/llm/metering/stats returns 404 in standalone mode", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-stats-standalone-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "standalone", fetchFn: makeFetchFn() });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering/stats`);
+    assert.equal(res.status, 404);
+  });
+});
+
+test("GET /v1/llm/metering returns paginated records in platform mode", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-query-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = createNoopMeteringSink();
+  await meteringSink.record({ project_id: "p-1", provider: "copilot", success: true, tokens_input: 10, tokens_output: 5, timestamp: "2026-05-01T10:00:00Z" });
+  await meteringSink.record({ project_id: "p-2", provider: "openai",  success: false, tokens_input: 20, tokens_output: 0, timestamp: "2026-05-02T10:00:00Z" });
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body.records));
+    assert.equal(body.total, 2);
+    assert.equal(typeof body.limit, "number");
+    assert.equal(typeof body.offset, "number");
+    assert.ok(body.order === "desc" || body.order === "asc");
+  });
+});
+
+test("GET /v1/llm/metering filters by project_id", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-filter-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = createNoopMeteringSink();
+  await meteringSink.record({ project_id: "p-1", success: true, tokens_input: 10, tokens_output: 5, timestamp: "2026-05-01T10:00:00Z" });
+  await meteringSink.record({ project_id: "p-2", success: true, tokens_input: 20, tokens_output: 8, timestamp: "2026-05-02T10:00:00Z" });
+  await meteringSink.record({ project_id: "p-1", success: true, tokens_input: 30, tokens_output: 12, timestamp: "2026-05-03T10:00:00Z" });
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering?project_id=p-1`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.total, 2);
+    assert.ok(body.records.every((r) => r.project_id === "p-1"));
+  });
+});
+
+test("GET /v1/llm/metering filters by success=false", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-success-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = createNoopMeteringSink();
+  await meteringSink.record({ success: true,  tokens_input: 10, tokens_output: 5, timestamp: "2026-05-01T10:00:00Z" });
+  await meteringSink.record({ success: false, tokens_input: 20, tokens_output: 0, timestamp: "2026-05-02T10:00:00Z" });
+  await meteringSink.record({ success: true,  tokens_input: 30, tokens_output: 8, timestamp: "2026-05-03T10:00:00Z" });
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering?success=false`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.total, 1);
+    assert.equal(body.records[0].success, false);
+  });
+});
+
+test("GET /v1/llm/metering returns 400 for invalid limit", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-badlimit-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = createNoopMeteringSink();
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering?limit=abc`);
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error.code, "INVALID_PARAM");
+  });
+});
+
+test("GET /v1/llm/metering returns 400 for invalid success param", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-badsuccess-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = createNoopMeteringSink();
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering?success=maybe`);
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error.code, "INVALID_PARAM");
+  });
+});
+
+test("GET /v1/llm/metering/stats returns aggregate object in platform mode", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-metering-stats-query-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = createNoopMeteringSink();
+  await meteringSink.record({ project_id: "p-1", provider: "copilot", success: true, tokens_input: 100, tokens_output: 20, duration_ms: 800, timestamp: "2026-05-01T10:00:00Z", scope_type: "project" });
+  await meteringSink.record({ project_id: "p-1", provider: "copilot", success: true, tokens_input: 200, tokens_output: 40, duration_ms: 1200, timestamp: "2026-05-02T10:00:00Z", scope_type: "project" });
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/metering/stats?project_id=p-1`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.filtered_total, 2);
+    assert.equal(body.total_requests, 2);
+    assert.equal(body.success_count, 2);
+    assert.equal(body.error_count, 0);
+    assert.equal(body.total_tokens_input, 300);
+    assert.equal(body.total_tokens_output, 60);
+    assert.equal(typeof body.avg_duration_ms, "number");
+    assert.equal(typeof body.p50_duration_ms, "number");
+    assert.equal(typeof body.p95_duration_ms, "number");
+    assert.ok(body.by_provider.copilot.requests === 2);
   });
 });

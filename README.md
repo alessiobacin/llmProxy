@@ -307,6 +307,31 @@ Minimal example:
 
 In addition to the core endpoints (`/health`, `/auth/status`, `/auth/logout`, `/v1/messages`), `llmProxy` also exposes REST endpoints for runtime CLI commands.
 
+### Billing attribution context for `/v1/llm/*`
+
+For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`) the caller must provide a complete hierarchy context for chargeback attribution.
+
+Required fields in `X-Hierarchy-Context`:
+
+- `master_company`
+- `tenant_id`
+- `client_id`
+- `project_id`
+- `scope_type`
+- `scope_id`
+
+Example:
+
+```http
+X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","tenant_id":"t-1","client_id":"c-1","project_id":"p-1"}
+```
+
+Optional metering dimensions can be sent via `X-Metering-Context` under `custom_dimensions` and are emitted in metering records:
+
+```http
+X-Metering-Context: {"caller_module":"orchestrator-v10","operation_id":"op-777","cost_accounting_required":true,"custom_dimensions":{"workflow":"content-generation"}}
+```
+
 Standard response format for runtime REST endpoints:
 
 ```json

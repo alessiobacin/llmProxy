@@ -60,24 +60,11 @@ test("parseHierarchyContext falls back to body when header is missing", () => {
   assert.equal(ctx.tenant_id, "ag-9");
 });
 
-test("validateHierarchyContextForBilling — project under master_company", () => {
+test("validateHierarchyContextForBilling requires full billing chain", () => {
   const invalid = validateHierarchyContextForBilling({ scope_type: "project", scope_id: "p-1", master_company: "mc-1" });
   assert.equal(invalid.valid, false);
-  assert.deepEqual(invalid.missing_fields, ["project_id"]);
+  assert.deepEqual(invalid.missing_fields, ["tenant_id", "client_id", "project_id"]);
 
-  const valid = validateHierarchyContextForBilling({ scope_type: "project", scope_id: "p-1", master_company: "mc-1", project_id: "p-1" });
-  assert.equal(valid.valid, true);
-});
-
-test("validateHierarchyContextForBilling — project under agency", () => {
-  const valid = validateHierarchyContextForBilling({
-    scope_type: "project", scope_id: "p-1",
-    master_company: "mc-1", tenant_id: "t-1", project_id: "p-1",
-  });
-  assert.equal(valid.valid, true);
-});
-
-test("validateHierarchyContextForBilling — project under client of agency (full chain)", () => {
   const valid = validateHierarchyContextForBilling({
     scope_type: "project", scope_id: "p-1",
     master_company: "mc-1", tenant_id: "t-1", client_id: "c-1", project_id: "p-1",
@@ -85,52 +72,16 @@ test("validateHierarchyContextForBilling — project under client of agency (ful
   assert.equal(valid.valid, true);
 });
 
-test("validateHierarchyContextForBilling — client under master_company", () => {
-  const invalid = validateHierarchyContextForBilling({ scope_type: "client", scope_id: "c-1", master_company: "mc-1" });
+test("validateHierarchyContextForBilling returns scope validation fields when invalid", () => {
+  const invalid = validateHierarchyContextForBilling({ scope_type: "invalid", scope_id: "", master_company: "mc-1" });
   assert.equal(invalid.valid, false);
-  assert.deepEqual(invalid.missing_fields, ["client_id"]);
-
-  const valid = validateHierarchyContextForBilling({ scope_type: "client", scope_id: "c-1", master_company: "mc-1", client_id: "c-1" });
-  assert.equal(valid.valid, true);
+  assert.deepEqual(invalid.missing_fields, ["tenant_id", "client_id", "project_id", "scope_type", "scope_id"]);
 });
 
-test("validateHierarchyContextForBilling — client under agency", () => {
-  const valid = validateHierarchyContextForBilling({
-    scope_type: "client", scope_id: "c-1",
-    master_company: "mc-1", tenant_id: "t-1", client_id: "c-1",
-  });
-  assert.equal(valid.valid, true);
-});
-
-test("validateHierarchyContextForBilling — user at master level", () => {
-  const invalid = validateHierarchyContextForBilling({ scope_type: "user", scope_id: "u-1", master_company: "mc-1" });
-  assert.equal(invalid.valid, false);
-  assert.deepEqual(invalid.missing_fields, ["user_id"]);
-
-  const valid = validateHierarchyContextForBilling({ scope_type: "user", scope_id: "u-1", master_company: "mc-1", user_id: "u-1" });
-  assert.equal(valid.valid, true);
-});
-
-test("validateHierarchyContextForBilling — user under agency", () => {
-  const valid = validateHierarchyContextForBilling({
-    scope_type: "user", scope_id: "u-1",
-    master_company: "mc-1", tenant_id: "t-1", user_id: "u-1",
-  });
-  assert.equal(valid.valid, true);
-});
-
-test("validateHierarchyContextForBilling — user under client of agency", () => {
-  const valid = validateHierarchyContextForBilling({
-    scope_type: "user", scope_id: "u-1",
-    master_company: "mc-1", tenant_id: "t-1", client_id: "c-1", user_id: "u-1",
-  });
-  assert.equal(valid.valid, true);
-});
-
-test("validateHierarchyContextForBilling — optional parent ID present but empty is invalid", () => {
+test("validateHierarchyContextForBilling fails when any billing dimension is empty", () => {
   const result = validateHierarchyContextForBilling({
     scope_type: "project", scope_id: "p-1",
-    master_company: "mc-1", tenant_id: "", project_id: "p-1",
+    master_company: "mc-1", tenant_id: "", client_id: "c-1", project_id: "p-1",
   });
   assert.equal(result.valid, false);
   assert.deepEqual(result.missing_fields, ["tenant_id"]);
@@ -151,6 +102,21 @@ test("parseMeteringContext extracts caller_module and operation_id", () => {
   assert.equal(ctx.caller_module, "ai-orchestrator");
   assert.equal(ctx.operation_id, "op-42");
   assert.equal(ctx.cost_accounting_required, true);
+});
+
+test("parseMeteringContext preserves optional custom dimensions", () => {
+  const ctx = parseMeteringContext({
+    headers: {
+      "x-metering-context": JSON.stringify({
+        caller_module: "ai-orchestrator",
+        operation_id: "op-99",
+        custom_dimensions: { campaign_id: "cmp-1", channel: "ads" },
+      }),
+    },
+    body: {},
+  });
+
+  assert.deepEqual(ctx.custom_dimensions, { campaign_id: "cmp-1", channel: "ads" });
 });
 
 test("resolveTraceId reads X-Trace-Id header", () => {

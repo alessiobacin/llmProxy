@@ -110,7 +110,57 @@ test("/v1/llm/messages rejects HierarchyContext missing billing identifiers", as
     assert.equal(res.status, 400);
     const body = await res.json();
     assert.equal(body.error.code, "HIERARCHY_CONTEXT_INVALID");
-    assert.deepEqual(body.error.missing_fields, ["master_company", "project_id"]);
+    assert.deepEqual(body.error.missing_fields, ["master_company", "client_id", "project_id"]);
+  });
+});
+
+test("/v1/llm/messages emits metering record with hierarchy attribution", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-platform-metering-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = {
+    records: [],
+    async record(record) {
+      this.records.push(record);
+    },
+  };
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-trace-id": "trace-meter-1",
+        "x-hierarchy-context": JSON.stringify({
+          scope_type: "project",
+          scope_id: "p-1",
+          master_company: "mc-1",
+          tenant_id: "t-1",
+          client_id: "c-1",
+          project_id: "p-1",
+        }),
+        "x-metering-context": JSON.stringify({
+          caller_module: "orchestrator-v10",
+          operation_id: "op-777",
+          cost_accounting_required: true,
+          custom_dimensions: { workflow: "content-generation" },
+        }),
+      },
+      body: JSON.stringify({ model: "claude-sonnet-4.5", messages: [{ role: "user", content: "hi" }] }),
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(meteringSink.records.length, 1);
+    const record = meteringSink.records[0];
+    assert.equal(record.trace_id, "trace-meter-1");
+    assert.equal(record.master_company, "mc-1");
+    assert.equal(record.tenant_id, "t-1");
+    assert.equal(record.client_id, "c-1");
+    assert.equal(record.project_id, "p-1");
+    assert.equal(record.caller_module, "orchestrator-v10");
+    assert.equal(record.operation_id, "op-777");
+    assert.equal(record.success, true);
   });
 });
 

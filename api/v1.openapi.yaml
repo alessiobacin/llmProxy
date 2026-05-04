@@ -58,13 +58,15 @@ components:
         agency_id: {type: string, nullable: true}
         client_id: {type: string, nullable: true}
         project_id: {type: string, nullable: true}
+        master_company: {type: string}
+        tenant_id: {type: string}
         user_id: {type: string, nullable: true}
         roles: {type: array, items: {type: string}}
         scope_type:
           type: string
           enum: [master, agency, client, project, user]
         scope_id: {type: string}
-      required: [scope_type, scope_id]
+      required: [scope_type, scope_id, master_company, tenant_id, client_id, project_id]
     MeteringContext:
       type: object
       properties:
@@ -72,6 +74,9 @@ components:
         operation_id: {type: string}
         request_purpose: {type: string}
         cost_accounting_required: {type: boolean}
+        custom_dimensions:
+          type: object
+          additionalProperties: true
     AnthropicMessagesRequest:
       type: object
       properties:

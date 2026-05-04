@@ -309,21 +309,39 @@ In addition to the core endpoints (`/health`, `/auth/status`, `/auth/logout`, `/
 
 ### Billing attribution context for `/v1/llm/*`
 
-For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`) the caller must provide a complete hierarchy context for chargeback attribution.
+For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`) the caller must provide a hierarchy context for chargeback attribution.
 
-Required fields in `X-Hierarchy-Context`:
+Always required in `X-Hierarchy-Context`:
 
 - `master_company`
-- `tenant_id`
-- `client_id`
 - `project_id`
 - `scope_type`
 - `scope_id`
 
-Example:
+Optional, depending on the billing hierarchy:
+
+- `tenant_id` — present when the masterCompany provides the SaaS platform to a tenant
+- `client_id` — present when the project belongs to a client (of the masterCompany or of a tenant)
+
+Valid combinations:
+
+| Scenario | Required fields |
+|---|---|
+| MC direct project | `master_company` + `project_id` |
+| Tenant project | `master_company` + `tenant_id` + `project_id` |
+| MC → direct client | `master_company` + `client_id` + `project_id` |
+| Full chain | `master_company` + `tenant_id` + `client_id` + `project_id` |
+
+Example (full chain):
 
 ```http
 X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","tenant_id":"t-1","client_id":"c-1","project_id":"p-1"}
+```
+
+Example (MC direct client, no tenant):
+
+```http
+X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","client_id":"c-1","project_id":"p-1"}
 ```
 
 Optional metering dimensions can be sent via `X-Metering-Context` under `custom_dimensions` and are emitted in metering records:

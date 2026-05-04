@@ -96,13 +96,12 @@ test("validateHierarchyContextForBilling requires project_id", () => {
   assert.ok(result.missing_fields.includes("project_id"));
 });
 
-test("validateHierarchyContextForBilling requires tenant_id when client_id is present", () => {
+test("validateHierarchyContextForBilling accepts scenario 4 - MC direct client (master_company + client_id + project_id)", () => {
   const result = validateHierarchyContextForBilling({
     scope_type: "project", scope_id: "p-1",
     master_company: "mc-1", client_id: "c-1", project_id: "p-1",
   });
-  assert.equal(result.valid, false);
-  assert.deepEqual(result.missing_fields, ["tenant_id"]);
+  assert.equal(result.valid, true);
 });
 
 test("parseMeteringContext extracts caller_module and operation_id", () => {

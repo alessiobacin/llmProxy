@@ -60,28 +60,46 @@ test("parseHierarchyContext falls back to body when header is missing", () => {
   assert.equal(ctx.tenant_id, "ag-9");
 });
 
-test("validateHierarchyContextForBilling requires full billing chain", () => {
-  const invalid = validateHierarchyContextForBilling({ scope_type: "project", scope_id: "p-1", master_company: "mc-1" });
-  assert.equal(invalid.valid, false);
-  assert.deepEqual(invalid.missing_fields, ["tenant_id", "client_id", "project_id"]);
+test("validateHierarchyContextForBilling accepts master_company + project_id (MC direct)", () => {
+  const result = validateHierarchyContextForBilling({
+    scope_type: "project", scope_id: "p-1",
+    master_company: "mc-1", project_id: "p-1",
+  });
+  assert.equal(result.valid, true);
+});
 
-  const valid = validateHierarchyContextForBilling({
+test("validateHierarchyContextForBilling accepts master_company + tenant_id + project_id (tenant)", () => {
+  const result = validateHierarchyContextForBilling({
+    scope_type: "project", scope_id: "p-1",
+    master_company: "mc-1", tenant_id: "t-1", project_id: "p-1",
+  });
+  assert.equal(result.valid, true);
+});
+
+test("validateHierarchyContextForBilling accepts full chain master_company + tenant_id + client_id + project_id", () => {
+  const result = validateHierarchyContextForBilling({
     scope_type: "project", scope_id: "p-1",
     master_company: "mc-1", tenant_id: "t-1", client_id: "c-1", project_id: "p-1",
   });
-  assert.equal(valid.valid, true);
+  assert.equal(result.valid, true);
 });
 
-test("validateHierarchyContextForBilling returns scope validation fields when invalid", () => {
-  const invalid = validateHierarchyContextForBilling({ scope_type: "invalid", scope_id: "", master_company: "mc-1" });
-  assert.equal(invalid.valid, false);
-  assert.deepEqual(invalid.missing_fields, ["tenant_id", "client_id", "project_id", "scope_type", "scope_id"]);
+test("validateHierarchyContextForBilling requires master_company", () => {
+  const result = validateHierarchyContextForBilling({ scope_type: "project", scope_id: "p-1", project_id: "p-1" });
+  assert.equal(result.valid, false);
+  assert.ok(result.missing_fields.includes("master_company"));
 });
 
-test("validateHierarchyContextForBilling fails when any billing dimension is empty", () => {
+test("validateHierarchyContextForBilling requires project_id", () => {
+  const result = validateHierarchyContextForBilling({ scope_type: "project", scope_id: "p-1", master_company: "mc-1" });
+  assert.equal(result.valid, false);
+  assert.ok(result.missing_fields.includes("project_id"));
+});
+
+test("validateHierarchyContextForBilling requires tenant_id when client_id is present", () => {
   const result = validateHierarchyContextForBilling({
     scope_type: "project", scope_id: "p-1",
-    master_company: "mc-1", tenant_id: "", client_id: "c-1", project_id: "p-1",
+    master_company: "mc-1", client_id: "c-1", project_id: "p-1",
   });
   assert.equal(result.valid, false);
   assert.deepEqual(result.missing_fields, ["tenant_id"]);

@@ -110,7 +110,8 @@ test("/v1/llm/messages rejects HierarchyContext missing billing identifiers", as
     assert.equal(res.status, 400);
     const body = await res.json();
     assert.equal(body.error.code, "HIERARCHY_CONTEXT_INVALID");
-    assert.deepEqual(body.error.missing_fields, ["master_company", "client_id", "project_id"]);
+    // tenant_id alone is valid (tenant project without client); but master_company and project_id are missing
+    assert.deepEqual(body.error.missing_fields, ["master_company", "project_id"]);
   });
 });
 

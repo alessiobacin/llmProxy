@@ -204,6 +204,53 @@ If you prefer manual configuration, set both the top-level `model` field and the
 }
 ```
 
+### Provider-targeted model preferences and fallback chain
+
+You can route different models to different providers directly from `ANTHROPIC_DEFAULT_MODEL` using a comma-separated list:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "proxy-local",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
+    "ANTHROPIC_DEFAULT_MODEL": "copilot:gpt-5.4,kimi:kimi-k2.5",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+  },
+  "model": "copilot:gpt-5.4",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}' || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+How it works:
+
+- `copilot:gpt-5.4,kimi:kimi-k2.5` means: use `gpt-5.4` when the active provider is Copilot, and use `kimi-k2.5` when the request falls back to Kimi.
+- Provider fallback order follows your configured provider order (`llmproxy provider:list`). You can change priority with `llmproxy provider:order <providerId> <position>`.
+- On retryable failures (for example `401`, `408`, `429`, many `5xx`, network errors, or invalid model errors), `llmProxy` moves to the next provider.
+- Keep the top-level `model` aligned with your primary route for a clearer Claude Code UI (`copilot:gpt-5.4` in this example).
+
+Example setup flow:
+
+```bash
+llmproxy provider:add default --name "Default GitHub Copilot" --model "gpt-5.4"
+llmproxy provider:add kimi --provider kimi --api-key "$KIMI_API_KEY" --model "kimi-k2.5"
+llmproxy provider:order default 1
+llmproxy provider:order kimi 2
+llmproxy provider:list
+```
+
 ### Meaning of the variables
 
 - `model`

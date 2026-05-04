@@ -204,6 +204,53 @@ Se preferisci configurare a mano, imposta sia il campo top-level `model` sia la 
 }
 ```
 
+### Preferenze modello per provider e catena di fallback
+
+Puoi instradare modelli diversi su provider diversi direttamente da `ANTHROPIC_DEFAULT_MODEL` usando una lista separata da virgole:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "proxy-local",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
+    "ANTHROPIC_DEFAULT_MODEL": "copilot:gpt-5.4,kimi:kimi-k2.5",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+  },
+  "model": "copilot:gpt-5.4",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}' || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Come funziona:
+
+- `copilot:gpt-5.4,kimi:kimi-k2.5` significa: usa `gpt-5.4` quando il provider attivo e` Copilot, e usa `kimi-k2.5` quando la richiesta va in fallback su Kimi.
+- L'ordine di fallback tra provider segue l'ordine configurato (`llmproxy provider:list`). Puoi cambiare la priorita` con `llmproxy provider:order <providerId> <position>`.
+- In caso di errori ritentabili (ad esempio `401`, `408`, `429`, molti `5xx`, errori di rete, oppure errori di modello non valido), `llmProxy` passa al provider successivo.
+- Mantieni il campo top-level `model` allineato al percorso primario per una UI Claude Code piu` chiara (`copilot:gpt-5.4` in questo esempio).
+
+Esempio di setup:
+
+```bash
+llmproxy provider:add default --name "Default GitHub Copilot" --model "gpt-5.4"
+llmproxy provider:add kimi --provider kimi --api-key "$KIMI_API_KEY" --model "kimi-k2.5"
+llmproxy provider:order default 1
+llmproxy provider:order kimi 2
+llmproxy provider:list
+```
+
 ### Significato delle variabili
 
 - `model`

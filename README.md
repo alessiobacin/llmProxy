@@ -217,20 +217,7 @@ You can route different models to different providers directly from `ANTHROPIC_D
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   },
-  "model": "llmProxy",
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Glob|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}' || true"
-          }
-        ]
-      }
-    ]
-  }
+  "model": "llmProxy"
 }
 ```
 
@@ -323,6 +310,16 @@ Optional, depending on the billing hierarchy:
 - `tenant_id` — present when the masterCompany provides the SaaS platform to a tenant
 - `client_id` — present when the project belongs to a client (of the masterCompany or of a tenant)
 
+Optional user identity fields (per org level):
+
+- `user_id` — generic identifier for the end-user within the current scope (backward-compatible alias)
+- `master_user_id` — user ID within the masterCompany identity system
+- `tenant_user_id` — user ID within the tenant identity system
+- `client_user_id` — user ID within the client identity system
+- `project_user_id` — user ID within the project identity system
+
+All `*_user_id` fields are optional and independent of each other. They are emitted as-is in metering records for chargeback attribution at the user level.
+
 Valid combinations:
 
 | Scenario | Required fields |
@@ -332,16 +329,16 @@ Valid combinations:
 | MC → direct client | `master_company` + `client_id` + `project_id` |
 | Full chain | `master_company` + `tenant_id` + `client_id` + `project_id` |
 
-Example (full chain):
+Example (full chain with per-level user IDs):
 
 ```http
-X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","tenant_id":"t-1","client_id":"c-1","project_id":"p-1"}
+X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","tenant_id":"t-1","client_id":"c-1","project_id":"p-1","master_user_id":"u-mc","tenant_user_id":"u-tenant","client_user_id":"u-client","project_user_id":"u-project"}
 ```
 
-Example (MC direct client, no tenant):
+Example (MC direct client, no tenant, with user identity):
 
 ```http
-X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","client_id":"c-1","project_id":"p-1"}
+X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","client_id":"c-1","project_id":"p-1","master_user_id":"u-mc","project_user_id":"u-project"}
 ```
 
 Optional metering dimensions can be sent via `X-Metering-Context` under `custom_dimensions` and are emitted in metering records:

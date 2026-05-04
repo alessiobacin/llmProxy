@@ -39,6 +39,50 @@ test("parseHierarchyContext parses JSON header and validates scope_type", () => 
   assert.deepEqual(ctx.roles, ["admin", "operator"]);
 });
 
+test("parseHierarchyContext extracts per-level user IDs", () => {
+  const ctx = parseHierarchyContext({
+    headers: {
+      "x-hierarchy-context": JSON.stringify({
+        scope_type: "project",
+        scope_id: "p-1",
+        master_company: "mc-1",
+        tenant_id: "t-1",
+        client_id: "c-1",
+        project_id: "p-1",
+        user_id: "u-generic",
+        master_user_id: "u-mc",
+        tenant_user_id: "u-tenant",
+        client_user_id: "u-client",
+        project_user_id: "u-project",
+      }),
+    },
+    body: {},
+  });
+  assert.equal(ctx.user_id, "u-generic");
+  assert.equal(ctx.master_user_id, "u-mc");
+  assert.equal(ctx.tenant_user_id, "u-tenant");
+  assert.equal(ctx.client_user_id, "u-client");
+  assert.equal(ctx.project_user_id, "u-project");
+});
+
+test("parseHierarchyContext per-level user IDs default to null when absent", () => {
+  const ctx = parseHierarchyContext({
+    headers: {
+      "x-hierarchy-context": JSON.stringify({
+        scope_type: "project",
+        scope_id: "p-1",
+        master_company: "mc-1",
+        project_id: "p-1",
+      }),
+    },
+    body: {},
+  });
+  assert.equal(ctx.master_user_id, null);
+  assert.equal(ctx.tenant_user_id, null);
+  assert.equal(ctx.client_user_id, null);
+  assert.equal(ctx.project_user_id, null);
+});
+
 test("parseHierarchyContext rejects invalid scope_type", () => {
   const ctx = parseHierarchyContext({
     headers: {

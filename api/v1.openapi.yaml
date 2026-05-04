@@ -57,16 +57,20 @@ components:
       properties:
         agency_id: {type: string, nullable: true}
         client_id: {type: string, nullable: true}
-        project_id: {type: string, nullable: true}
+        project_id: {type: string}
         master_company: {type: string}
-        tenant_id: {type: string}
-        user_id: {type: string, nullable: true}
+        tenant_id: {type: string, nullable: true}
+        user_id: {type: string, nullable: true, description: "Generic user identifier (alias for the user within the current scope)."}
+        master_user_id: {type: string, nullable: true, description: "User ID within the masterCompany identity system."}
+        tenant_user_id: {type: string, nullable: true, description: "User ID within the tenant identity system."}
+        client_user_id: {type: string, nullable: true, description: "User ID within the client identity system."}
+        project_user_id: {type: string, nullable: true, description: "User ID within the project identity system."}
         roles: {type: array, items: {type: string}}
         scope_type:
           type: string
           enum: [master, agency, client, project, user]
         scope_id: {type: string}
-      required: [scope_type, scope_id, master_company, tenant_id, client_id, project_id]
+      required: [scope_type, scope_id, master_company, project_id]
     MeteringContext:
       type: object
       properties:

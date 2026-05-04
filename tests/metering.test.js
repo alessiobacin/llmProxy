@@ -34,6 +34,46 @@ test("buildMeteringRecord normalizes provider attempts and totals", () => {
   assert.equal(record.success, true);
 });
 
+test("buildMeteringRecord emits per-level user IDs from hierarchyContext", () => {
+  const record = buildMeteringRecord({
+    requestId: "req-uid",
+    hierarchyContext: {
+      master_company: "mc-1",
+      tenant_id: "t-1",
+      client_id: "c-1",
+      project_id: "p-1",
+      scope_type: "project",
+      scope_id: "p-1",
+      user_id: "u-generic",
+      master_user_id: "u-mc",
+      tenant_user_id: "u-tenant",
+      client_user_id: "u-client",
+      project_user_id: "u-project",
+    },
+  });
+  assert.equal(record.user_id, "u-generic");
+  assert.equal(record.master_user_id, "u-mc");
+  assert.equal(record.tenant_user_id, "u-tenant");
+  assert.equal(record.client_user_id, "u-client");
+  assert.equal(record.project_user_id, "u-project");
+});
+
+test("buildMeteringRecord per-level user IDs default to null when absent", () => {
+  const record = buildMeteringRecord({
+    requestId: "req-no-uid",
+    hierarchyContext: {
+      master_company: "mc-1",
+      project_id: "p-1",
+      scope_type: "project",
+      scope_id: "p-1",
+    },
+  });
+  assert.equal(record.master_user_id, null);
+  assert.equal(record.tenant_user_id, null);
+  assert.equal(record.client_user_id, null);
+  assert.equal(record.project_user_id, null);
+});
+
 test("createNoopMeteringSink stores records in memory for inspection", async () => {
   const sink = createNoopMeteringSink();
   await sink.record({ a: 1 });

@@ -1,6 +1,6 @@
 # llmProxy
 
-`llmProxy` e` un package standalone che espone un proxy GitHub Copilot Anthropic-compatible su `/v1/messages` e una CLI globale per login, avvio, status, log, servizio persistente e fallback tra piu` account GitHub Copilot.
+`llmProxy` e` un package standalone che espone un proxy GitHub Copilot Anthropic-compatible su `/v1/messages` e una CLI globale per login, avvio, status, log, servizio persistente e fallback tra piu` account GitHub Copilot. Al momento e` ottimizzato principalmente per workflow Claude Code.
 
 > **Modalità v8 platform**: llmProxy può funzionare anche come Tool #45 della v8 architecture esponendo `/v1/llm/messages` e `/v1/llm/health` con HierarchyContext / MeteringContext obbligatori. Imposta `LLMPROXY_MODE=platform`. Dettagli completi in [docs/CHANGELOG-v8-platform-tool.md](docs/CHANGELOG-v8-platform-tool.md).
 
@@ -239,7 +239,7 @@ Come funziona:
 - `copilot:gpt-5.4,kimi:kimi-k2.5` significa: usa `gpt-5.4` quando il provider attivo e` Copilot, e usa `kimi-k2.5` quando la richiesta va in fallback su Kimi.
 - L'ordine di fallback tra provider segue l'ordine configurato (`llmproxy provider:list`). Puoi cambiare la priorita` con `llmproxy provider:order <providerId> <position>`.
 - In caso di errori ritentabili (ad esempio `401`, `408`, `429`, molti `5xx`, errori di rete, oppure errori di modello non valido), `llmProxy` passa al provider successivo.
-- Mantieni il campo top-level `model` allineato al percorso primario per una UI Claude Code piu` chiara (`copilot:gpt-5.4` in questo esempio).
+- `model` puo` essere un'etichetta UI come `llmProxy`; la logica di instradamento e` guidata da `ANTHROPIC_DEFAULT_MODEL` e dai default dei provider.
 
 Esempio di setup:
 
@@ -254,14 +254,14 @@ llmproxy provider:list
 ### Significato delle variabili
 
 - `model`
-  E` il modello che Claude Code considera attivo nella sessione e quello mostrato nell'interfaccia. Deve corrispondere al modello che vuoi instradare verso `llmProxy`.
+  E` principalmente l'etichetta mostrata da Claude Code in UI/sessione. Puoi mantenerlo come `llmProxy`.
 
 - `ANTHROPIC_AUTH_TOKEN`
   Con `llmProxy` puo` essere un valore fittizio non vuoto, per esempio `proxy-local`.
 - `ANTHROPIC_BASE_URL`
   Deve puntare al proxy `llmProxy`. Il default di questo package e` `http://127.0.0.1:3015`.
 - `ANTHROPIC_DEFAULT_MODEL`
-  Deve essere un modello supportato da GitHub Copilot. Puoi ricavarlo da `llmproxy models:list`.
+  E` l'input di routing usato da `llmProxy` (modello singolo o catena provider come `copilot:gpt-5.4,kimi:kimi-k2.5`).
 - `API_TIMEOUT_MS`
   Puoi lasciare un timeout alto se vuoi evitare timeout prematuri su task lunghi.
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`
@@ -272,9 +272,15 @@ llmproxy provider:list
 Se stavi gia` usando un proxy locale o una configurazione precedente di Claude Code, qui ci sono le differenze importanti:
 
 - `ANTHROPIC_BASE_URL` deve puntare al servizio `llmProxy`
-- `model` e `ANTHROPIC_DEFAULT_MODEL` devono avere lo stesso valore se vuoi che interfaccia Claude Code, request canonica e log coincidano
-- `ANTHROPIC_DEFAULT_MODEL` deve essere un modello GitHub Copilot valido
+- `model` puo` essere una label UI stabile (`llmProxy`) e non deve per forza coincidere con la catena di routing
+- `ANTHROPIC_DEFAULT_MODEL` dovrebbe contenere il modello primario esplicito o la chain se vuoi routing deterministico
 - non serve PM2: il servizio persistente viene gestito dal service manager nativo (`launchd` o `systemd --user`)
+
+Se `ANTHROPIC_DEFAULT_MODEL` e` vuoto:
+
+- `llmProxy` non ricava automaticamente una provider chain da `model: llmProxy`.
+- Il routing va in fallback su modello della richiesta e/o sui `default_model` dei provider (se configurati con `provider:add ... --model ...`).
+- Se nessuno dei due e` disponibile, sul percorso Copilot viene usato il fallback interno al modello mappato di default.
 
 Esempio minimo:
 

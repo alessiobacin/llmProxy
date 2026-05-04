@@ -193,7 +193,7 @@ If you prefer manual configuration, set both the top-level `model` field and the
 
 ```json
 {
-  "model": "claude-opus-4.5",
+  "model": "llmProxy",
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "proxy-local",
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
@@ -217,20 +217,7 @@ You can route different models to different providers directly from `ANTHROPIC_D
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   },
-  "model": "copilot:gpt-5.4",
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Glob|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}' || true"
-          }
-        ]
-      }
-    ]
-  }
+  "model": "llmProxy"
 }
 ```
 
@@ -280,7 +267,7 @@ Minimal example:
 
 ```json
 {
-  "model": "claude-sonnet-4.5",
+  "model": "llmProxy",
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
     "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-4.5"

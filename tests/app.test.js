@@ -1003,6 +1003,10 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
       serviceCalls.push("install");
       return { stdoutPath: path.join(tempRoot, "logs", "service.out.log"), stderrPath: path.join(tempRoot, "logs", "service.err.log") };
     },
+    start() {
+      serviceCalls.push("start");
+      return { ok: true, stdout: "", stderr: "" };
+    },
     stop() {
       serviceCalls.push("stop");
       return { ok: true, stdout: "", stderr: "" };

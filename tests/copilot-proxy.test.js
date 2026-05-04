@@ -8,6 +8,16 @@ test("parseProviderModelPreferences keeps deepseek model names intact", () => {
   assert.deepEqual(parsed, [{ provider: null, model: "deepseek-v4-flash" }]);
 });
 
+test("parseProviderModelPreferences keeps mistral model names intact", () => {
+  const parsed = parseProviderModelPreferences("mistral-large-latest");
+  assert.deepEqual(parsed, [{ provider: null, model: "mistral-large-latest" }]);
+});
+
+test("parseProviderModelPreferences keeps mistral-small model names intact", () => {
+  const parsed = parseProviderModelPreferences("mistral-small-latest");
+  assert.deepEqual(parsed, [{ provider: null, model: "mistral-small-latest" }]);
+});
+
 test("parseProviderModelPreferences still supports zai- prefix shorthand", () => {
   const parsed = parseProviderModelPreferences("zai-glm-5");
   assert.deepEqual(parsed, [{ provider: "zai", model: "glm-5" }]);

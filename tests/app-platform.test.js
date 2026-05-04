@@ -164,6 +164,79 @@ test("/v1/llm/messages emits metering record with hierarchy attribution", async 
   });
 });
 
+test("/v1/llm/messages emits v10-ready metering record (agent/mansione/task_id mapping)", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-platform-v10-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "t" });
+  const meteringSink = {
+    records: [],
+    async record(record) {
+      this.records.push(record);
+    },
+  };
+  const app = createApp({ dataRoot: tempRoot, tokenStore, mode: "platform", fetchFn: makeFetchFn(), meteringSink });
+
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/llm/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-trace-id": "trace-v10-contract",
+        "x-hierarchy-context": JSON.stringify({
+          scope_type: "project",
+          scope_id: "p-42",
+          master_company: "mc-acme",
+          tenant_id: "t-agency",
+          client_id: "c-brand",
+          project_id: "p-42",
+        }),
+        "x-metering-context": JSON.stringify({
+          caller_module: "lm-gateway-v10",
+          operation_id: "op-contract-001",
+          cost_accounting_required: true,
+          custom_dimensions: {
+            agent: "content-strategist",
+            mansione: "content-strategist-v2",
+            task_id: "task-uuid-abc123",
+            workflow: "content-generation",
+          },
+        }),
+      },
+      body: JSON.stringify({ model: "claude-sonnet-4.5", messages: [{ role: "user", content: "hi" }] }),
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(meteringSink.records.length, 1);
+    const rec = meteringSink.records[0];
+
+    // Event envelope
+    assert.equal(rec.event_schema_version, "2026.1");
+    assert.equal(rec.trace_id, "trace-v10-contract");
+    assert.equal(rec.success, true);
+
+    // v10 billing hierarchy column aliases
+    assert.equal(rec.company_id, "mc-acme");
+    assert.equal(rec.client_id, "c-brand");
+    assert.equal(rec.project_id, "p-42");
+
+    // v10 token column aliases (from mock: prompt_tokens=1, completion_tokens=2)
+    assert.equal(rec.tokens_input, 1);
+    assert.equal(rec.tokens_output, 2);
+
+    // v10 agent dimensions from custom_dimensions
+    assert.equal(rec.agent, "content-strategist");
+    assert.equal(rec.mansione, "content-strategist-v2");
+    assert.equal(rec.task_id, "task-uuid-abc123");
+
+    // Metering context
+    assert.equal(rec.caller_module, "lm-gateway-v10");
+    assert.equal(rec.cost_accounting_required, true);
+
+    // custom_dimensions preserved
+    assert.equal(rec.custom_dimensions.workflow, "content-generation");
+  });
+});
+
 test("/v1/messages keeps backward compatibility without HierarchyContext", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-platform-bc-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

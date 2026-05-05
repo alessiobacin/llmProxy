@@ -1,0 +1,66 @@
+# docker-compose.production.yml
+#
+# llmProxy — production environment
+#
+# Port convention (production = prefix 7):
+#   llmProxy  → 7045
+#   db-layer  → 7046
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml up -d
+#   docker compose -f docker-compose.production.yml down
+#
+# Secrets (not stored here — inject via CI/CD or Docker secrets):
+#   LLMPROXY_SECRET, GitHub Copilot token
+
+services:
+  llmproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llmproxy:production
+    container_name: llmproxy-production
+    restart: always
+    ports:
+      - "7045:7045"
+    environment:
+      PORT: "7045"
+      HOST: "0.0.0.0"
+      NODE_ENV: "production"
+      LLMPROXY_ENV: "production"
+      LLMPROXY_MODE: "platform"
+      LLMPROXY_METERING_SINK: "dblayer"
+      # db-layer is a Docker sibling service; use the service name as hostname
+      DBLAYER_URL: "http://dblayer:7046"
+      LLMPROXY_LOG_RETENTION_DAYS: "30"
+      # Inject secrets at deploy time (do NOT hard-code here):
+      # LLMPROXY_SECRET: "${LLMPROXY_SECRET}"
+    volumes:
+      # Reuse host token store/logs so container has the same authenticated providers
+      - "${HOME}/Library/Application Support/llmProxy:/root/.local/share/llmProxy"
+    networks:
+      - llmproxy-production
+
+  dblayer:
+    profiles:
+      - dblayer
+    image: alessiobacin/dblayer:latest   # replace with correct image ref
+    container_name: dblayer-production
+    restart: always
+    ports:
+      - "7046:7046"
+    environment:
+      PORT: "7046"
+      HOST: "0.0.0.0"
+      NODE_ENV: "production"
+    volumes:
+      - dblayer-data-production:/data
+    networks:
+      - llmproxy-production
+
+volumes:
+  dblayer-data-production:
+
+networks:
+  llmproxy-production:
+    driver: bridge

@@ -38,7 +38,7 @@ test("claude:setup creates .claude/settings.json for the current project", async
   assert.equal(stderr.toString(), "");
   assert.equal(settings.model, "claude-sonnet-4.5");
   assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
-  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:5045");
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "claude-sonnet-4.5");
   assert.equal(settings.env.API_TIMEOUT_MS, "3000000");
   assert.equal(settings.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, "1");
@@ -419,7 +419,7 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "http://127.0.0.1:3015/v1/messages");
+  assert.equal(requests[0].url, "http://127.0.0.1:5045/v1/messages");
   assert.equal(requests[0].options.method, "POST");
   assert.equal(requests[0].options.headers["content-type"], "application/json");
 

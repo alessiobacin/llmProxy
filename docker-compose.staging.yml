@@ -1,0 +1,67 @@
+# docker-compose.staging.yml
+#
+# llmProxy — staging environment
+#
+# Port convention (staging = prefix 6):
+#   llmProxy  → 6045
+#   db-layer  → 6046
+#
+# Usage:
+#   docker compose -f docker-compose.staging.yml up -d
+#   docker compose -f docker-compose.staging.yml down
+#
+# Secrets (not stored here — inject via CI/CD or Docker secrets):
+#   LLMPROXY_SECRET, GitHub Copilot token
+
+services:
+  llmproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llmproxy:staging
+    container_name: llmproxy-staging
+    restart: unless-stopped
+    ports:
+      - "6045:6045"
+    environment:
+      PORT: "6045"
+      HOST: "0.0.0.0"
+      NODE_ENV: "staging"
+      LLMPROXY_ENV: "staging"
+      LLMPROXY_MODE: "platform"
+      LLMPROXY_METERING_SINK: "dblayer"
+      # db-layer is a Docker sibling service; use the service name as hostname
+      DBLAYER_URL: "http://dblayer:6046"
+      LLMPROXY_LOG_RETENTION_DAYS: "7"
+      # Inject secrets at deploy time (do NOT hard-code here):
+      # LLMPROXY_SECRET: "${LLMPROXY_SECRET}"
+    volumes:
+      # Persist token store, logs and local metering fallback (JSONL)
+      - llmproxy-data-staging:/root/.local/share/llmProxy
+    depends_on:
+      - dblayer
+    networks:
+      - llmproxy-staging
+
+  dblayer:
+    image: alessiobacin/dblayer:latest   # replace with correct image ref
+    container_name: dblayer-staging
+    restart: unless-stopped
+    ports:
+      - "6046:6046"
+    environment:
+      PORT: "6046"
+      HOST: "0.0.0.0"
+      NODE_ENV: "staging"
+    volumes:
+      - dblayer-data-staging:/data
+    networks:
+      - llmproxy-staging
+
+volumes:
+  llmproxy-data-staging:
+  dblayer-data-staging:
+
+networks:
+  llmproxy-staging:
+    driver: bridge

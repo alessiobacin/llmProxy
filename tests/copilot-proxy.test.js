@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { parseProviderModelPreferences, sanitizeSchemaForMoonshot, sanitizeToolsForMoonshot } = require("../lib/copilot-proxy");
+const { parseProviderModelPreferences, sanitizeSchemaForMoonshot, sanitizeToolsForMoonshot, sanitizeVisionContent, VISION_CAPABLE_PROVIDERS } = require("../lib/copilot-proxy");
 
 test("parseProviderModelPreferences keeps deepseek model names intact", () => {
   const parsed = parseProviderModelPreferences("deepseek-v4-flash");
@@ -54,4 +54,42 @@ test("sanitizeToolsForMoonshot sanitizes parameters of each tool", () => {
   ];
   const result = sanitizeToolsForMoonshot(tools);
   assert.deepEqual(result[0].function.parameters.properties.config, { $ref: "#/defs/Config" });
+});
+
+test("sanitizeVisionContent replaces image_url blocks with [image] text for non-vision providers", () => {
+  const messages = [
+    { role: "user", content: [{ type: "text", text: "Guarda questa immagine:" }, { type: "image_url", image_url: { url: "data:image/png;base64,abc" } }] },
+    { role: "assistant", content: [{ type: "text", text: "Ok" }] },
+  ];
+  const result = sanitizeVisionContent(messages);
+  // First message: collapsed to string (text + [image])
+  assert.equal(typeof result[0].content, "string");
+  assert.ok(result[0].content.includes("[image]"), "deve contenere [image]");
+  // Second message: invariato (nessuna image_url)
+  assert.deepEqual(result[1], messages[1]);
+});
+
+test("sanitizeVisionContent keeps messages with only text unchanged", () => {
+  const messages = [
+    { role: "user", content: [{ type: "text", text: "Ciao" }] },
+    { role: "user", content: "Semplice stringa" },
+  ];
+  const result = sanitizeVisionContent(messages);
+  assert.deepEqual(result, messages);
+});
+
+test("sanitizeVisionContent handles message where content is only image_url (no text)", () => {
+  const messages = [
+    { role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] },
+  ];
+  const result = sanitizeVisionContent(messages);
+  assert.equal(result[0].content, "[image]");
+});
+
+test("VISION_CAPABLE_PROVIDERS includes copilot and openai but not deepseek", () => {
+  assert.ok(VISION_CAPABLE_PROVIDERS.has("copilot"), "copilot deve supportare vision");
+  assert.ok(VISION_CAPABLE_PROVIDERS.has("openai"), "openai deve supportare vision");
+  assert.ok(!VISION_CAPABLE_PROVIDERS.has("deepseek"), "deepseek non deve supportare vision");
+  assert.ok(!VISION_CAPABLE_PROVIDERS.has("kimi"), "kimi non deve supportare vision");
+  assert.ok(!VISION_CAPABLE_PROVIDERS.has("groq"), "groq non deve supportare vision");
 });

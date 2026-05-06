@@ -501,6 +501,59 @@ test("claude:setup accepts a model index from the numbered model list", async ()
   assert.match(stdout.toString(), new RegExp(settings.env.ANTHROPIC_DEFAULT_MODEL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
+test("model:set updates the Claude project model with a raw provider-prefixed value", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-set-"));
+  const claudeDir = path.join(tempRoot, ".claude");
+  const settingsFile = path.join(claudeDir, "settings.json");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(settingsFile, JSON.stringify({
+    permissions: {
+      allow: ["Bash(node:*)"],
+    },
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
+      KEEP_ME: "yes",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "model:set", "deepseek:deepseek-v4-flash"], {
+    cwd: tempRoot,
+    stdout,
+    stderr,
+  });
+
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.deepEqual(settings.permissions, { allow: ["Bash(node:*)"] });
+  assert.equal(settings.model, "deepseek:deepseek-v4-flash");
+  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "deepseek:deepseek-v4-flash");
+  assert.equal(settings.env.KEEP_ME, "yes");
+  assert.match(stdout.toString(), /Default model: deepseek:deepseek-v4-flash/);
+});
+
+test("model:set rejects an empty model value", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-set-missing-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "model:set"], {
+    cwd: tempRoot,
+    stdout,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Uso: llmproxy model:set <model>/);
+});
+
 test("claude:setup resolves model indexes from the live Copilot catalog", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-live-select-"));
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-runtime-"));
@@ -813,6 +866,21 @@ test("help <command> prints detailed guidance for a specific command", async () 
   assert.match(stdout.toString(), /Scrive \.claude\/settings\.json/);
   assert.match(stdout.toString(), /Esempio:/);
   assert.match(stdout.toString(), /llmproxy claude:setup --model 2/);
+});
+
+test("help model:set prints detailed guidance for the model switch command", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-model-set-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "model:set"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /^llmproxy model:set <model>/m);
+  assert.match(stdout.toString(), /Aggiorna il modello Claude del progetto/);
+  assert.match(stdout.toString(), /deepseek:deepseek-v4-flash/);
 });
 
 test("help install prints English guidance for the English install command", async () => {

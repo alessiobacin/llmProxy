@@ -653,6 +653,12 @@ Creates or updates `.claude/settings.json` in the current folder with the `env` 
 
 Supports `--model <index>` to set `ANTHROPIC_DEFAULT_MODEL` from the available model catalog.
 
+### `llmproxy model:set <model>`
+
+Quickly updates `model` and `env.ANTHROPIC_DEFAULT_MODEL` in the current project without re-running `claude:setup`.
+
+Use it when you want to switch to a raw provider-aware value such as `deepseek:deepseek-v4-flash` or set an explicit chain such as `copilot:gpt-5.4,deepseek:deepseek-v4-flash`.
+
 ### `llmproxy update`
 
 Updates the global `llmproxy` installation by cloning the latest version from the GitHub repository `alessiobacin/llmProxy` and reinstalling it globally.

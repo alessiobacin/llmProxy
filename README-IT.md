@@ -653,6 +653,12 @@ Crea o aggiorna `.claude/settings.json` nella cartella corrente con le variabili
 
 Supporta `--model <indice>` per impostare `ANTHROPIC_DEFAULT_MODEL` dal catalogo modelli disponibile.
 
+### `llmproxy model:set <model>`
+
+Aggiorna rapidamente `model` e `env.ANTHROPIC_DEFAULT_MODEL` nel progetto corrente senza rifare `claude:setup`.
+
+Usalo quando vuoi passare a un valore raw provider-aware come `deepseek:deepseek-v4-flash` oppure impostare una chain esplicita come `copilot:gpt-5.4,deepseek:deepseek-v4-flash`.
+
 ### `llmproxy update`
 
 Aggiorna l'installazione globale di `llmproxy` clonando l'ultima versione della repository GitHub `alessiobacin/llmProxy` e reinstallandola globalmente.

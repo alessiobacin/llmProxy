@@ -999,6 +999,42 @@ test("update prints changelog notes for known versions", async () => {
   assert.match(stdout.toString(), /rebuild\+recreate/i);
 });
 
+test("update prints changelog in English when LLMPROXY_LOCALE=en", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-notes-en-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    env: { ...process.env, LLMPROXY_LOCALE: "en" },
+    commandRunner() {
+      return { status: 0, stdout: "changed 82 packages in 2s\n__LLMPROXY_VERSION__=0.2.54\n", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Changelog 0\.2\.54:/);
+  assert.match(stdout.toString(), /Provider network: automatic retry/i);
+});
+
+test("update prints fallback changelog line when release notes are missing", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-notes-missing-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    env: { ...process.env, LLMPROXY_LOCALE: "it" },
+    commandRunner() {
+      return { status: 0, stdout: "changed 82 packages in 2s\n__LLMPROXY_VERSION__=9.9.9\n", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Changelog 9\.9\.9:/);
+  assert.match(stdout.toString(), /Note di rilascio non disponibili/);
+});
+
 test("uninstall removes both npm and pnpm global installs", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-"));
   const stdout = createWritableBuffer();

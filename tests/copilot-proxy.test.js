@@ -1,11 +1,29 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { parseProviderModelPreferences, sanitizeSchemaForMoonshot, sanitizeToolsForMoonshot, sanitizeVisionContent, VISION_CAPABLE_PROVIDERS } = require("../lib/copilot-proxy");
+const {
+  parseProviderModelPreferences,
+  sanitizeSchemaForMoonshot,
+  sanitizeToolsForMoonshot,
+  sanitizeVisionContent,
+  VISION_CAPABLE_PROVIDERS,
+  isContextLimitError,
+  trimOldestNonSystemMessage,
+  hasImageInOpenAiMessages,
+  API_KEY_PROVIDER_CONFIGS,
+} = require("../lib/copilot-proxy");
 
 test("parseProviderModelPreferences keeps deepseek model names intact", () => {
   const parsed = parseProviderModelPreferences("deepseek-v4-flash");
   assert.deepEqual(parsed, [{ provider: null, model: "deepseek-v4-flash" }]);
+});
+
+test("API_KEY_PROVIDER_CONFIGS.deepseek accepts only deepseek model family", () => {
+  const deepseek = API_KEY_PROVIDER_CONFIGS.deepseek;
+  assert.equal(typeof deepseek.supportsModel, "function");
+  assert.equal(deepseek.supportsModel("deepseek-v4-flash"), true);
+  assert.equal(deepseek.supportsModel("deepseek-v4-pro"), true);
+  assert.equal(deepseek.supportsModel("gpt-5.4"), false);
 });
 
 test("parseProviderModelPreferences keeps mistral model names intact", () => {
@@ -92,4 +110,31 @@ test("VISION_CAPABLE_PROVIDERS includes copilot and openai but not deepseek", ()
   assert.ok(!VISION_CAPABLE_PROVIDERS.has("deepseek"), "deepseek non deve supportare vision");
   assert.ok(!VISION_CAPABLE_PROVIDERS.has("kimi"), "kimi non deve supportare vision");
   assert.ok(!VISION_CAPABLE_PROVIDERS.has("groq"), "groq non deve supportare vision");
+});
+
+test("isContextLimitError detects Moonshot token limit errors", () => {
+  const errorText = "Invalid request: Your request exceeded model token limit: 262144 (requested: 262164)";
+  assert.equal(isContextLimitError(400, errorText), true);
+  assert.equal(isContextLimitError(429, errorText), false);
+  assert.equal(isContextLimitError(400, "invalid model"), false);
+});
+
+test("trimOldestNonSystemMessage removes oldest non-system message", () => {
+  const messages = [
+    { role: "system", content: "rules" },
+    { role: "user", content: "oldest user" },
+    { role: "assistant", content: "assistant reply" },
+    { role: "user", content: "newest user" },
+  ];
+  const trimmed = trimOldestNonSystemMessage(messages);
+  assert.equal(trimmed.length, 3);
+  assert.deepEqual(trimmed[0], messages[0]);
+  assert.deepEqual(trimmed[1], messages[2]);
+  assert.deepEqual(trimmed[2], messages[3]);
+});
+
+test("hasImageInOpenAiMessages detects image_url blocks", () => {
+  assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "text", text: "hello" }] }]), false);
+  assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] }]), true);
+  assert.equal(hasImageInOpenAiMessages(null), false);
 });

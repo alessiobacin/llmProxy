@@ -536,14 +536,106 @@ test("messages endpoint can fall back to every configurable API-key provider", a
 
         const payload = await response.json();
         assert.equal(response.status, 200);
-        assert.equal(payload.model, "provider-native-model");
+        const expectedModel = providerId === "deepseek" ? "deepseek-v4-flash" : "provider-native-model";
+        assert.equal(payload.model, expectedModel);
         assert.equal(payload.content[0].text, `served by ${providerId}`);
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
-        assert.equal(calls[1].model, "provider-native-model");
+        assert.equal(calls[1].model, expectedModel);
       });
     });
   }
+});
+
+test("messages endpoint prioritizes vision-capable providers when request contains images", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-vision-priority-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("openai", {
+    access_token: "token-openai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openai",
+    auth_type: "api_key",
+  }, { name: "OpenAI" });
+
+  const calls = [];
+  const fetchFn = async (url, options = {}) => {
+    const auth = options.headers?.Authorization || options.headers?.["x-api-key"] || "";
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push({ url: String(url), auth, model: body.model });
+
+    if (auth === "Bearer token-deepseek") {
+      return {
+        ok: false,
+        status: 400,
+        async text() {
+          return "deepseek should be skipped for image requests when a vision provider exists";
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [
+            {
+              message: { content: "served by openai vision" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 7, completion_tokens: 4 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "deepseek:deepseek-v4-flash,openai:gpt-4o-mini",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Descrivi questa immagine" },
+              {
+                type: "image",
+                source: {
+                  type: "url",
+                  url: "https://example.com/cat.png",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.content[0].text, "served by openai vision");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].auth, "Bearer token-openai");
+    assert.equal(calls[0].model, "gpt-4o-mini");
+  });
 });
 
 test("messages endpoint tries a provider default model before moving to the next provider", async () => {

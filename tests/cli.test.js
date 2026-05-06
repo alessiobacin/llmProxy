@@ -975,11 +975,28 @@ test("update runs the package manager command for the latest llmproxy release", 
     "sh",
     [
       "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || true\n  fi\ndone\n\"$new_bin\" service:restart >/dev/null\nversion_output=$(\"$new_bin\" version)\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || true\n  fi\ndone\n\"$new_bin\" service:restart >/dev/null\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nversion_output=$(\"$new_bin\" version)\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"",
     ],
   ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
+});
+
+test("update prints changelog notes for known versions", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-notes-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    commandRunner() {
+      return { status: 0, stdout: "changed 82 packages in 2s\n__LLMPROXY_VERSION__=0.2.53\n", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Changelog 0\.2\.53:/);
+  assert.match(stdout.toString(), /rebuild\+recreate/i);
 });
 
 test("uninstall removes both npm and pnpm global installs", async () => {

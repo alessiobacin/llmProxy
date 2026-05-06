@@ -176,6 +176,67 @@ test("messages endpoint falls back to the next Copilot provider when the first o
   });
 });
 
+test("messages endpoint retries transient socket-close errors before failing", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-network-retry-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-retry" });
+
+  let attempts = 0;
+  const fetchFn = async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw new Error("The socket connection was closed unexpectedly. For more information, pass verbose: true in the second argument to fetch()");
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "claude-sonnet-4.5",
+          choices: [
+            {
+              message: { content: "retry success" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 10, completion_tokens: 3 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.content[0].text, "retry success");
+    assert.equal(attempts, 2);
+  });
+});
+
 test("messages endpoint falls back to the next Copilot provider when the first one is blocked by safety policy", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-safety-fallback-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

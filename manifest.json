@@ -3,7 +3,7 @@
   "type": "tool",
   "slug": "llm-proxy",
   "name": "llmProxy",
-  "version": "0.2.57",
+  "version": "0.2.58",
   "architecture_version": "v8",
   "tool_id": 45,
   "category": "transport",

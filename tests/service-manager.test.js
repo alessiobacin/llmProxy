@@ -59,3 +59,60 @@ test("launchd status treats missing service as inactive without surfacing an err
   assert.equal(status.active, false);
   assert.equal(status.stderr, "");
 });
+
+test("launchd treats bootout 'No such process' as a missing service", () => {
+  const manager = createLaunchdServiceManager({
+    execLaunchctl(args) {
+      if (args[0] === "bootout") {
+        return {
+          status: 3,
+          stdout: "",
+          stderr: "Boot-out failed: 3: No such process\n",
+        };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.install();
+
+  assert.equal(result.ok, true);
+});
+
+test("launchd install surfaces bootstrap failures", () => {
+  const manager = createLaunchdServiceManager({
+    execLaunchctl(args) {
+      if (args[0] === "bootout") {
+        return { status: 113, stdout: "", stderr: 'Could not find service "com.llmproxy.service"' };
+      }
+      if (args[0] === "bootstrap") {
+        return { status: 5, stdout: "", stderr: "bootstrap failed" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.install();
+
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /bootstrap failed/);
+});
+
+test("launchd start surfaces kickstart failures", () => {
+  const manager = createLaunchdServiceManager({
+    execLaunchctl(args) {
+      if (args[0] === "bootstrap") {
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      if (args[0] === "kickstart") {
+        return { status: 3, stdout: "", stderr: "kickstart failed" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.start();
+
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /kickstart failed/);
+});

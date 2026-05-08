@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile } = require("../lib/cli");
 
 function createWritableBuffer() {
   let output = "";
@@ -17,6 +17,62 @@ function createWritableBuffer() {
     },
   };
 }
+
+test("resolveServiceEnvironment aligns service ports with the CLI runtime env", () => {
+  const serviceEnv = resolveServiceEnvironment({
+    env: {
+      PORT: "5045",
+      HOST: "127.0.0.1",
+      NODE_ENV: "development",
+      LLMPROXY_ENV: "development",
+      LLMPROXY_MODE: "platform",
+      LLMPROXY_METERING_SINK: "dblayer",
+      DBLAYER_URL: "http://localhost:5046",
+      EVENTBUS_URL: "http://localhost:5048",
+      LLMPROXY_LOG_RETENTION_DAYS: "7",
+    },
+    paths: {
+      dataRoot: "/tmp/llmproxy-runtime",
+      packageRoot: "/tmp/llmproxy-package",
+    },
+    dockerComposeFile: "/tmp/llmproxy-package/docker-compose.production.yml",
+  });
+
+  assert.equal(serviceEnv.PORT, "5045");
+  assert.equal(serviceEnv.HOST, "127.0.0.1");
+  assert.equal(serviceEnv.NODE_ENV, "development");
+  assert.equal(serviceEnv.LLMPROXY_ENV, "development");
+  assert.equal(serviceEnv.DBLAYER_URL, "http://localhost:5046");
+  assert.equal(serviceEnv.EVENTBUS_URL, "http://localhost:5048");
+  assert.equal(serviceEnv.LLMPROXY_LOG_RETENTION_DAYS, "7");
+});
+
+test("resolveServiceEntryFile uses the Docker wrapper for production service mode", () => {
+  const entryFile = resolveServiceEntryFile({
+    env: { LLMPROXY_ENV: "production" },
+    packageRoot: "/tmp/node_modules/llmproxy",
+  });
+
+  assert.equal(entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+});
+
+test("resolveServiceEntryFile uses the native server entrypoint in local development", () => {
+  const entryFile = resolveServiceEntryFile({
+    env: { LLMPROXY_ENV: "development" },
+    packageRoot: "/tmp/llmproxy-package",
+  });
+
+  assert.equal(entryFile, "/tmp/llmproxy-package/server.js");
+});
+
+test("resolveServiceEntryFile allows forcing the native server runtime", () => {
+  const entryFile = resolveServiceEntryFile({
+    env: { LLMPROXY_ENV: "production", LLMPROXY_SERVICE_RUNTIME: "node" },
+    packageRoot: "/tmp/node_modules/llmproxy",
+  });
+
+  assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
+});
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-project-"));
@@ -340,6 +396,33 @@ test("logs prints structured request logs when service stdout and stderr are emp
   assert.match(stdout.toString(), /request_in/);
   assert.match(stdout.toString(), /glm-5/);
   assert.match(stdout.toString(), /model_not_supported/);
+});
+
+test("service:start returns an error when the service manager install fails", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-start-fail-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "service:start"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    serviceManager: {
+      kind: "launchd",
+      install() {
+        return {
+          ok: false,
+          stderr: "bootstrap failed",
+          stdoutPath: "/tmp/service.out.log",
+          stderrPath: "/tmp/service.err.log",
+        };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /bootstrap failed/);
 });
 
 test("models:list prints a numbered list of available models", async () => {

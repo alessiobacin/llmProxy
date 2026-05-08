@@ -1082,6 +1082,23 @@ test("update prints changelog notes for known versions", async () => {
   assert.match(stdout.toString(), /rebuild\+recreate/i);
 });
 
+test("update prints changelog notes for release 0.2.57", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-notes-0257-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    commandRunner() {
+      return { status: 0, stdout: "changed 10 packages in 1s\n__LLMPROXY_VERSION__=0.2.57\n", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Changelog 0\.2\.57:/);
+  assert.match(stdout.toString(), /profilo runtime esplicito/i);
+});
+
 test("update prints changelog in English when LLMPROXY_LOCALE=en", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-notes-en-"));
   const stdout = createWritableBuffer();

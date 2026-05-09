@@ -1058,7 +1058,7 @@ test("update runs the package manager command for the latest llmproxy release", 
     "sh",
     [
       "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || true\n  fi\ndone\n\"$new_bin\" service:restart >/dev/null\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nversion_output=$(\"$new_bin\" version)\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it')\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || true\n  fi\ndone\n\"$new_bin\" service:restart >/dev/null\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nversion_output=$(\"$new_bin\" version)\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"",
     ],
   ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
@@ -1111,6 +1111,24 @@ test("release-notes prints changelog notes for release 0.2.58", async () => {
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Changelog 0\.2\.58:/);
   assert.match(stdout.toString(), /binario appena installato/i);
+});
+
+test("release-notes formats notes from a commit message when provided", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-release-notes-commit-message-"));
+  const stdout = createWritableBuffer();
+  const commitMessageBase64 = Buffer.from("fix fallback chain\nensure update reads release notes from git commit\nkeep Docker rebuild in self-update\n", "utf8").toString("base64");
+
+  const exitCode = await runCli(["node", "llmproxy", "release-notes", "--version", "0.2.59", "--locale", "it", "--commit-message-base64", commitMessageBase64], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Changelog 0\.2\.59:/);
+  assert.match(stdout.toString(), /- fix fallback chain/);
+  assert.match(stdout.toString(), /- ensure update reads release notes from git commit/);
+  assert.match(stdout.toString(), /- keep Docker rebuild in self-update/);
+  assert.doesNotMatch(stdout.toString(), /Note di rilascio non disponibili/);
 });
 
 test("update prefers release notes emitted by the newly installed binary", async () => {

@@ -1329,6 +1329,31 @@ test("help model:set prints detailed guidance for the model switch command", asy
   assert.match(stdout.toString(), /deepseek:deepseek-v4-flash/);
 });
 
+test("help covers release-notes and provider subcommands", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-provider-commands-"));
+  const commands = [
+    ["release-notes", /changelog/i],
+    ["provider:add", /aggiunge un provider noto/i],
+    ["provider:key", /API key/i],
+    ["provider:list", /provider configurati/i],
+    ["provider:status", /provider attivo/i],
+    ["provider:order", /posizione di fallback desiderata/i],
+    ["provider:rename", /rinomina un provider/i],
+    ["provider:remove", /rimuove un provider/i],
+  ];
+
+  for (const [command, expectedPattern] of commands) {
+    const stdout = createWritableBuffer();
+    const exitCode = await runCli(["node", "llmproxy", "help", command], {
+      dataRoot: runtimeRoot,
+      stdout,
+    });
+
+    assert.equal(exitCode, 0, `help ${command} should succeed`);
+    assert.match(stdout.toString(), expectedPattern, `help ${command} should mention its purpose`);
+  }
+});
+
 test("help install prints English guidance for the English install command", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-install-english-"));
   const stdout = createWritableBuffer();

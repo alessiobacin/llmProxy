@@ -1118,16 +1118,32 @@ test("release-notes formats notes from a commit message when provided", async ()
   const stdout = createWritableBuffer();
   const commitMessageBase64 = Buffer.from("fix fallback chain\nensure update reads release notes from git commit\nkeep Docker rebuild in self-update\n", "utf8").toString("base64");
 
-  const exitCode = await runCli(["node", "llmproxy", "release-notes", "--version", "0.2.59", "--locale", "it", "--commit-message-base64", commitMessageBase64], {
+  const exitCode = await runCli(["node", "llmproxy", "release-notes", "--version", "0.2.60", "--locale", "it", "--commit-message-base64", commitMessageBase64], {
     dataRoot: runtimeRoot,
     stdout,
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /Changelog 0\.2\.59:/);
+  assert.match(stdout.toString(), /Changelog 0\.2\.60:/);
   assert.match(stdout.toString(), /- fix fallback chain/);
   assert.match(stdout.toString(), /- ensure update reads release notes from git commit/);
   assert.match(stdout.toString(), /- keep Docker rebuild in self-update/);
+  assert.doesNotMatch(stdout.toString(), /Note di rilascio non disponibili/);
+});
+
+test("release-notes reads embedded package notes when commit message is unavailable", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-release-notes-embedded-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "release-notes", "--version", "0.2.60", "--locale", "it"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Changelog 0\.2\.60:/);
+  assert.match(stdout.toString(), /- release 0\.2\.60/);
+  assert.match(stdout.toString(), /- embed current release notes in the installed package for first-update compatibility/);
   assert.doesNotMatch(stdout.toString(), /Note di rilascio non disponibili/);
 });
 

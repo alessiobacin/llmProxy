@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.59",
+  "version": "0.2.60",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -14,6 +14,14 @@
     "install:persistent-it": "node bin/llmproxy.js install:persistent-it",
     "install:persistent-en": "node bin/llmproxy.js install:persistent-en",
     "test": "node --test tests/*.test.js"
+  },
+  "llmproxyReleaseNotes": {
+    "0.2.60": [
+      "release 0.2.60",
+      "embed current release notes in the installed package for first-update compatibility",
+      "keep deriving update changelogs from the release commit message when available",
+      "preserve hardcoded release notes only as a backward-compatible final fallback"
+    ]
   },
   "dependencies": {
     "express": "^4.21.0",

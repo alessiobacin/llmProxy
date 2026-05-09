@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const { createLaunchdServiceManager } = require("../lib/service/launchd");
+const { createSystemdServiceManager } = require("../lib/service/systemd");
 
 test("launchd service manager renders a plist with expected paths and label", () => {
   const manager = createLaunchdServiceManager({
@@ -115,4 +116,88 @@ test("launchd start surfaces kickstart failures", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.stderr, /kickstart failed/);
+});
+
+test("systemd status uses runtime dir env for user bus access", () => {
+  const calls = [];
+  const manager = createSystemdServiceManager({
+    userId: 1000,
+    execSystemctl(args, spawnOptions) {
+      calls.push({ args, spawnOptions });
+      return {
+        status: 0,
+        stdout: "active",
+        stderr: "",
+      };
+    },
+  });
+
+  const status = manager.status();
+
+  assert.equal(status.ok, true);
+  assert.equal(status.active, true);
+  assert.deepEqual(calls[0].args, ["status", "llmproxy.service", "--no-pager"]);
+  assert.equal(calls[0].spawnOptions.env.XDG_RUNTIME_DIR, "/run/user/1000");
+  assert.equal(calls[0].spawnOptions.env.DBUS_SESSION_BUS_ADDRESS, "unix:path=/run/user/1000/bus");
+});
+
+test("systemd install enables linger for the current user and fails when systemctl fails", () => {
+  const loginctlCalls = [];
+  const systemctlCalls = [];
+  const manager = createSystemdServiceManager({
+    username: "alessio",
+    userId: 1000,
+    packageRoot: "/opt/llmproxy",
+    serviceFile: path.join("/tmp", "llmproxy.service"),
+    stdoutPath: "/tmp/llmproxy.out.log",
+    stderrPath: "/tmp/llmproxy.err.log",
+    execLoginctl(args) {
+      loginctlCalls.push(args);
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    execSystemctl(args) {
+      systemctlCalls.push(args);
+      return args[0] === "enable"
+        ? { status: 1, stdout: "", stderr: "enable failed" }
+        : { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.install();
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(loginctlCalls[0], ["enable-linger", "alessio"]);
+  assert.deepEqual(systemctlCalls[0], ["daemon-reload"]);
+  assert.deepEqual(systemctlCalls[1], ["enable", "llmproxy.service"]);
+  assert.deepEqual(systemctlCalls[2], ["is-active", "--quiet", "llmproxy.service"]);
+  assert.deepEqual(systemctlCalls[3], ["restart", "llmproxy.service"]);
+  assert.match(result.stderr, /enable failed/);
+});
+
+test("systemd install restarts an already active service so updated units take effect", () => {
+  const systemctlCalls = [];
+  const manager = createSystemdServiceManager({
+    username: "aqdas",
+    userId: 1001,
+    packageRoot: "/opt/llmproxy",
+    serviceFile: path.join("/tmp", "llmproxy-restart.service"),
+    stdoutPath: "/tmp/llmproxy-restart.out.log",
+    stderrPath: "/tmp/llmproxy-restart.err.log",
+    execLoginctl() {
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    execSystemctl(args) {
+      systemctlCalls.push(args);
+      if (args[0] === "is-active") return { status: 0, stdout: "active", stderr: "" };
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.install();
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(systemctlCalls[0], ["daemon-reload"]);
+  assert.deepEqual(systemctlCalls[1], ["enable", "llmproxy.service"]);
+  assert.deepEqual(systemctlCalls[2], ["is-active", "--quiet", "llmproxy.service"]);
+  assert.deepEqual(systemctlCalls[3], ["restart", "llmproxy.service"]);
 });

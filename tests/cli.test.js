@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { runCli, resolveServiceEnvironment, resolveServiceEntryFile } = require("../lib/cli");
+const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
   let output = "";
@@ -515,7 +516,47 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\) ciao creatore/);
 });
 
-test("test probes every configured provider with its default model", async () => {
+test("test uses a deterministic per-user port when no explicit PORT is configured", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-user-port-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-package-no-env-"));
+  const stdout = createWritableBuffer();
+  const requests = [];
+
+  const fetchFn = async (url) => {
+    requests.push(url);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4.5",
+          content: [{ type: "text", text: "ok" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(requests[0], `http://127.0.0.1:${deriveUserScopedPort(runtimeRoot)}/v1/messages`);
+});
+
+test("different runtime roots resolve to different default proxy ports", async () => {
+  const leftRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-left-"));
+  const rightRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-right-"));
+
+  assert.notEqual(deriveUserScopedPort(leftRuntimeRoot), deriveUserScopedPort(rightRuntimeRoot));
+});
+
+test("test probes only the active provider by default", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-providers-"));
   const stdout = createWritableBuffer();
   const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
@@ -559,9 +600,9 @@ test("test probes every configured provider with its default model", async () =>
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"], ["kimi", "kimi-k2.5"]]);
+  assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"]]);
   assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
-  assert.match(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
+  assert.doesNotMatch(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
 
 test("claude:setup accepts a model index from the numbered model list", async () => {
@@ -756,6 +797,7 @@ test("install:persistent-it prints linger guidance on Linux", async () => {
 
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /loginctl enable-linger/);
+  assert.match(stdout.toString(), /loginctl enable-linger/);
 });
 
 test("install:persistent-en prints linger guidance on Linux in English", async () => {
@@ -779,6 +821,53 @@ test("install:persistent-en prints linger guidance on Linux in English", async (
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Linux note:/);
   assert.match(stdout.toString(), /loginctl enable-linger/);
+});
+
+test("install:persistent-en best-effort enables linger during Linux bootstrap", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linger-linux-"));
+  const stdout = createWritableBuffer();
+  const commandCalls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/tmp/llmproxy-package",
+    platform: "linux",
+    stdout,
+    commandRunner(command, args, spawnOptions) {
+      commandCalls.push({ command, args, spawnOptions });
+      return {
+        status: 0,
+        stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(commandCalls[0].args[1], /linger_user=\$\{SUDO_USER:-\$USER\}/);
+  assert.match(commandCalls[0].args[1], /sudo -n loginctl enable-linger "\$linger_user"/);
+});
+
+test("service:start returns an error when the service manager install fails", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-start-fail-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "service:start"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    serviceManager: {
+      kind: "systemd",
+      install() {
+        return { ok: false, stderr: "Failed to connect to bus: No medium found\n" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Failed to connect to bus: No medium found/);
 });
 
 test("install:persistent-it fails fast on unsupported platforms", async () => {
@@ -925,6 +1014,55 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);
   assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
   assert.match(stdout.toString(), /Problemi comuni:/);
+});
+
+test("test probes every configured provider with --all-providers", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-all-providers-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Copilot" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+
+  const requestBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    requestBodies.push(body);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: body.model,
+          content: [{ type: "text", text: `ok ${body.provider}` }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "--all-providers"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"], ["kimi", "kimi-k2.5"]]);
+  assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
+  assert.match(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
 
 test("package scripts expose install:persistent-it and install:persistent-en", async () => {

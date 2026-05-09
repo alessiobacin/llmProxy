@@ -979,6 +979,86 @@ test("messages endpoint uses default models for providers not listed in Claude s
   });
 });
 
+test("messages endpoint falls back when DeepSeek returns 402 insufficient balance", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-deepseek-balance-fallback-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("openai", {
+    access_token: "token-openai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openai",
+    auth_type: "api_key",
+    default_model: "gpt-4.1",
+  }, { name: "OpenAI" });
+
+  const calls = [];
+  const fetchFn = async (_url, options = {}) => {
+    const auth = options.headers?.Authorization || options.headers?.["x-api-key"] || "";
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push({ auth, model: body.model });
+
+    if (auth === "Bearer token-deepseek") {
+      return {
+        ok: false,
+        status: 402,
+        async text() {
+          return JSON.stringify({
+            error: {
+              message: "Insufficient Balance",
+              type: "unknown_error",
+              code: "invalid_request_error",
+            },
+          });
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: "served by openai fallback" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 3, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "deepseek:deepseek-v4-flash,openai:gpt-4.1",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "gpt-4.1");
+    assert.equal(payload.content[0].text, "served by openai fallback");
+    assert.deepEqual(calls, [
+      { auth: "Bearer token-deepseek", model: "deepseek-v4-flash" },
+      { auth: "Bearer token-openai", model: "gpt-4.1" },
+    ]);
+  });
+});
+
 test("messages endpoint prefers the Claude project-configured model over the incoming requested model", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-project-model-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

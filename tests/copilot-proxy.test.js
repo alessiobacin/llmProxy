@@ -7,6 +7,7 @@ const {
   sanitizeToolsForMoonshot,
   sanitizeVisionContent,
   VISION_CAPABLE_PROVIDERS,
+  shouldFallbackToNextProvider,
   isContextLimitError,
   trimOldestNonSystemMessage,
   hasImageInOpenAiMessages,
@@ -117,6 +118,20 @@ test("isContextLimitError detects Moonshot token limit errors", () => {
   assert.equal(isContextLimitError(400, errorText), true);
   assert.equal(isContextLimitError(429, errorText), false);
   assert.equal(isContextLimitError(400, "invalid model"), false);
+});
+
+test("shouldFallbackToNextProvider treats any provider error as fallbackable", () => {
+  const insufficientBalance = JSON.stringify({
+    error: {
+      message: "Insufficient Balance",
+      type: "unknown_error",
+      code: "invalid_request_error",
+    },
+  });
+  assert.equal(shouldFallbackToNextProvider(402, insufficientBalance), true);
+  assert.equal(shouldFallbackToNextProvider(400, "arbitrary provider validation error"), true);
+  assert.equal(shouldFallbackToNextProvider(503, "temporary outage"), true);
+  assert.equal(shouldFallbackToNextProvider(0, "unexpected local failure"), true);
 });
 
 test("trimOldestNonSystemMessage removes oldest non-system message", () => {

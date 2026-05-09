@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.60",
+  "version": "0.2.61",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -21,6 +21,13 @@
       "embed current release notes in the installed package for first-update compatibility",
       "keep deriving update changelogs from the release commit message when available",
       "preserve hardcoded release notes only as a backward-compatible final fallback"
+    ],
+    "0.2.61": [
+      "release 0.2.61",
+      "stabilize launchd service restart by avoiding explicit stop before kickstart on macOS",
+      "treat missing launchd bootout targets as already stopped during service recovery",
+      "cap forwarded Copilot tools to 128 on both /responses and /chat/completions",
+      "make claude:setup and model:set target the installed llmproxy service port when LLMPROXY_HOME is set"
     ]
   },
   "dependencies": {

@@ -25,8 +25,8 @@ test("loadRuntimeEnv ignores package .env for global installs and defaults to pr
 
   const env = loadRuntimeEnv({ env: {}, packageRoot });
 
-  assert.equal(env.PORT, "7045");
-  assert.equal(env.HOST, "127.0.0.1");
+  assert.equal(env.PORT, undefined);
+  assert.equal(env.HOST, undefined);
   assert.equal(env.LLMPROXY_ENV, "production");
   assert.equal(env.DBLAYER_URL, "http://localhost:7046");
   assert.equal(env.EVENTBUS_URL, "http://localhost:7048");
@@ -41,7 +41,7 @@ test("loadRuntimeEnv resolves staging defaults when explicitly requested", () =>
     packageRoot,
   });
 
-  assert.equal(env.PORT, "6045");
+  assert.equal(env.PORT, undefined);
   assert.equal(env.LLMPROXY_ENV, "staging");
   assert.equal(env.DBLAYER_URL, "http://localhost:6046");
   assert.equal(env.EVENTBUS_URL, "http://localhost:6048");
@@ -56,7 +56,7 @@ test("loadRuntimeEnv honors an explicit runtime profile even when the package ro
     packageRoot,
   });
 
-  assert.equal(env.PORT, "7045");
+  assert.equal(env.PORT, undefined);
   assert.equal(env.LLMPROXY_ENV, "production");
   assert.equal(env.DBLAYER_URL, "http://localhost:7046");
 });

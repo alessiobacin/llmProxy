@@ -13,6 +13,10 @@ const {
   hasImageInOpenAiMessages,
   API_KEY_PROVIDER_CONFIGS,
 } = require("../lib/copilot-proxy");
+const {
+  normalizeCopilotTooling,
+  translateOpenAiChatBodyToResponsesRequest,
+} = require("../lib/copilot-responses");
 
 test("parseProviderModelPreferences keeps deepseek model names intact", () => {
   const parsed = parseProviderModelPreferences("deepseek-v4-flash");
@@ -152,4 +156,102 @@ test("hasImageInOpenAiMessages detects image_url blocks", () => {
   assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "text", text: "hello" }] }]), false);
   assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] }]), true);
   assert.equal(hasImageInOpenAiMessages(null), false);
+});
+
+test("translateOpenAiChatBodyToResponsesRequest caps tools to 128 for Copilot responses", () => {
+  const tools = Array.from({ length: 170 }, (_, index) => ({
+    type: "function",
+    function: {
+      name: `tool_${index + 1}`,
+      description: `Tool ${index + 1}`,
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string" },
+        },
+      },
+    },
+  }));
+
+  const request = translateOpenAiChatBodyToResponsesRequest({
+    model: "gpt-5.4",
+    messages: [{ role: "user", content: "hello" }],
+    tools,
+  });
+
+  assert.equal(request.tools.length, 128);
+  assert.equal(request.tools[0].name, "tool_1");
+  assert.equal(request.tools[127].name, "tool_128");
+});
+
+test("translateOpenAiChatBodyToResponsesRequest resets named tool_choice when trimmed tool is removed", () => {
+  const tools = Array.from({ length: 129 }, (_, index) => ({
+    type: "function",
+    function: {
+      name: `tool_${index + 1}`,
+      description: `Tool ${index + 1}`,
+      parameters: { type: "object", properties: {} },
+    },
+  }));
+
+  const request = translateOpenAiChatBodyToResponsesRequest({
+    model: "gpt-5.4",
+    messages: [{ role: "user", content: "hello" }],
+    tools,
+    tool_choice: {
+      type: "function",
+      function: {
+        name: "tool_129",
+      },
+    },
+  });
+
+  assert.equal(request.tools.length, 128);
+  assert.equal(request.tool_choice, "auto");
+});
+
+test("normalizeCopilotTooling caps tools to 128 for Copilot chat payloads", () => {
+  const tools = Array.from({ length: 170 }, (_, index) => ({
+    type: "function",
+    function: {
+      name: `tool_${index + 1}`,
+      description: `Tool ${index + 1}`,
+      parameters: { type: "object", properties: {} },
+    },
+  }));
+
+  const normalized = normalizeCopilotTooling({
+    model: "gpt-5.4",
+    messages: [{ role: "user", content: "hello" }],
+    tools,
+  });
+
+  assert.equal(normalized.tools.length, 128);
+  assert.equal(normalized.tools[127].function.name, "tool_128");
+});
+
+test("normalizeCopilotTooling resets named tool_choice when trimmed chat tool is removed", () => {
+  const tools = Array.from({ length: 129 }, (_, index) => ({
+    type: "function",
+    function: {
+      name: `tool_${index + 1}`,
+      description: `Tool ${index + 1}`,
+      parameters: { type: "object", properties: {} },
+    },
+  }));
+
+  const normalized = normalizeCopilotTooling({
+    model: "gpt-5.4",
+    messages: [{ role: "user", content: "hello" }],
+    tools,
+    tool_choice: {
+      type: "function",
+      function: {
+        name: "tool_129",
+      },
+    },
+  });
+
+  assert.equal(normalized.tools.length, 128);
+  assert.equal(normalized.tool_choice, "auto");
 });

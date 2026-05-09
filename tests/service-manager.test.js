@@ -63,6 +63,9 @@ test("launchd status treats missing service as inactive without surfacing an err
 
 test("launchd treats bootout 'No such process' as a missing service", () => {
   const manager = createLaunchdServiceManager({
+    serviceFile: path.join("/tmp", "llmproxy-launchd-missing.plist"),
+    stdoutPath: "/tmp/llmproxy-launchd-missing.out.log",
+    stderrPath: "/tmp/llmproxy-launchd-missing.err.log",
     execLaunchctl(args) {
       if (args[0] === "bootout") {
         return {
@@ -82,6 +85,9 @@ test("launchd treats bootout 'No such process' as a missing service", () => {
 
 test("launchd install surfaces bootstrap failures", () => {
   const manager = createLaunchdServiceManager({
+    serviceFile: path.join("/tmp", "llmproxy-launchd-bootstrap.plist"),
+    stdoutPath: "/tmp/llmproxy-launchd-bootstrap.out.log",
+    stderrPath: "/tmp/llmproxy-launchd-bootstrap.err.log",
     execLaunchctl(args) {
       if (args[0] === "bootout") {
         return { status: 113, stdout: "", stderr: 'Could not find service "com.llmproxy.service"' };

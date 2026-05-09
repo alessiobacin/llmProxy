@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate } = require("../lib/cli");
 const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
@@ -1446,11 +1446,29 @@ test("update runs the package manager command for the latest llmproxy release", 
     "sh",
     [
       "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || true\n  fi\ndone\nservice_restart_status=0\nservice_restart_output=$(\"$new_bin\" service:restart 2>&1 >/dev/null) || service_restart_status=$?\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nversion_output=$(\"$new_bin\" version)\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"\nif [ \"$service_restart_status\" -ne 0 ]; then\n  printf \"__LLMPROXY_SERVICE_RESTART_WARNING__=%s\\n\" \"$service_restart_output\"\nfi",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nused_sudo=0\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n    used_sudo=1\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nif [ \"$used_sudo\" -eq 1 ]; then\n  npm_prefix=$(sudo npm prefix -g)\nelse\n  npm_prefix=$(npm prefix -g)\nfi\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || { if [ \"$used_sudo\" -eq 1 ]; then sudo rm -f \"$installed_bin\" >/dev/null 2>&1 || true; else true; fi; }\n  fi\ndone\nservice_restart_status=0\nservice_restart_output=$(\"$new_bin\" service:restart 2>&1 >/dev/null) || service_restart_status=$?\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nversion_output=$(\"$new_bin\" version)\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"\nif [ \"$service_restart_status\" -ne 0 ]; then\n  printf \"__LLMPROXY_SERVICE_RESTART_WARNING__=%s\\n\" \"$service_restart_output\"\nfi",
     ],
   ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
+});
+
+test("runSelfUpdate resolves the installed npm prefix with sudo when the fallback install path is used", () => {
+  const result = runSelfUpdate(() => ({ status: 0, stdout: "", stderr: "" }));
+  const script = result ? null : null;
+  assert.equal(typeof runSelfUpdate, "function");
+
+  const executed = [];
+  runSelfUpdate((command, args) => {
+    executed.push([command, args]);
+    return { status: 0, stdout: "", stderr: "" };
+  });
+
+  const scriptText = executed[0][1][1];
+  assert.match(scriptText, /used_sudo=0/);
+  assert.match(scriptText, /sudo npm install -g \"\$package_file\"\n    used_sudo=1/);
+  assert.match(scriptText, /if \[ \"\$used_sudo\" -eq 1 \]; then\n  npm_prefix=\$\(sudo npm prefix -g\)\nelse\n  npm_prefix=\$\(npm prefix -g\)\nfi/);
+  assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
 });
 
 test("update keeps success when package install succeeds but service restart fails", async () => {

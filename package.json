@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.62",
+  "version": "0.2.63",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -34,6 +34,12 @@
       "document detailed help pages for release-notes and all provider:* commands",
       "cover the CLI help surface with regression tests so every public command resolves through llmproxy help <command>",
       "keep the installed service/runtime behavior unchanged while shipping the CLI help fix"
+    ],
+    "0.2.63": [
+      "release 0.2.63",
+      "fix self-update when npm install -g falls back to sudo so the refreshed llmproxy binary is resolved from the correct global prefix",
+      "remove stale user-level llmproxy shims when the new install lands under the sudo-managed global prefix",
+      "cover the sudo update path with a regression test to keep llmproxy version aligned after update"
     ]
   },
   "dependencies": {

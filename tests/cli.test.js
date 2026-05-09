@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli, resolveServiceEnvironment, resolveServiceEntryFile } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions } = require("../lib/cli");
 const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
@@ -73,6 +73,27 @@ test("resolveServiceEntryFile allows forcing the native server runtime", () => {
   });
 
   assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
+});
+
+test("resolveCliServiceManagerOptions uses the Docker wrapper for installed production runtime", () => {
+  const options = resolveCliServiceManagerOptions({
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+    },
+    paths: {
+      packageRoot: "/tmp/node_modules/llmproxy",
+      dataRoot: "/Users/alessiobacin/Library/Application Support/llmProxy",
+      launchAgentFile: "/Users/alessiobacin/Library/LaunchAgents/com.llmproxy.service.plist",
+      systemdUnitFile: "/tmp/llmproxy.service",
+      stdoutLogFile: "/tmp/service.out.log",
+      stderrLogFile: "/tmp/service.err.log",
+    },
+    targetPlatform: "darwin",
+  });
+
+  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+  assert.equal(options.environment.PORT, "7045");
+  assert.equal(options.environment.HOST, "127.0.0.1");
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -164,7 +185,7 @@ test("claude:setup loads HOST and PORT from the llmproxy package .env file", asy
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:3015/);
 });
 
-test("claude:setup prefers installed service home for ANTHROPIC_BASE_URL when LLMPROXY_HOME is set", async () => {
+test("claude:setup uses the production service port 7045 when the installed CLI profile is active", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-claude-project-"));
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-claude-runtime-"));
   const serviceHome = "/Users/alessiobacin/Library/Application Support/llmProxy";
@@ -174,6 +195,7 @@ test("claude:setup prefers installed service home for ANTHROPIC_BASE_URL when LL
     cwd: tempRoot,
     dataRoot: runtimeRoot,
     env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
       LLMPROXY_HOME: serviceHome,
       HOST: "127.0.0.1",
     },
@@ -184,8 +206,8 @@ test("claude:setup prefers installed service home for ANTHROPIC_BASE_URL when LL
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
 
   assert.equal(exitCode, 0);
-  assert.equal(settings.env.ANTHROPIC_BASE_URL, `http://127.0.0.1:${deriveUserScopedPort(serviceHome)}`);
-  assert.match(stdout.toString(), new RegExp(`http://127\\.0\\.0\\.1:${deriveUserScopedPort(serviceHome)}`));
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:7045");
+  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
 });
 
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {
@@ -641,6 +663,41 @@ test("test uses a deterministic per-user port when no explicit PORT is configure
   assert.equal(requests[0], `http://127.0.0.1:${deriveUserScopedPort(runtimeRoot)}/v1/messages`);
 });
 
+test("test uses the production service port 7045 when the installed CLI profile is active", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-production-port-"));
+  const stdout = createWritableBuffer();
+  const requests = [];
+
+  const fetchFn = async (url) => {
+    requests.push(url);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4.5",
+          content: [{ type: "text", text: "ok" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_HOME: "/Users/alessiobacin/Library/Application Support/llmProxy",
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(requests[0], "http://127.0.0.1:7045/v1/messages");
+});
+
 test("different runtime roots resolve to different default proxy ports", async () => {
   const leftRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-left-"));
   const rightRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-right-"));
@@ -797,6 +854,37 @@ test("model:set updates the Claude project model with a raw provider-prefixed va
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "deepseek:deepseek-v4-flash");
   assert.equal(settings.env.KEEP_ME, "yes");
   assert.match(stdout.toString(), /Default model: deepseek:deepseek-v4-flash/);
+});
+
+test("model:set rewrites ANTHROPIC_BASE_URL to the production service port 7045 for installed CLI profile", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-set-production-"));
+  const claudeDir = path.join(tempRoot, ".claude");
+  const settingsFile = path.join(claudeDir, "settings.json");
+  const stdout = createWritableBuffer();
+
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(settingsFile, JSON.stringify({
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:12345",
+      ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "model:set", "gpt-5.4"], {
+    cwd: tempRoot,
+    stdout,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_HOME: "/Users/alessiobacin/Library/Application Support/llmProxy",
+      HOST: "127.0.0.1",
+    },
+  });
+
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:7045");
+  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
 });
 
 test("model:set rejects an empty model value", async () => {

@@ -13,7 +13,8 @@
     "install:persistent": "node bin/llmproxy.js install:persistent-it",
     "install:persistent-it": "node bin/llmproxy.js install:persistent-it",
     "install:persistent-en": "node bin/llmproxy.js install:persistent-en",
-    "test": "node --test tests/*.test.js"
+    "build:ts": "tsc -p tsconfig.json",
+    "test": "npm run build:ts && node --test tests/*.test.js"
   },
   "llmproxyReleaseNotes": {
     "0.2.60": [
@@ -26,5 +27,9 @@
   "dependencies": {
     "express": "^4.21.0",
     "mongodb": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
   }
 }

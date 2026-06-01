@@ -20,9 +20,11 @@ describe("buildEventBusHierarchyContext", () => {
     assert.equal(result.tenantId, "t2");
   });
 
-  it("uses 'unknown' when hierarchy context is null", () => {
-    const result = buildEventBusHierarchyContext(null);
-    assert.equal(result.tenantId, "unknown");
+  it("throws when hierarchy context is null (V11: no silent fallback to 'unknown')", () => {
+    assert.throws(
+      () => buildEventBusHierarchyContext(null),
+      /HIERARCHY_CONTEXT_MISSING_TENANT/,
+    );
   });
 
   it("maps optional fields to camelCase", () => {
@@ -99,7 +101,7 @@ describe("createEventBusSink — publish", () => {
       return { ok: true };
     };
     const sink = createEventBusSink({ url: "http://localhost:5048/", fetchFn: mockFetch });
-    await sink.publish({ payload: {}, hierarchyContext: null });
+    await sink.publish({ payload: {}, hierarchyContext: { tenant_id: "t" } });
     assert.equal(capturedUrl, "http://localhost:5048/api/v1/events/publish");
   });
 
@@ -110,7 +112,7 @@ describe("createEventBusSink — publish", () => {
       text: async () => "bad request",
     });
     const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: mockFetch });
-    const result = await sink.publish({ payload: {}, hierarchyContext: null });
+    const result = await sink.publish({ payload: {}, hierarchyContext: { tenant_id: "t" } });
     assert.equal(result.ok, false);
     assert.match(result.error, /400/);
   });
@@ -118,7 +120,7 @@ describe("createEventBusSink — publish", () => {
   it("returns ok:false on network error without throwing", async () => {
     const mockFetch = async () => { throw new Error("ECONNREFUSED"); };
     const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: mockFetch });
-    const result = await sink.publish({ payload: {}, hierarchyContext: null });
+    const result = await sink.publish({ payload: {}, hierarchyContext: { tenant_id: "t" } });
     assert.equal(result.ok, false);
     assert.match(result.error, /ECONNREFUSED/);
   });
@@ -132,7 +134,7 @@ describe("createEventBusSink — publish", () => {
     const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: mockFetch });
     await sink.publish({
       payload: {},
-      hierarchyContext: null,
+      hierarchyContext: { tenant_id: "t" },
       topic: "llmproxy.call.failed",
       version: "2.0",
       producer: "test-producer",
@@ -140,5 +142,12 @@ describe("createEventBusSink — publish", () => {
     assert.equal(capturedBody.topic, "llmproxy.call.failed");
     assert.equal(capturedBody.version, "2.0");
     assert.equal(capturedBody.producer, "test-producer");
+  });
+
+  it("returns ok:false when hierarchyContext is null (V11: no silent 'unknown' tenant)", async () => {
+    const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: async () => ({ ok: true }) });
+    const result = await sink.publish({ payload: {}, hierarchyContext: null });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /HIERARCHY_CONTEXT_MISSING_TENANT/);
   });
 });

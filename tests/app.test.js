@@ -176,6 +176,102 @@ test("messages endpoint falls back to the next Copilot provider when the first o
   });
 });
 
+test("messages endpoint truncates oversized Copilot tool lists and records the adjustment in logs", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-tool-trim-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-xyz" });
+
+  const loggerCalls = [];
+  const logger = {
+    logIncomingRequest(entry) {
+      loggerCalls.push({ type: "incoming", entry });
+    },
+    logProviderAttempt(entry) {
+      loggerCalls.push({ type: "attempt", entry });
+    },
+    logProviderResult(entry) {
+      loggerCalls.push({ type: "result", entry });
+    },
+  };
+
+  const fetchBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    fetchBodies.push(body);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "gpt-5.4",
+          choices: [
+            {
+              message: { content: "trim ok" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 9, completion_tokens: 3 },
+        };
+      },
+    };
+  };
+
+  const tools = Array.from({ length: 132 }, (_, index) => ({
+    name: `tool_${index + 1}`,
+    description: `Tool ${index + 1}`,
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+      },
+    },
+  }));
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+    logger,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.4",
+        stream: false,
+        max_tokens: 64,
+        tools,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.content[0].text, "trim ok");
+    assert.equal(fetchBodies.length, 1);
+    assert.equal(fetchBodies[0].tools.length, 128);
+
+    const attemptLog = loggerCalls.find((entry) => entry.type === "attempt");
+    assert.ok(attemptLog, "deve registrare un provider attempt");
+    assert.deepEqual(attemptLog.entry.toolAdjustment, {
+      kind: "copilot_tools_truncated",
+      originalToolCount: 132,
+      effectiveToolCount: 128,
+      droppedToolCount: 4,
+      toolChoiceAdjusted: false,
+    });
+  });
+});
+
 test("messages endpoint retries transient socket-close errors before failing", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-network-retry-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
@@ -1234,7 +1330,7 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     kind: "launchd",
     install() {
       serviceCalls.push("install");
-      return { ok: true, stdoutPath: path.join(tempRoot, "logs", "service.out.log"), stderrPath: path.join(tempRoot, "logs", "service.err.log") };
+      return { stdoutPath: path.join(tempRoot, "logs", "service.out.log"), stderrPath: path.join(tempRoot, "logs", "service.err.log") };
     },
     start() {
       serviceCalls.push("start");
@@ -1360,7 +1456,7 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
 
   assert.ok(serviceCalls.includes("status"));
   assert.ok(serviceCalls.includes("install"));
-  assert.ok(serviceCalls.includes("stop"));
+  assert.ok(!serviceCalls.includes("start"));
 });
 
 test("claude setup is exposed via REST endpoint", async () => {

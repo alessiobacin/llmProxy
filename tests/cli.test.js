@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli, resolveServiceEnvironment, resolveServiceEntryFile } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate } = require("../lib/cli");
 const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
@@ -73,6 +73,27 @@ test("resolveServiceEntryFile allows forcing the native server runtime", () => {
   });
 
   assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
+});
+
+test("resolveCliServiceManagerOptions uses the Docker wrapper for installed production runtime", () => {
+  const options = resolveCliServiceManagerOptions({
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+    },
+    paths: {
+      packageRoot: "/tmp/node_modules/llmproxy",
+      dataRoot: "/Users/alessiobacin/Library/Application Support/llmProxy",
+      launchAgentFile: "/Users/alessiobacin/Library/LaunchAgents/com.llmproxy.service.plist",
+      systemdUnitFile: "/tmp/llmproxy.service",
+      stdoutLogFile: "/tmp/service.out.log",
+      stderrLogFile: "/tmp/service.err.log",
+    },
+    targetPlatform: "darwin",
+  });
+
+  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+  assert.equal(options.environment.PORT, "7045");
+  assert.equal(options.environment.HOST, "127.0.0.1");
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -162,6 +183,31 @@ test("claude:setup loads HOST and PORT from the llmproxy package .env file", asy
   assert.equal(settings.model, "claude-sonnet-4.5");
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:3015/);
+});
+
+test("claude:setup uses the production service port 7045 when the installed CLI profile is active", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-claude-project-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-claude-runtime-"));
+  const serviceHome = "/Users/alessiobacin/Library/Application Support/llmProxy";
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_HOME: serviceHome,
+      HOST: "127.0.0.1",
+    },
+    stdout,
+  });
+
+  const settingsFile = path.join(tempRoot, ".claude", "settings.json");
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:7045");
+  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
 });
 
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {
@@ -426,6 +472,74 @@ test("service:start returns an error when the service manager install fails", as
   assert.match(stderr.toString(), /bootstrap failed/);
 });
 
+test("service:restart on launchd reinstalls the agent directly", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-fallback-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const calls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "service:restart"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    serviceManager: {
+      kind: "launchd",
+      stop() {
+        calls.push("stop");
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      start() {
+        calls.push("start");
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      install() {
+        calls.push("install");
+        return {
+          ok: true,
+          stdout: "",
+          stderr: "",
+          stdoutPath: "/tmp/service.out.log",
+          stderrPath: "/tmp/service.err.log",
+        };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(calls, ["install"]);
+  assert.match(stdout.toString(), /Servizio riavviato/);
+  assert.equal(stderr.toString(), "");
+});
+
+test("service:restart on launchd falls back to start when install is unavailable", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-launchd-direct-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const calls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "service:restart"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    serviceManager: {
+      kind: "launchd",
+      stop() {
+        calls.push("stop");
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      start() {
+        calls.push("start");
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(calls, ["start"]);
+  assert.match(stdout.toString(), /Servizio riavviato/);
+  assert.equal(stderr.toString(), "");
+});
+
 test("models:list prints a numbered list of available models", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-list-"));
   const stdout = createWritableBuffer();
@@ -549,6 +663,41 @@ test("test uses a deterministic per-user port when no explicit PORT is configure
   assert.equal(requests[0], `http://127.0.0.1:${deriveUserScopedPort(runtimeRoot)}/v1/messages`);
 });
 
+test("test uses the production service port 7045 when the installed CLI profile is active", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-production-port-"));
+  const stdout = createWritableBuffer();
+  const requests = [];
+
+  const fetchFn = async (url) => {
+    requests.push(url);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4.5",
+          content: [{ type: "text", text: "ok" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_HOME: "/Users/alessiobacin/Library/Application Support/llmProxy",
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(requests[0], "http://127.0.0.1:7045/v1/messages");
+});
+
 test("different runtime roots resolve to different default proxy ports", async () => {
   const leftRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-left-"));
   const rightRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-right-"));
@@ -603,6 +752,51 @@ test("test probes only the active provider by default", async () => {
   assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"]]);
   assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
   assert.doesNotMatch(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
+});
+
+test("test retries once after a transient local fetch failure", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-retry-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("default", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Copilot" });
+
+  let attempts = 0;
+  const sleepCalls = [];
+  const fetchFn = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("fetch failed");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          content: [{ type: "text", text: "llmproxy-test-default" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+    fetchFn,
+    sleep(ms) {
+      sleepCalls.push(ms);
+      return Promise.resolve();
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(attempts, 2);
+  assert.deepEqual(sleepCalls, [250]);
+  assert.match(stdout.toString(), /default: ok \(gpt-5\.4\) llmproxy-test-default/);
 });
 
 test("claude:setup accepts a model index from the numbered model list", async () => {
@@ -660,6 +854,37 @@ test("model:set updates the Claude project model with a raw provider-prefixed va
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "deepseek:deepseek-v4-flash");
   assert.equal(settings.env.KEEP_ME, "yes");
   assert.match(stdout.toString(), /Default model: deepseek:deepseek-v4-flash/);
+});
+
+test("model:set rewrites ANTHROPIC_BASE_URL to the production service port 7045 for installed CLI profile", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-set-production-"));
+  const claudeDir = path.join(tempRoot, ".claude");
+  const settingsFile = path.join(claudeDir, "settings.json");
+  const stdout = createWritableBuffer();
+
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(settingsFile, JSON.stringify({
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:12345",
+      ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "model:set", "gpt-5.4"], {
+    cwd: tempRoot,
+    stdout,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_HOME: "/Users/alessiobacin/Library/Application Support/llmProxy",
+      HOST: "127.0.0.1",
+    },
+  });
+
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+
+  assert.equal(exitCode, 0);
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:7045");
+  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
 });
 
 test("model:set rejects an empty model value", async () => {
@@ -1104,6 +1329,31 @@ test("help model:set prints detailed guidance for the model switch command", asy
   assert.match(stdout.toString(), /deepseek:deepseek-v4-flash/);
 });
 
+test("help covers release-notes and provider subcommands", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-provider-commands-"));
+  const commands = [
+    ["release-notes", /changelog/i],
+    ["provider:add", /aggiunge un provider noto/i],
+    ["provider:key", /API key/i],
+    ["provider:list", /provider configurati/i],
+    ["provider:status", /provider attivo/i],
+    ["provider:order", /posizione di fallback desiderata/i],
+    ["provider:rename", /rinomina un provider/i],
+    ["provider:remove", /rimuove un provider/i],
+  ];
+
+  for (const [command, expectedPattern] of commands) {
+    const stdout = createWritableBuffer();
+    const exitCode = await runCli(["node", "llmproxy", "help", command], {
+      dataRoot: runtimeRoot,
+      stdout,
+    });
+
+    assert.equal(exitCode, 0, `help ${command} should succeed`);
+    assert.match(stdout.toString(), expectedPattern, `help ${command} should mention its purpose`);
+  }
+});
+
 test("help install prints English guidance for the English install command", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-install-english-"));
   const stdout = createWritableBuffer();
@@ -1196,11 +1446,65 @@ test("update runs the package manager command for the latest llmproxy release", 
     "sh",
     [
       "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nnpm_prefix=$(npm prefix -g)\nnew_bin=\"$npm_prefix/bin/llmproxy\"\n[ -x \"$new_bin\" ]\nfor installed_bin in $existing_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || true\n  fi\ndone\n\"$new_bin\" service:restart >/dev/null\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nversion_output=$(\"$new_bin\" version)\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"",
+      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nused_sudo=0\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ntarget_version=$(node -p \"require('./package.json').version\")\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n    used_sudo=1\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nif [ \"$used_sudo\" -eq 1 ]; then\n  npm_prefix=$(sudo npm prefix -g)\nelse\n  npm_prefix=$(npm prefix -g)\nfi\nresolved_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nnew_bin=\"\"\nfor candidate_bin in $resolved_bins; do\n  if [ -x \"$candidate_bin\" ]; then\n    candidate_version=$(\"$candidate_bin\" version 2>/dev/null || true)\n    if [ \"$candidate_version\" = \"$target_version\" ]; then\n      new_bin=\"$candidate_bin\"\n      break\n    fi\n  fi\ndone\nif [ -z \"$new_bin\" ]; then\n  new_bin=\"$npm_prefix/bin/llmproxy\"\nfi\n[ -x \"$new_bin\" ]\nversion_output=$(\"$new_bin\" version)\n[ \"$version_output\" = \"$target_version\" ]\nfor installed_bin in $resolved_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || { if [ \"$used_sudo\" -eq 1 ]; then sudo rm -f \"$installed_bin\" >/dev/null 2>&1 || true; else true; fi; }\n  fi\ndone\nservice_restart_status=0\nservice_restart_output=$(\"$new_bin\" service:restart 2>&1 >/dev/null) || service_restart_status=$?\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"\nif [ \"$service_restart_status\" -ne 0 ]; then\n  printf \"__LLMPROXY_SERVICE_RESTART_WARNING__=%s\\n\" \"$service_restart_output\"\nfi",
     ],
   ]]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
+});
+
+test("runSelfUpdate resolves the refreshed llmproxy binary by matching the target version", () => {
+  const executed = [];
+  runSelfUpdate((command, args) => {
+    executed.push([command, args]);
+    return { status: 0, stdout: "", stderr: "" };
+  });
+
+  const scriptText = executed[0][1][1];
+  assert.equal(typeof runSelfUpdate, "function");
+  assert.match(scriptText, /used_sudo=0/);
+  assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
+  assert.match(scriptText, /sudo npm install -g \"\$package_file\"\n    used_sudo=1/);
+  assert.match(scriptText, /if \[ \"\$used_sudo\" -eq 1 \]; then\n  npm_prefix=\$\(sudo npm prefix -g\)\nelse\n  npm_prefix=\$\(npm prefix -g\)\nfi/);
+  assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /if \[ \"\$candidate_version\" = \"\$target_version\" \]; then\n      new_bin=\"\$candidate_bin\"/);
+  assert.match(scriptText, /version_output=\$\(\"\$new_bin\" version\)\n\[ \"\$version_output\" = \"\$target_version\" \]/);
+  assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
+});
+
+test("update keeps success when package install succeeds but service restart fails", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-restart-warning-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    commandRunner() {
+      return {
+        status: 0,
+        stdout: [
+          "changed 10 packages in 1s",
+          "__LLMPROXY_VERSION__=0.2.60",
+          "__LLMPROXY_RELEASE_NOTES_START__",
+          "Changelog 0.2.60:",
+          "- release 0.2.60",
+          "__LLMPROXY_RELEASE_NOTES_END__",
+          "__LLMPROXY_SERVICE_RESTART_WARNING__=Bootstrap failed: 5: Input/output error",
+          "",
+        ].join("\n"),
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Aggiornamento completato/);
+  assert.match(stdout.toString(), /Versione corrente: 0\.2\.60/);
+  assert.match(stdout.toString(), /Bootstrap failed: 5: Input\/output error/);
+  assert.equal(stderr.toString(), "");
 });
 
 test("update prints changelog notes for known versions", async () => {

@@ -105,6 +105,30 @@ test("launchd install surfaces bootstrap failures", () => {
   assert.match(result.stderr, /bootstrap failed/);
 });
 
+test("launchd install retries bootstrap after transient input/output errors", () => {
+  const calls = [];
+  const manager = createLaunchdServiceManager({
+    serviceFile: path.join("/tmp", "llmproxy-launchd-bootstrap-retry.plist"),
+    stdoutPath: "/tmp/llmproxy-launchd-bootstrap-retry.out.log",
+    stderrPath: "/tmp/llmproxy-launchd-bootstrap-retry.err.log",
+    execLaunchctl(args) {
+      calls.push(args[0]);
+      if (args[0] === "bootout") {
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      if (args[0] === "bootstrap" && calls.filter((call) => call === "bootstrap").length === 1) {
+        return { status: 5, stdout: "", stderr: "Bootstrap failed: 5: Input/output error\n" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.install();
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ["bootout", "bootstrap", "bootstrap", "kickstart"]);
+});
+
 test("launchd start surfaces kickstart failures", () => {
   const manager = createLaunchdServiceManager({
     execLaunchctl(args) {
@@ -122,6 +146,22 @@ test("launchd start surfaces kickstart failures", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.stderr, /kickstart failed/);
+});
+
+test("launchd stop treats missing service as already stopped", () => {
+  const manager = createLaunchdServiceManager({
+    execLaunchctl(args) {
+      if (args[0] === "bootout") {
+        return { status: 3, stdout: "", stderr: "Boot-out failed: 3: No such process\n" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.stop();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stderr, "");
 });
 
 test("systemd status uses runtime dir env for user bus access", () => {

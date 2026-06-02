@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { loadRuntimeEnv } = require("../lib/runtime-env");
+const { loadRuntimeEnv, resolveProxyHostPort } = require("../lib/runtime-env");
 
 test("loadRuntimeEnv keeps local checkout defaults from .env in development", () => {
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-local-"));
@@ -25,8 +25,8 @@ test("loadRuntimeEnv ignores package .env for global installs and defaults to pr
 
   const env = loadRuntimeEnv({ env: {}, packageRoot });
 
-  assert.equal(env.PORT, "7045");
-  assert.equal(env.HOST, "127.0.0.1");
+  assert.equal(env.PORT, undefined);
+  assert.equal(env.HOST, undefined);
   assert.equal(env.LLMPROXY_ENV, "production");
   assert.equal(env.DBLAYER_URL, "http://localhost:7046");
   assert.equal(env.EVENTBUS_URL, "http://localhost:7048");
@@ -41,7 +41,7 @@ test("loadRuntimeEnv resolves staging defaults when explicitly requested", () =>
     packageRoot,
   });
 
-  assert.equal(env.PORT, "6045");
+  assert.equal(env.PORT, undefined);
   assert.equal(env.LLMPROXY_ENV, "staging");
   assert.equal(env.DBLAYER_URL, "http://localhost:6046");
   assert.equal(env.EVENTBUS_URL, "http://localhost:6048");
@@ -56,7 +56,39 @@ test("loadRuntimeEnv honors an explicit runtime profile even when the package ro
     packageRoot,
   });
 
-  assert.equal(env.PORT, "7045");
+  assert.equal(env.PORT, undefined);
   assert.equal(env.LLMPROXY_ENV, "production");
   assert.equal(env.DBLAYER_URL, "http://localhost:7046");
+});
+
+test("resolveProxyHostPort uses the fixed production service port when the runtime profile is production", () => {
+  const binding = resolveProxyHostPort({
+    env: { LLMPROXY_RUNTIME_PROFILE: "production" },
+    dataRoot: "/Users/alessiobacin/Library/Application Support/llmProxy",
+  });
+
+  assert.deepEqual(binding, { host: "127.0.0.1", port: "7045" });
+});
+
+test("resolveProxyHostPort uses the fixed staging service port when the runtime profile is staging", () => {
+  const binding = resolveProxyHostPort({
+    env: { LLMPROXY_ENV: "staging" },
+    dataRoot: "/Users/alessiobacin/Library/Application Support/llmProxy",
+  });
+
+  assert.deepEqual(binding, { host: "127.0.0.1", port: "6045" });
+});
+
+test("resolveProxyHostPort keeps the shared production port across different user data roots", () => {
+  const aliceBinding = resolveProxyHostPort({
+    env: { LLMPROXY_RUNTIME_PROFILE: "production" },
+    dataRoot: "/Users/alice/Library/Application Support/llmProxy",
+  });
+  const bobBinding = resolveProxyHostPort({
+    env: { LLMPROXY_RUNTIME_PROFILE: "production" },
+    dataRoot: "/Users/bob/Library/Application Support/llmProxy",
+  });
+
+  assert.deepEqual(aliceBinding, { host: "127.0.0.1", port: "7045" });
+  assert.deepEqual(bobBinding, { host: "127.0.0.1", port: "7045" });
 });

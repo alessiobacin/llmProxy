@@ -124,6 +124,11 @@ test("isContextLimitError detects Moonshot token limit errors", () => {
   assert.equal(isContextLimitError(400, "invalid model"), false);
 });
 
+test("isContextLimitError detects Copilot max prompt token errors", () => {
+  const errorText = "{\"error\":{\"message\":\"prompt token count of 86627 exceeds the limit of 64000\",\"code\":\"model_max_prompt_tokens_exceeded\"}}";
+  assert.equal(isContextLimitError(400, errorText), true);
+});
+
 test("shouldFallbackToNextProvider treats any provider error as fallbackable", () => {
   const insufficientBalance = JSON.stringify({
     error: {

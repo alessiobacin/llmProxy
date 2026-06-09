@@ -14,7 +14,13 @@ Run the `/graphify` skill from the repository root. Outputs:
 
 - `graph.html` — interactive view
 - `graph.json` — nodes/edges, communities, metadata
-- `audit.md` — quality and coverage report
+- `GRAPH_REPORT.md` — quality, coverage, communities and god nodes report
+
+For code-only refreshes without LLM cost you can also run:
+
+```bash
+graphify update .
+```
 
 ## Why a tool needs a graph
 

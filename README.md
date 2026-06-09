@@ -195,9 +195,7 @@ If you prefer manual configuration, set both the top-level `model` field and the
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "proxy-local",
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
-    "ANTHROPIC_DEFAULT_MODEL": "claude-opus-4.5",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   }
@@ -211,7 +209,6 @@ You can route different models to different providers directly from `ANTHROPIC_D
 ```json
 {
   "env": {
-    "ANTHROPIC_AUTH_TOKEN": "proxy-local",
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
     "ANTHROPIC_DEFAULT_MODEL": "copilot:gpt-5.4,kimi:kimi-k2.5",
     "API_TIMEOUT_MS": "3000000",
@@ -243,12 +240,10 @@ llmproxy provider:list
 - `model`
   This is mainly the label Claude Code shows in the UI/session. You can keep it as `llmProxy`.
 
-- `ANTHROPIC_AUTH_TOKEN`
-  With `llmProxy` this can be any non-empty placeholder value, for example `proxy-local`.
 - `ANTHROPIC_BASE_URL`
   It must point to the `llmProxy` service. The default for this package is `http://127.0.0.1:3015`.
 - `ANTHROPIC_DEFAULT_MODEL`
-  This is the routing input used by `llmProxy` (single model or provider chain like `copilot:gpt-5.4,kimi:kimi-k2.5`).
+  Optional. Use it only when you want project-local routing overrides such as a single model or a provider chain like `copilot:gpt-5.4,kimi:kimi-k2.5`.
 - `API_TIMEOUT_MS`
   You can keep a high timeout if you want to avoid premature timeouts on long tasks.
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`
@@ -260,16 +255,27 @@ If you were already using another local proxy or a previous Claude Code configur
 
 - `ANTHROPIC_BASE_URL` must point to the `llmProxy` service
 - `model` can be a stable UI label (`llmProxy`) and does not need to match the routing chain
-- `ANTHROPIC_DEFAULT_MODEL` should contain your explicit primary model or chain if you want deterministic routing
+- `ANTHROPIC_DEFAULT_MODEL` is optional and should be set only if you want project-local routing overrides
 - PM2 is not needed: the persistent service is managed by the native service manager (`launchd` or `systemd --user`)
 
-If `ANTHROPIC_DEFAULT_MODEL` is empty:
+If `ANTHROPIC_DEFAULT_MODEL` is empty or omitted:
 
 - `llmProxy` does not derive a provider chain from `model: llmProxy`.
 - Routing falls back to request model and/or provider `default_model` values (if configured with `provider:add ... --model ...`).
 - If neither is available, Copilot path falls back to the internal default mapped model.
 
 Minimal example:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015"
+  }
+}
+```
+
+Project-local override example:
 
 ```json
 {
@@ -788,7 +794,7 @@ Restarts the native persistent service.
 
 Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
 
-Supports `--model <index>` to set `ANTHROPIC_DEFAULT_MODEL` from the available model catalog.
+Supports `--model <index>` to show the selected default model in CLI output while keeping `.claude/settings.json` minimal (`model: llmProxy` plus proxy base URL).
 
 ### `llmproxy model:set <model>`
 

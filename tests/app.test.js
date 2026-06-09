@@ -21,6 +21,10 @@ async function withServer(app, callback) {
   }
 }
 
+function withInferenceFooter(text, providerId, modelUsed) {
+  return `${text}\n\n[llmproxy] provider: ${providerId} | model: ${modelUsed}`;
+}
+
 test("health and auth status endpoints reflect standalone runtime state", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-health-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
@@ -99,8 +103,65 @@ test("messages endpoint proxies a non-stream Copilot response into Anthropic for
     assert.equal(response.status, 200);
     assert.equal(payload.type, "message");
     assert.equal(payload.role, "assistant");
-    assert.equal(payload.content[0].text, "pong from copilot");
+    assert.equal(payload.content[0].text, "pong from copilot\n\n[llmproxy] provider: default | model: claude-sonnet-4.5");
     assert.equal(payload.model, "claude-sonnet-4.5");
+  });
+});
+
+test("messages endpoint appends provider and model footer to streaming responses", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-stream-footer-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-stream" });
+
+  const encoder = new TextEncoder();
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "claude-sonnet-4.5",
+          choices: [{ delta: { content: "pong stream" } }],
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "claude-sonnet-4.5",
+          choices: [{ finish_reason: "stop", delta: {} }],
+          usage: { prompt_tokens: 7, completion_tokens: 3 },
+        })}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    }),
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: true,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(payload, /event: content_block_delta/);
+    assert.match(payload, /pong stream/);
+    assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
   });
 });
 
@@ -171,7 +232,7 @@ test("messages endpoint falls back to the next Copilot provider when the first o
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, "served by backup");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by backup", "backup", "claude-sonnet-4.5"));
     assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
   });
 });
@@ -256,7 +317,7 @@ test("messages endpoint truncates oversized Copilot tool lists and records the a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, "trim ok");
+    assert.equal(payload.content[0].text, withInferenceFooter("trim ok", "default", "gpt-5.4"));
     assert.equal(fetchBodies.length, 1);
     assert.equal(fetchBodies[0].tools.length, 128);
 
@@ -269,6 +330,81 @@ test("messages endpoint truncates oversized Copilot tool lists and records the a
       droppedToolCount: 4,
       toolChoiceAdjusted: false,
     });
+  });
+});
+
+test("messages endpoint trims oldest messages and retries when Copilot rejects prompt token count", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-context-trim-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-trim" });
+
+  const requestBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    requestBodies.push(body);
+    if (requestBodies.length === 1) {
+      return {
+        ok: false,
+        status: 400,
+        async text() {
+          return JSON.stringify({
+            error: {
+              message: "prompt token count of 86627 exceeds the limit of 64000",
+              code: "model_max_prompt_tokens_exceeded",
+            },
+          });
+        },
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [
+            {
+              message: { content: "context trimmed ok" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 5 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          { role: "user", content: [{ type: "text", text: "oldest user" }] },
+          { role: "assistant", content: [{ type: "text", text: "assistant reply" }] },
+          { role: "user", content: [{ type: "text", text: "latest user" }] },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.content[0].text, withInferenceFooter("context trimmed ok", "default", "claude-sonnet-4.5"));
+    assert.equal(requestBodies.length, 2);
+    assert.equal(requestBodies[0].messages.length, 3);
+    assert.equal(requestBodies[1].messages.length, 2);
+    assert.match(JSON.stringify(requestBodies[1].messages), /assistant reply/);
+    assert.match(JSON.stringify(requestBodies[1].messages), /latest user/);
+    assert.doesNotMatch(JSON.stringify(requestBodies[1].messages), /oldest user/);
   });
 });
 
@@ -328,7 +464,7 @@ test("messages endpoint retries transient socket-close errors before failing", a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, "retry success");
+    assert.equal(payload.content[0].text, withInferenceFooter("retry success", "default", "claude-sonnet-4.5"));
     assert.equal(attempts, 2);
   });
 });
@@ -404,7 +540,7 @@ test("messages endpoint falls back to the next Copilot provider when the first o
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, "served by backup after safety block");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by backup after safety block", "backup", "gpt-5.4"));
     assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
   });
 });
@@ -581,7 +717,7 @@ test("messages endpoint falls back from Copilot to Z.ai for GLM models", async (
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "glm-5");
-    assert.equal(payload.content[0].text, "served by z.ai");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by z.ai", "zai", "glm-5"));
     assert.deepEqual(calls, [
       {
         url: "https://api.githubcopilot.com/chat/completions",
@@ -695,7 +831,7 @@ test("messages endpoint can fall back to every configurable API-key provider", a
         assert.equal(response.status, 200);
         const expectedModel = providerId === "deepseek" ? "deepseek-v4-flash" : "provider-native-model";
         assert.equal(payload.model, expectedModel);
-        assert.equal(payload.content[0].text, `served by ${providerId}`);
+        assert.equal(payload.content[0].text, withInferenceFooter(`served by ${providerId}`, providerId, expectedModel));
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
         assert.equal(calls[1].model, expectedModel);
@@ -788,7 +924,7 @@ test("messages endpoint prioritizes vision-capable providers when request contai
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, "served by openai vision");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by openai vision", "openai", "gpt-4o-mini"));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].auth, "Bearer token-openai");
     assert.equal(calls[0].model, "gpt-4o-mini");
@@ -861,7 +997,7 @@ test("messages endpoint tries a provider default model before moving to the next
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "kimi-k2.5");
-    assert.equal(payload.content[0].text, "served by provider default");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by provider default", "kimi", "kimi-k2.5"));
     assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
   });
 });
@@ -892,7 +1028,7 @@ test("messages endpoint honors provider/model fallback lists from Claude setting
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     model: "gpt-5.4",
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       ANTHROPIC_DEFAULT_MODEL: "kimi-k2.5,zai-glm-5",
     },
   }, null, 2));
@@ -956,7 +1092,7 @@ test("messages endpoint keeps deepseek model names intact from Claude settings",
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     model: "ignored-by-settings",
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       ANTHROPIC_DEFAULT_MODEL: "deepseek-v4-flash",
     },
   }, null, 2));
@@ -1028,7 +1164,7 @@ test("messages endpoint uses default models for providers not listed in Claude s
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     model: "ignored",
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
     },
   }, null, 2));
@@ -1070,7 +1206,7 @@ test("messages endpoint uses default models for providers not listed in Claude s
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "kimi-k2.5");
-    assert.equal(payload.content[0].text, "served by kimi default");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by kimi default", "kimi", "kimi-k2.5"));
     assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
   });
 });
@@ -1147,10 +1283,75 @@ test("messages endpoint falls back when DeepSeek returns 402 insufficient balanc
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "gpt-4.1");
-    assert.equal(payload.content[0].text, "served by openai fallback");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by openai fallback", "openai", "gpt-4.1"));
     assert.deepEqual(calls, [
       { auth: "Bearer token-deepseek", model: "deepseek-v4-flash" },
       { auth: "Bearer token-openai", model: "gpt-4.1" },
+    ]);
+  });
+});
+
+test("messages endpoint ignores llmProxy UI labels when project settings are unavailable", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-ignore-ui-label-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Copilot" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+
+  const calls = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    const auth = String(options.headers?.Authorization || "");
+    calls.push({ auth, model: body.model });
+    if (auth === "Bearer token-copilot") {
+      return { ok: false, status: 429, async text() { return "quota exceeded"; } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: "served by kimi default" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 2, completion_tokens: 3 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "llmProxy",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "kimi-k2.5");
+    assert.deepEqual(calls, [
+      { auth: "Bearer token-copilot", model: "gpt-5.4" },
+      { auth: "Bearer token-kimi", model: "kimi-k2.5" },
     ]);
   });
 });
@@ -1179,7 +1380,6 @@ test("messages endpoint prefers the Claude project-configured model over the inc
   fs.writeFileSync(path.join(workspaceRoot, "package.json"), JSON.stringify({ name: "yt-monitor" }, null, 2));
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
       ANTHROPIC_BASE_URL: "http://127.0.0.1:3015",
       ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
     },
@@ -1330,7 +1530,7 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     kind: "launchd",
     install() {
       serviceCalls.push("install");
-      return { stdoutPath: path.join(tempRoot, "logs", "service.out.log"), stderrPath: path.join(tempRoot, "logs", "service.err.log") };
+      return { ok: true, stdoutPath: path.join(tempRoot, "logs", "service.out.log"), stderrPath: path.join(tempRoot, "logs", "service.err.log") };
     },
     start() {
       serviceCalls.push("start");
@@ -1498,8 +1698,8 @@ test("claude setup is exposed via REST endpoint", async () => {
 
   const settingsFile = path.join(projectRoot, ".claude", "settings.json");
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
-  assert.equal(settings.model, "o3");
-  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "o3");
+  assert.equal(settings.model, "llmProxy");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
 });
 
 test("logs stream endpoint exposes live logs over SSE", async () => {

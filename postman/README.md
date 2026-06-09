@@ -18,7 +18,7 @@ Questa cartella contiene tutto il necessario per provare gli endpoint HTTP di ll
 
 ## Prerequisiti
 
-1. Avvia llmProxy in locale (default: `http://127.0.0.1:3015`).
+1. Avvia llmProxy in locale. L'environment incluso punta al profilo installato/Docker su `http://127.0.0.1:7045`; se stai usando il server di sviluppo repo-local cambia `baseUrl` a `http://127.0.0.1:3015`.
 2. Per test LLM reali, assicurati che ci sia autenticazione provider valida (Copilot).
 3. Per endpoint `/v1/llm/*`, fornisci un `HierarchyContext` valido.
 
@@ -95,4 +95,6 @@ Endpoint non equivalenti alla CLI (solo API runtime/platform):
 
 - La request `GET /api/logs/stream` è SSE: nel runner di Postman può restare aperta, quindi conviene eseguirla singolarmente.
 - I test della collection usano assert tolleranti (`200/400`, `200/401`) per accomodare ambienti autenticati e non autenticati.
+- Le risposte LLM riuscite tramite llmProxy aggiungono in coda un footer testuale con provider e modello effettivamente usati. La collection lo verifica su `POST /v1/messages`.
+- La request `POST /api/claude/setup` usa un indice numerico (`claudeSetupModelIndex`) coerente con la CLI attuale, non il nome raw del modello.
 - La request `POST /v1/llm/providers` salva automaticamente l'id in `providerEntryId` per la request di delete successiva.

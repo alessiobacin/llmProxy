@@ -6,8 +6,10 @@
     "_postman_id": "c8db0cd0-8475-4b5a-91be-6af0d28fe914"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://127.0.0.1:3015" },
+    { "key": "baseUrl", "value": "http://127.0.0.1:7045" },
     { "key": "traceId", "value": "trace-postman-001" },
+    { "key": "llmProxyModel", "value": "llmProxy" },
+    { "key": "claudeSetupModelIndex", "value": "2" },
     { "key": "hierarchyContextProject", "value": "{\"scope_type\":\"project\",\"scope_id\":\"p-1\",\"master_company\":\"mc-1\",\"tenant_id\":\"t-1\",\"client_id\":\"c-1\",\"project_id\":\"p-1\",\"roles\":[\"admin\"]}" },
     { "key": "hierarchyContextMissingFields", "value": "{\"scope_type\":\"project\",\"scope_id\":\"p-1\",\"tenant_id\":\"t-1\"}" },
     { "key": "providerId", "value": "copilot" },
@@ -139,7 +141,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"model\": \"gpt-4.1\",\n  \"projectPath\": \"{{projectPath}}\"\n}"
+              "raw": "{\n  \"model\": \"{{claudeSetupModelIndex}}\",\n  \"projectPath\": \"{{projectPath}}\"\n}"
             },
             "url": "{{baseUrl}}/api/claude/setup"
           },
@@ -230,11 +232,11 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"model\": \"gpt-4.1\",\n  \"max_tokens\": 64,\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Ciao da Postman\" }\n  ]\n}"
+              "raw": "{\n  \"model\": \"{{llmProxyModel}}\",\n  \"max_tokens\": 64,\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Ciao da Postman\" }\n  ]\n}"
             },
             "url": "{{baseUrl}}/v1/messages"
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});", "if (pm.response.code === 200) {", "  const body = pm.response.json();", "  const textBlocks = Array.isArray(body.content) ? body.content.filter(function (block) { return block.type === 'text'; }) : [];", "  const lastText = textBlocks.length ? String(textBlocks[textBlocks.length - 1].text || '') : '';", "  pm.test('Inference footer includes provider and model', function () {", "    pm.expect(lastText).to.include('[llmproxy] provider:');", "    pm.expect(lastText).to.include('| model:');", "  });", "}"] } }]
         },
         {
           "name": "POST /v1/chat/completions",
@@ -246,7 +248,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Hello from Postman\" }\n  ]\n}"
+              "raw": "{\n  \"model\": \"{{llmProxyModel}}\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Hello from Postman\" }\n  ]\n}"
             },
             "url": "{{baseUrl}}/v1/chat/completions"
           },

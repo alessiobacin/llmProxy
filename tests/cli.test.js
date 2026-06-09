@@ -114,10 +114,10 @@ test("claude:setup creates .claude/settings.json for the current project", async
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
-  assert.equal(settings.model, "claude-sonnet-4.5");
-  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
+  assert.equal(settings.model, "llmProxy");
+  assert.equal("ANTHROPIC_AUTH_TOKEN" in settings.env, false);
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:5045");
-  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "claude-sonnet-4.5");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.equal(settings.env.API_TIMEOUT_MS, "3000000");
   assert.equal(settings.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, "1");
   assert.match(stdout.toString(), /settings\.json/);
@@ -157,7 +157,8 @@ test("claude:setup merges env settings without overwriting unrelated project set
   assert.deepEqual(settings.permissions, { allow: ["Bash(node:*)"] });
   assert.equal(settings.env.EXISTING_FLAG, "keep-me");
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://0.0.0.0:4242");
-  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "proxy-local");
+  assert.equal("ANTHROPIC_AUTH_TOKEN" in settings.env, false);
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.match(stdout.toString(), /http:\/\/0\.0\.0\.0:4242/);
 });
 
@@ -180,8 +181,9 @@ test("claude:setup loads HOST and PORT from the llmproxy package .env file", asy
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
 
   assert.equal(exitCode, 0);
-  assert.equal(settings.model, "claude-sonnet-4.5");
+  assert.equal(settings.model, "llmProxy");
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:3015/);
 });
 
@@ -207,6 +209,7 @@ test("claude:setup uses the production service port 7045 when the installed CLI 
 
   assert.equal(exitCode, 0);
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:7045");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
 });
 
@@ -814,9 +817,8 @@ test("claude:setup accepts a model index from the numbered model list", async ()
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
 
   assert.equal(exitCode, 0);
-  assert.notEqual(settings.env.ANTHROPIC_DEFAULT_MODEL, "");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.match(stdout.toString(), /Default model:/);
-  assert.match(stdout.toString(), new RegExp(settings.env.ANTHROPIC_DEFAULT_MODEL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 test("model:set updates the Claude project model with a raw provider-prefixed value", async () => {
@@ -832,7 +834,6 @@ test("model:set updates the Claude project model with a raw provider-prefixed va
       allow: ["Bash(node:*)"],
     },
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
       KEEP_ME: "yes",
@@ -935,8 +936,8 @@ test("claude:setup resolves model indexes from the live Copilot catalog", async 
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
 
   assert.equal(exitCode, 0);
-  assert.equal(settings.model, "o3");
-  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "o3");
+  assert.equal(settings.model, "llmProxy");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.match(stdout.toString(), /Default model: o3/);
 });
 

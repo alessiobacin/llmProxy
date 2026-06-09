@@ -58,7 +58,7 @@ test("resolveClaudeProjectSettings reads the configured model from the nearest C
   fs.mkdirSync(claudeDir, { recursive: true });
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
     },
   }, null, 2));
@@ -79,7 +79,7 @@ test("resolveClaudeProjectSettings prefers the top-level Claude model when prese
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     model: "gpt-5.3-codex",
     env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
     },
   }, null, 2));
@@ -87,5 +87,26 @@ test("resolveClaudeProjectSettings prefers the top-level Claude model when prese
   const result = resolveClaudeProjectSettings(nestedDir);
 
   assert.equal(result.configuredModel, "gpt-5.3-codex");
+  assert.equal(result.configuredModelSource, "settings.json:model");
+});
+
+test("resolveClaudeProjectSettings ignores proxy UI labels and defers model routing to the proxy", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-proxy-label-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4,kimi:kimi-k2.5",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.configuredModel, null);
   assert.equal(result.configuredModelSource, "settings.json:model");
 });

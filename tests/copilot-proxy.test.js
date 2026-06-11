@@ -12,6 +12,8 @@ const {
   trimOldestNonSystemMessage,
   hasImageInOpenAiMessages,
   API_KEY_PROVIDER_CONFIGS,
+  getApiKeyProviderRequestUrls,
+  probeApiKeyProviderModel,
 } = require("../lib/copilot-proxy");
 const {
   normalizeCopilotTooling,
@@ -37,6 +39,43 @@ test("API_KEY_PROVIDER_CONFIGS.qwen accepts only qwen model family", () => {
   assert.equal(qwen.supportsModel("qwen3.7-max"), true);
   assert.equal(qwen.supportsModel("qwen3.7-plus"), true);
   assert.equal(qwen.supportsModel("gpt-5.4"), false);
+});
+
+test("getApiKeyProviderRequestUrls routes qwen token-plan keys to the token-plan endpoint first", () => {
+  const urls = getApiKeyProviderRequestUrls({ provider: "qwen", access_token: "sk-sp-test" });
+  assert.deepEqual(urls, [
+    "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+  ]);
+});
+
+test("getApiKeyProviderRequestUrls honors an explicit qwen payg plan", () => {
+  const urls = getApiKeyProviderRequestUrls({ provider: "qwen", access_token: "sk-sp-test", endpoint_variant: "dashscope" });
+  assert.deepEqual(urls, [
+    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+  ]);
+});
+
+test("probeApiKeyProviderModel retries qwen against the token-plan endpoint", async () => {
+  const urls = [];
+  const result = await probeApiKeyProviderModel({
+    provider: "qwen",
+    apiKey: "sk-sp-test",
+    model: "qwen3.7-max",
+    fetchFn: async (url) => {
+      urls.push(url);
+      return {
+        ok: url.includes("token-plan"),
+        status: url.includes("token-plan") ? 200 : 401,
+        async text() {
+          return "Incorrect API key provided";
+        },
+      };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(urls, ["https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions"]);
 });
 
 test("parseProviderModelPreferences keeps mistral model names intact", () => {

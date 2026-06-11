@@ -618,7 +618,7 @@ Use it when you want a quick operator view of:
 - per-provider usage
 - per-model usage
 
-### `llmproxy provider:add <id> [--name <name>] [--api-key <key>]`
+### `llmproxy provider:add <id> [--name <name>] [--api-key <key>] [--model <model>] [--plan <plan>]`
 
 Adds a provider identified by `<id>`. Behaviour depends on the provider type:
 
@@ -643,11 +643,15 @@ Known API-key providers:
 | `kimi` | Kimi (Moonshot) |
 | `zai` / `z.ai` | Z.ai |
 
+`qwen` note: `llmproxy` automatically uses the Token Plan OpenAI-compatible endpoint for `sk-sp-...` keys and keeps using `dashscope-intl` for standard pay-as-you-go keys. If you want to force the choice during setup, use `--plan subscription` or `--plan payg`.
+
 Example:
 
 ```bash
 llmproxy provider:add openrouter --api-key sk-or-...
 llmproxy provider:add groq --api-key gsk_...
+llmproxy provider:add qwen --api-key sk-sp-... --model qwen3.7-max --plan subscription
+llmproxy provider:add qwen --api-key sk-qwen-... --model qwen3.7-max --plan payg
 ```
 
 ### `llmproxy provider:available`
@@ -660,17 +664,18 @@ Use it to confirm:
 - the display name shown by llmProxy
 - which providers use OAuth vs API-key authentication
 
-### `llmproxy provider:key <id> --api-key <key>`
+### `llmproxy provider:key <id> --api-key <key> [--model <model>] [--plan <plan>]`
 
 Sets or replaces the API-key credential for an existing API-key provider without going through the OAuth flow. Equivalent to `provider:add <id> --api-key <key>` when the provider is already registered.
 
 ```bash
 llmproxy provider:key openrouter --api-key sk-or-new-key
+llmproxy provider:key qwen --api-key sk-sp-... --plan subscription
 ```
 
 ### `llmproxy provider:list`
 
-Shows the current fallback order of configured providers.
+Shows the current fallback order of configured providers. For `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`.
 
 ### `llmproxy provider:status`
 

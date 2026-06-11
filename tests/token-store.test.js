@@ -50,3 +50,39 @@ test("token store persists multiple providers and fallback order", () => {
   assert.equal(reloaded.getAccessToken(), "token-backup");
   assert.equal(reloaded.getProvider("primary").name, "Primary Copilot");
 });
+
+test("token store keeps provider order stable when updating an existing provider", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-update-order-"));
+  const tokenFile = path.join(tempRoot, "copilot-token.json");
+  const store = createTokenStore({ filePath: tokenFile });
+
+  store.saveProvider("qwen", {
+    access_token: "token-qwen",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+  store.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  store.setProviderOrder(["qwen", "deepseek"]);
+
+  store.saveProvider("qwen", {
+    access_token: "token-qwen-updated",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+
+  assert.deepEqual(store.listProviders().map((provider) => provider.id), ["qwen", "deepseek"]);
+  assert.equal(store.getProvider("qwen").access_token, "token-qwen-updated");
+});

@@ -37,7 +37,7 @@ services:
       # LLMPROXY_SECRET: "${LLMPROXY_SECRET}"
     volumes:
       # Reuse host token store/logs so container has the same authenticated providers
-      - "${HOME}/Library/Application Support/llmProxy:/root/.local/share/llmProxy"
+      - "${LLMPROXY_HOME}:/root/.local/share/llmProxy"
     networks:
       - llmproxy-production
 

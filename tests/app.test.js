@@ -1192,6 +1192,72 @@ test("messages endpoint still tries providers in configured order when request c
   });
 });
 
+test("messages endpoint routes qwen token-plan keys to the token-plan endpoint", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-qwen-token-plan-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("qwen", {
+    access_token: "sk-sp-qwen-token-plan",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+
+  const calls = [];
+  const fetchFn = async (url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push({ url, model: body.model });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [
+            {
+              message: { content: "served by qwen token plan" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 3, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": "/Users/example/project-qwen-token-plan",
+      },
+      body: JSON.stringify({
+        model: "qwen3.7-max",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "qwen3.7-max");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by qwen token plan", "qwen", "qwen3.7-max", 3, 2));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
+    assert.equal(calls[0].model, "qwen3.7-max");
+  });
+});
+
 test("messages endpoint tries a provider default model before moving to the next provider", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-provider-default-model-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

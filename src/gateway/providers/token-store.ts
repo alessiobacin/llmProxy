@@ -15,6 +15,7 @@ interface ProviderToken {
   token_type: string;
   scope: string;
   default_model: string;
+  endpoint_variant: string;
   created_at: number;
   updated_at: number;
 }
@@ -92,6 +93,7 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
     token_type: String(provider?.token_type ?? (authType === "api_key" ? "api_key" : "bearer")),
     scope: String(provider?.scope ?? "read:user"),
     default_model: provider?.default_model ? String(provider.default_model).trim() : "",
+    endpoint_variant: provider?.endpoint_variant ? String(provider.endpoint_variant).trim() : "",
     created_at: Number(provider?.created_at) || Date.now(),
     updated_at: Number(provider?.updated_at) || Date.now(),
   };
@@ -191,8 +193,10 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
 
     registry.providers = registry.providers.filter((p) => p.id !== targetId);
     registry.providers.push(nextProvider);
-    registry.order = registry.order.filter((id) => id !== targetId);
-    registry.order.push(targetId);
+    if (!existing) {
+      registry.order = registry.order.filter((id) => id !== targetId);
+      registry.order.push(targetId);
+    }
     registry.providers.sort((a, b) => registry.order.indexOf(a.id) - registry.order.indexOf(b.id));
     persistRegistry(registry);
     return nextProvider;

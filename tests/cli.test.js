@@ -52,9 +52,20 @@ test("resolveServiceEntryFile uses the Docker wrapper for production service mod
   const entryFile = resolveServiceEntryFile({
     env: { LLMPROXY_ENV: "production" },
     packageRoot: "/tmp/node_modules/llmproxy",
+    targetPlatform: "darwin",
   });
 
   assert.equal(entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+});
+
+test("resolveServiceEntryFile uses the native server entrypoint on Linux even in production", () => {
+  const entryFile = resolveServiceEntryFile({
+    env: { LLMPROXY_ENV: "production" },
+    packageRoot: "/tmp/node_modules/llmproxy",
+    targetPlatform: "linux",
+  });
+
+  assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
 });
 
 test("resolveServiceEntryFile uses the native server entrypoint in local development", () => {
@@ -92,6 +103,27 @@ test("resolveCliServiceManagerOptions uses the Docker wrapper for installed prod
   });
 
   assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+  assert.equal(options.environment.PORT, "7045");
+  assert.equal(options.environment.HOST, "127.0.0.1");
+});
+
+test("resolveCliServiceManagerOptions uses the native server entrypoint on Linux", () => {
+  const options = resolveCliServiceManagerOptions({
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+    },
+    paths: {
+      packageRoot: "/tmp/node_modules/llmproxy",
+      dataRoot: "/home/aqdas/.local/share/llmProxy",
+      launchAgentFile: "/tmp/com.llmproxy.service.plist",
+      systemdUnitFile: "/tmp/llmproxy.service",
+      stdoutLogFile: "/tmp/service.out.log",
+      stderrLogFile: "/tmp/service.err.log",
+    },
+    targetPlatform: "linux",
+  });
+
+  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/server.js");
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
 });
@@ -298,8 +330,10 @@ test("provider:add supports api-key providers like openrouter", async () => {
 test("provider:add supports api-key providers like qwen", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-"));
   const stdout = createWritableBuffer();
+  const requestUrls = [];
   const requestBodies = [];
-  const fetchFn = async (_url, options = {}) => {
+  const fetchFn = async (url, options = {}) => {
+    requestUrls.push(url);
     requestBodies.push(JSON.parse(String(options.body || "{}")));
     return {
       ok: true,
@@ -321,8 +355,91 @@ test("provider:add supports api-key providers like qwen", async () => {
   assert.equal(exitCode, 0);
   assert.equal(saved.provider, "qwen");
   assert.equal(saved.default_model, "qwen3.7-max");
+  assert.equal(saved.endpoint_variant, "dashscope");
+  assert.equal(requestUrls[0], "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions");
   assert.equal(requestBodies[0].model, "qwen3.7-max");
-  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max\)/);
+  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, plan: payg\)/);
+});
+
+test("provider:add supports qwen subscription plan explicitly", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-subscription-"));
+  const stdout = createWritableBuffer();
+  const requestUrls = [];
+  const fetchFn = async (url) => {
+    requestUrls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { id: "ok" };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--name", "Qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--plan", "subscription"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const saved = tokenStore.getProvider("qwen");
+  assert.equal(exitCode, 0);
+  assert.equal(saved.endpoint_variant, "token_plan");
+  assert.equal(requestUrls[0], "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
+  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, plan: subscription\)/);
+});
+
+test("provider:key routes qwen token-plan keys to the token-plan endpoint", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-key-qwen-token-plan-"));
+  const stdout = createWritableBuffer();
+  const requestUrls = [];
+  const fetchFn = async (url) => {
+    requestUrls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { id: "ok" };
+      },
+    };
+  };
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("qwen", {
+    access_token: "sk-old-qwen",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:key", "qwen", "--api-key", "sk-sp-token-plan"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const saved = tokenStore.getProvider("qwen");
+  assert.equal(exitCode, 0);
+  assert.equal(requestUrls[0], "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
+  assert.equal(saved.access_token, "sk-sp-token-plan");
+  assert.equal(saved.endpoint_variant, "token_plan");
+  assert.match(stdout.toString(), /API key aggiornata per provider qwen \(default model: qwen3\.7-max, plan: subscription\)/);
+});
+
+test("provider:add rejects invalid qwen plan values", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-invalid-plan-"));
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--plan", "enterprise"], {
+    dataRoot: runtimeRoot,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /--plan subscription oppure --plan payg/);
 });
 
 test("provider:add rejects api-key providers when the default model probe fails", async () => {
@@ -430,6 +547,15 @@ test("provider:status shows ordered providers and identifies the active one", as
 
   tokenStore.saveProvider("primary", { access_token: "token-primary", token_type: "bearer", scope: "read:user" }, { name: "Primary" });
   tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "token-qwen",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+    endpoint_variant: "token_plan",
+  }, { name: "Qwen" });
   tokenStore.moveProvider("backup", 1);
 
   const exitCode = await runCli(["node", "llmproxy", "provider:status"], {
@@ -441,6 +567,7 @@ test("provider:status shows ordered providers and identifies the active one", as
   assert.match(stdout.toString(), /Active provider: backup/);
   assert.match(stdout.toString(), /1\. backup \(Backup\) \[active\]/);
   assert.match(stdout.toString(), /2\. primary \(Primary\)/);
+  assert.match(stdout.toString(), /3\. qwen \(Qwen\).*plan=subscription/);
 });
 
 test("status shows configured fallback provider order", async () => {

@@ -256,6 +256,22 @@ test("provider:add performs a dedicated Copilot login and provider:list shows fa
   assert.match(listStdout.toString(), /1\. backup \(Backup Copilot\)/);
 });
 
+test("provider:available shows supported providers with aliases and auth type", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-available-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:available"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /1\. copilot \(GitHub Copilot\) auth=oauth/);
+  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\) auth=api_key/);
+  assert.match(stdout.toString(), /3\. zai \(Z\.AI\) auth=api_key aliases=z\.ai/);
+  assert.match(stdout.toString(), /qwen \(Qwen \(DashScope\)\) auth=api_key/);
+});
+
 test("provider:add supports api-key providers like openrouter", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-apikey-"));
   const stdout = createWritableBuffer();
@@ -277,6 +293,36 @@ test("provider:add supports api-key providers like openrouter", async () => {
   assert.equal(provider.provider, "openrouter");
   assert.equal(provider.default_model, "openai/gpt-4o");
   assert.match(stdout.toString(), /Provider configurato con API key/);
+});
+
+test("provider:add supports api-key providers like qwen", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-"));
+  const stdout = createWritableBuffer();
+  const requestBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { id: "ok" };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--name", "Qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const saved = tokenStore.getProvider("qwen");
+  assert.equal(exitCode, 0);
+  assert.equal(saved.provider, "qwen");
+  assert.equal(saved.default_model, "qwen3.7-max");
+  assert.equal(requestBodies[0].model, "qwen3.7-max");
+  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max\)/);
 });
 
 test("provider:add rejects api-key providers when the default model probe fails", async () => {
@@ -755,6 +801,35 @@ test("test probes only the active provider by default", async () => {
   assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"]]);
   assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
   assert.doesNotMatch(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
+});
+
+test("test hides llmproxy metadata lines from the printed assistant reply", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-hide-metadata-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          content: [{
+            type: "text",
+            text: "llmproxy-test-qwen\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 256 (in 20, out 236) | provider today 256 week 256 | model today 256 week 256",
+          }],
+        };
+      },
+    }),
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /auto: ok \([^)]+\) llmproxy-test-qwen/);
+  assert.doesNotMatch(stdout.toString(), /\[llmproxy\] provider:/);
+  assert.doesNotMatch(stdout.toString(), /\[llmproxy\] tokens:/);
 });
 
 test("test retries once after a transient local fetch failure", async () => {
@@ -1236,6 +1311,8 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /llmproxy install:persistent-en\s+installs the current CLI globally/i);
   assert.match(stdout.toString(), /llmproxy test\s+esegue un test rapido di inferenza contro il proxy locale/i);
   assert.match(stdout.toString(), /llmproxy login\s+autentica GitHub Copilot/i);
+  assert.match(stdout.toString(), /llmproxy stats\s+mostra statistiche aggregate di utilizzo per provider e modello/i);
+  assert.match(stdout.toString(), /llmproxy provider:available\s+elenca i provider supportati dalla CLI/i);
   assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);
   assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);
   assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
@@ -1291,6 +1368,50 @@ test("test probes every configured provider with --all-providers", async () => {
   assert.match(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
 
+test("stats prints provider and model token breakdown from local metering data", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-stats-"));
+  const stdout = createWritableBuffer();
+  const logsDir = path.join(runtimeRoot, "logs");
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.writeFileSync(path.join(logsDir, "metering.jsonl"), [
+    JSON.stringify({ timestamp: "2026-05-01T10:00:00Z", provider: "qwen", model_used: "qwen3.7-max", success: true, tokens_input: 100, tokens_output: 20 }),
+    JSON.stringify({ timestamp: "2026-05-02T10:00:00Z", provider: "deepseek", model_used: "deepseek-v4-pro", success: true, tokens_input: 50, tokens_output: 10 }),
+    JSON.stringify({ timestamp: "2026-05-03T10:00:00Z", provider: "qwen", model_used: "qwen3.7-max", success: false, tokens_input: 25, tokens_output: 0 }),
+  ].join("\n") + "\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "stats"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    env: {
+      LLMPROXY_METERING_SINK: "jsonl",
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Requests: 3 \| Success: 2 \| Errors: 1/);
+  assert.match(stdout.toString(), /Tokens: total=205 in=175 out=30/);
+  assert.match(stdout.toString(), /Providers:/);
+  assert.match(stdout.toString(), /1\. qwen requests=2 total=145 in=125 out=20/);
+  assert.match(stdout.toString(), /2\. deepseek requests=1 total=60 in=50 out=10/);
+  assert.match(stdout.toString(), /Models:/);
+  assert.match(stdout.toString(), /1\. qwen3\.7-max requests=2 total=145 in=125 out=20/);
+  assert.match(stdout.toString(), /2\. deepseek-v4-pro requests=1 total=60 in=50 out=10/);
+});
+
+test("help stats prints detailed guidance", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-stats-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "stats"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /^llmproxy stats/m);
+  assert.match(stdout.toString(), /breakdown per provider e modello/i);
+});
+
 test("package scripts expose install:persistent-it and install:persistent-en", async () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
 
@@ -1336,6 +1457,7 @@ test("help covers release-notes and provider subcommands", async () => {
     ["release-notes", /changelog/i],
     ["provider:add", /aggiunge un provider noto/i],
     ["provider:key", /API key/i],
+    ["provider:available", /provider supportati dalla CLI/i],
     ["provider:list", /provider configurati/i],
     ["provider:status", /provider attivo/i],
     ["provider:order", /posizione di fallback desiderata/i],
@@ -1430,28 +1552,110 @@ test("--version is an alias for version", async () => {
 
 test("update runs the package manager command for the latest llmproxy release", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-"));
+  const npmPrefix = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-prefix-"));
   const stdout = createWritableBuffer();
   const executed = [];
 
   const exitCode = await runCli(["node", "llmproxy", "update"], {
     dataRoot: runtimeRoot,
     stdout,
+    env: { ...process.env, LLMPROXY_ENV: "development" },
     commandRunner(command, args) {
       executed.push([command, args]);
+      if (["gh", "git", "pnpm"].includes(command)) {
+        return { status: 0, stdout: "ok\n", stderr: "" };
+      }
+      if (command === "npm" && args[0] === "--version") {
+        return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      }
+      if (command === "npm" && args[0] === "prefix") {
+        return { status: 0, stdout: `${npmPrefix}\n`, stderr: "" };
+      }
+      if (command === "sudo") {
+        return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
+      }
       return { status: 0, stdout: "changed 69 packages in 3s\n__LLMPROXY_VERSION__=0.1.0\n", stderr: "" };
     },
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(executed, [[
+  assert.deepEqual(executed.slice(0, 5), [
+    ["gh", ["--version"]],
+    ["git", ["--version"]],
+    ["pnpm", ["--version"]],
+    ["npm", ["--version"]],
+    ["npm", ["prefix", "-g"]],
+  ]);
+  assert.deepEqual(executed.at(-1), [
     "sh",
     [
       "-c",
       "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nused_sudo=0\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ntarget_version=$(node -p \"require('./package.json').version\")\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n    used_sudo=1\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nif [ \"$used_sudo\" -eq 1 ]; then\n  npm_prefix=$(sudo npm prefix -g)\nelse\n  npm_prefix=$(npm prefix -g)\nfi\nresolved_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nnew_bin=\"\"\nfor candidate_bin in $resolved_bins; do\n  if [ -x \"$candidate_bin\" ]; then\n    candidate_version=$(\"$candidate_bin\" version 2>/dev/null || true)\n    if [ \"$candidate_version\" = \"$target_version\" ]; then\n      new_bin=\"$candidate_bin\"\n      break\n    fi\n  fi\ndone\nif [ -z \"$new_bin\" ]; then\n  new_bin=\"$npm_prefix/bin/llmproxy\"\nfi\n[ -x \"$new_bin\" ]\nversion_output=$(\"$new_bin\" version)\n[ \"$version_output\" = \"$target_version\" ]\nfor installed_bin in $resolved_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || { if [ \"$used_sudo\" -eq 1 ]; then sudo rm -f \"$installed_bin\" >/dev/null 2>&1 || true; else true; fi; }\n  fi\ndone\nservice_restart_status=0\nservice_restart_output=$(\"$new_bin\" service:restart 2>&1 >/dev/null) || service_restart_status=$?\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"\nif [ \"$service_restart_status\" -ne 0 ]; then\n  printf \"__LLMPROXY_SERVICE_RESTART_WARNING__=%s\\n\" \"$service_restart_output\"\nfi",
     ],
-  ]]);
+  ]);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
+});
+
+test("update stops early and reports missing base prerequisites", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-preflight-missing-"));
+  const npmPrefix = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-prefix-missing-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    env: { ...process.env, LLMPROXY_ENV: "development" },
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      if (command === "gh") return { status: 1, stdout: "", stderr: "gh missing" };
+      if (command === "git") return { status: 1, stdout: "", stderr: "git missing" };
+      if (command === "pnpm") return { status: 1, stdout: "", stderr: "pnpm missing" };
+      if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: `${npmPrefix}\n`, stderr: "" };
+      if (command === "sudo") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /prerequisiti.*non sono soddisfatti/i);
+  assert.match(stderr.toString(), /GitHub CLI \(`gh`\) non trovato/i);
+  assert.match(stderr.toString(), /Git \(`git`\) non trovato/i);
+  assert.match(stderr.toString(), /pnpm non trovato/i);
+  assert.equal(executed.some(([command]) => command === "sh"), false);
+});
+
+test("update reports Docker prerequisites when the service runtime uses Docker", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-preflight-docker-"));
+  const npmPrefix = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-prefix-docker-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    env: { ...process.env, LLMPROXY_ENV: "production" },
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      if (["gh", "git", "pnpm"].includes(command)) return { status: 0, stdout: "ok\n", stderr: "" };
+      if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: `${npmPrefix}\n`, stderr: "" };
+      if (command === "docker") return { status: 1, stdout: "", stderr: "docker missing" };
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /Docker non trovato nel PATH/i);
+  assert.equal(executed.some(([command]) => command === "sh"), false);
 });
 
 test("runSelfUpdate resolves the refreshed llmproxy binary by matching the target version", () => {

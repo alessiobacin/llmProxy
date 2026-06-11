@@ -9,6 +9,7 @@ const SUPPORTED_PROVIDERS = [
   "openrouter",
   "zai",
   "kimi",
+  "qwen",
   "openai",
   "anthropic",
   "deepseek",

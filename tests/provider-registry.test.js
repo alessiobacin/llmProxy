@@ -34,15 +34,22 @@ test("upsert validates provider and scope", () => {
   assert.throws(() => registry.upsert({ provider: "copilot", scope_type: "project", scope_id: "" }));
 });
 
-test("upsert accepts newly supported providers like kimi", () => {
+test("upsert accepts newly supported providers like kimi and qwen", () => {
   const registry = createProviderRegistry({ filePath: tempPath(), secret: "s" });
-  const entry = registry.upsert({
+  const kimiEntry = registry.upsert({
     provider: "kimi",
     scope_type: "project",
     scope_id: "p-1",
     credentials: { api_key: "kimi-key" },
   });
-  assert.equal(entry.provider, "kimi");
+  const qwenEntry = registry.upsert({
+    provider: "qwen",
+    scope_type: "project",
+    scope_id: "p-2",
+    credentials: { api_key: "qwen-key" },
+  });
+  assert.equal(kimiEntry.provider, "kimi");
+  assert.equal(qwenEntry.provider, "qwen");
 });
 
 test("resolve picks most specific scope (project > client > agency)", () => {

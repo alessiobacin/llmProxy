@@ -31,6 +31,14 @@ test("API_KEY_PROVIDER_CONFIGS.deepseek accepts only deepseek model family", () 
   assert.equal(deepseek.supportsModel("gpt-5.4"), false);
 });
 
+test("API_KEY_PROVIDER_CONFIGS.qwen accepts only qwen model family", () => {
+  const qwen = API_KEY_PROVIDER_CONFIGS.qwen;
+  assert.equal(typeof qwen.supportsModel, "function");
+  assert.equal(qwen.supportsModel("qwen3.7-max"), true);
+  assert.equal(qwen.supportsModel("qwen3.7-plus"), true);
+  assert.equal(qwen.supportsModel("gpt-5.4"), false);
+});
+
 test("parseProviderModelPreferences keeps mistral model names intact", () => {
   const parsed = parseProviderModelPreferences("mistral-large-latest");
   assert.deepEqual(parsed, [{ provider: null, model: "mistral-large-latest" }]);
@@ -46,16 +54,33 @@ test("parseProviderModelPreferences still supports zai- prefix shorthand", () =>
   assert.deepEqual(parsed, [{ provider: "zai", model: "glm-5" }]);
 });
 
-test("sanitizeSchemaForMoonshot removes sibling keywords from $ref nodes", () => {
+test("sanitizeSchemaForMoonshot removes sibling keywords from $ref nodes and normalizes refs to $defs", () => {
   const input = {
     type: "object",
+    definitions: {
+      DesignSystem: {
+        type: "object",
+        properties: {
+          mode: { type: "string" },
+        },
+      },
+    },
     properties: {
       designSystem: { $ref: "#/definitions/DesignSystem", description: "The design system" },
       name: { type: "string", description: "A name" },
     },
   };
   const output = sanitizeSchemaForMoonshot(input);
-  assert.deepEqual(output.properties.designSystem, { $ref: "#/definitions/DesignSystem" });
+  assert.deepEqual(output.properties.designSystem, { $ref: "#/$defs/DesignSystem" });
+  assert.deepEqual(output.$defs, {
+    DesignSystem: {
+      type: "object",
+      properties: {
+        mode: { type: "string" },
+      },
+    },
+  });
+  assert.equal("definitions" in output, false);
   // non-$ref nodes are untouched
   assert.deepEqual(output.properties.name, { type: "string", description: "A name" });
 });
@@ -68,6 +93,14 @@ test("sanitizeToolsForMoonshot sanitizes parameters of each tool", () => {
         name: "myTool",
         parameters: {
           type: "object",
+          defs: {
+            Config: {
+              type: "object",
+              properties: {
+                enabled: { type: "boolean" },
+              },
+            },
+          },
           properties: {
             config: { $ref: "#/defs/Config", description: "conflicting" },
           },
@@ -76,7 +109,15 @@ test("sanitizeToolsForMoonshot sanitizes parameters of each tool", () => {
     },
   ];
   const result = sanitizeToolsForMoonshot(tools);
-  assert.deepEqual(result[0].function.parameters.properties.config, { $ref: "#/defs/Config" });
+  assert.deepEqual(result[0].function.parameters.properties.config, { $ref: "#/$defs/Config" });
+  assert.deepEqual(result[0].function.parameters.$defs, {
+    Config: {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+      },
+    },
+  });
 });
 
 test("sanitizeVisionContent replaces image_url blocks with [image] text for non-vision providers", () => {

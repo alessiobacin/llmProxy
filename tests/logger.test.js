@@ -123,3 +123,119 @@ test("request logger persists tool truncation metadata on provider attempts", ()
     toolChoiceAdjusted: false,
   });
 });
+
+test("request logger writes a request summary with provider sequence", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-logs-summary-"));
+  const logger = createRequestLogger({
+    logsDir: root,
+    retentionDays: 7,
+    nowFn: () => new Date("2026-06-10T10:00:00.000Z").getTime(),
+  });
+
+  logger.logRequestSummary({
+    requestId: "req_summary",
+    traceId: "trace_summary",
+    projectName: "webapp",
+    requestedModel: "claude-sonnet-4.5",
+    success: false,
+    finalProvider: "backup",
+    finalModel: "gpt-4.1",
+    finalStatus: 429,
+    promptTokens: 11,
+    completionTokens: 5,
+    providerAttempts: [
+      { provider: "default", endpoint: "responses", status: 429, success: false, effective_model: "gpt-5.4", actual_model: null },
+      { provider: "kimi", endpoint: "chat", status: 400, success: false, effective_model: "kimi-k2.5", actual_model: null },
+      { provider: "backup", endpoint: "chat", status: 429, success: false, effective_model: "gpt-4.1", actual_model: null },
+    ],
+  });
+
+  const files = fs.readdirSync(root);
+  assert.equal(files.length, 1);
+
+  const entries = fs.readFileSync(path.join(root, files[0]), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].event, "request_summary");
+  assert.equal(entries[0].attemptCount, 3);
+  assert.equal(entries[0].finalProvider, "backup");
+  assert.equal(entries[0].promptTokens, 11);
+  assert.equal(entries[0].completionTokens, 5);
+  assert.equal(entries[0].totalTokens, 16);
+  assert.equal(entries[0].providerSequence[0].provider, "default");
+  assert.equal(entries[0].providerSequence[1].provider, "kimi");
+  assert.equal(entries[0].providerSequence[2].provider, "backup");
+});
+
+test("request logger computes today and week token totals from successful summaries", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-logs-totals-"));
+  const logger = createRequestLogger({
+    logsDir: root,
+    retentionDays: 7,
+    nowFn: () => new Date("2026-06-10T10:00:00.000Z").getTime(),
+  });
+
+  logger.logRequestSummary({
+    requestId: "req_today",
+    success: true,
+    finalProvider: "kimi",
+    finalModel: "kimi-k2.5",
+    finalStatus: 200,
+    promptTokens: 10,
+    completionTokens: 5,
+    providerAttempts: [],
+  });
+
+  const mondayLogger = createRequestLogger({
+    logsDir: root,
+    retentionDays: 7,
+    nowFn: () => new Date("2026-06-08T08:00:00.000Z").getTime(),
+  });
+  mondayLogger.logRequestSummary({
+    requestId: "req_monday",
+    success: true,
+    finalProvider: "openai",
+    finalModel: "gpt-4.1",
+    finalStatus: 200,
+    promptTokens: 4,
+    completionTokens: 3,
+    providerAttempts: [],
+  });
+
+  const sundayLogger = createRequestLogger({
+    logsDir: root,
+    retentionDays: 7,
+    nowFn: () => new Date("2026-06-07T08:00:00.000Z").getTime(),
+  });
+  sundayLogger.logRequestSummary({
+    requestId: "req_sunday",
+    success: true,
+    finalProvider: "backup",
+    finalModel: "gpt-4.1",
+    finalStatus: 200,
+    promptTokens: 20,
+    completionTokens: 2,
+    providerAttempts: [],
+  });
+
+  const totals = logger.getUsageTotals(new Date("2026-06-10T10:00:00.000Z"));
+  assert.deepEqual(totals, {
+    todayTokens: 15,
+    weekTokens: 22,
+  });
+  assert.deepEqual(logger.getUsageTotals({ provider: "kimi" }, new Date("2026-06-10T10:00:00.000Z")), {
+    todayTokens: 15,
+    weekTokens: 15,
+  });
+  assert.deepEqual(logger.getUsageTotals({ provider: "openai" }, new Date("2026-06-10T10:00:00.000Z")), {
+    todayTokens: 0,
+    weekTokens: 7,
+  });
+  assert.deepEqual(logger.getUsageTotals({ model: "gpt-4.1" }, new Date("2026-06-10T10:00:00.000Z")), {
+    todayTokens: 0,
+    weekTokens: 7,
+  });
+});

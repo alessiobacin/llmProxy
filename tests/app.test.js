@@ -21,8 +21,9 @@ async function withServer(app, callback) {
   }
 }
 
-function withInferenceFooter(text, providerId, modelUsed) {
-  return `${text}\n\n[llmproxy] provider: ${providerId} | model: ${modelUsed}`;
+function withInferenceFooter(text, providerId, modelUsed, promptTokens = 0, completionTokens = 0) {
+  const requestTokens = Number(promptTokens || 0) + Number(completionTokens || 0);
+  return `[llmproxy] provider: ${providerId} | model: ${modelUsed}\n\n${text}\n\n[llmproxy] tokens: req ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | provider today ${requestTokens} week ${requestTokens} | model today ${requestTokens} week ${requestTokens}`;
 }
 
 test("health and auth status endpoints reflect standalone runtime state", async () => {
@@ -103,7 +104,7 @@ test("messages endpoint proxies a non-stream Copilot response into Anthropic for
     assert.equal(response.status, 200);
     assert.equal(payload.type, "message");
     assert.equal(payload.role, "assistant");
-    assert.equal(payload.content[0].text, "pong from copilot\n\n[llmproxy] provider: default | model: claude-sonnet-4.5");
+    assert.equal(payload.content[0].text, withInferenceFooter("pong from copilot", "default", "claude-sonnet-4.5", 11, 5));
     assert.equal(payload.model, "claude-sonnet-4.5");
   });
 });
@@ -165,6 +166,176 @@ test("messages endpoint appends provider and model footer to streaming responses
   });
 });
 
+test("messages endpoint counts tokens from a usage-only final streaming chunk", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-stream-usage-only-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-stream-usage-only" });
+
+  const encoder = new TextEncoder();
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "qwen3.7-max",
+          choices: [{ delta: { content: "pong stream" } }],
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "qwen3.7-max",
+          choices: [],
+          usage: { prompt_tokens: 20, completion_tokens: 236, total_tokens: 256 },
+        })}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    }),
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: true,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(payload, /pong stream/);
+    assert.match(payload, /\[llmproxy\] tokens: req 256 \(in 20, out 236\)/);
+  });
+});
+
+test("messages endpoint rewrites provider metadata once when upstream response already contains llmproxy lines", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-dedup-response-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-dedup" });
+
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        model: "claude-sonnet-4.5",
+        choices: [
+          {
+            message: {
+              content: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 0 (in 0, out 0) | today 980728 | week 1196086",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 11, completion_tokens: 5 },
+      };
+    },
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.content[0].text, withInferenceFooter("build ok", "default", "claude-sonnet-4.5", 11, 5));
+  });
+});
+
+test("messages endpoint strips llmproxy metadata from streaming provider deltas before appending its own", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-stream-dedup-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-stream-dedup" });
+
+  const encoder = new TextEncoder();
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "claude-sonnet-4.5",
+          choices: [{
+            delta: {
+              content: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 0 (in 0, out 0) | today 980728 | week 1196086",
+            },
+          }],
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "claude-sonnet-4.5",
+          choices: [{ finish_reason: "stop", delta: {} }],
+          usage: { prompt_tokens: 7, completion_tokens: 3 },
+        })}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    }),
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: true,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(payload, /build ok/);
+    assert.equal((payload.match(/\[llmproxy\] provider:/g) || []).length, 1);
+    assert.doesNotMatch(payload, /today 980728/);
+  });
+});
+
 test("messages endpoint falls back to the next Copilot provider when the first one fails", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-fallback-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
@@ -172,6 +343,21 @@ test("messages endpoint falls back to the next Copilot provider when the first o
   tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
 
   const attempts = [];
+  const loggerCalls = [];
+  const logger = {
+    logIncomingRequest(entry) {
+      loggerCalls.push({ type: "incoming", entry });
+    },
+    logProviderAttempt(entry) {
+      loggerCalls.push({ type: "attempt", entry });
+    },
+    logProviderResult(entry) {
+      loggerCalls.push({ type: "result", entry });
+    },
+    logRequestSummary(entry) {
+      loggerCalls.push({ type: "summary", entry });
+    },
+  };
   const fetchFn = async (_url, options = {}) => {
     const authHeader = options.headers?.Authorization || "";
     attempts.push(authHeader);
@@ -208,6 +394,7 @@ test("messages endpoint falls back to the next Copilot provider when the first o
     dataRoot: tempRoot,
     tokenStore,
     fetchFn,
+    logger,
   });
 
   await withServer(app, async (baseUrl) => {
@@ -232,8 +419,75 @@ test("messages endpoint falls back to the next Copilot provider when the first o
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceFooter("served by backup", "backup", "claude-sonnet-4.5"));
+    assert.equal(payload.content[0].text, withInferenceFooter("served by backup", "backup", "claude-sonnet-4.5", 11, 4));
     assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
+    const summaryLog = loggerCalls.find((entry) => entry.type === "summary");
+    assert.ok(summaryLog);
+    assert.equal(summaryLog.entry.finalProvider, "backup");
+    assert.equal(summaryLog.entry.providerAttempts.length, 2);
+    assert.deepEqual(summaryLog.entry.providerAttempts.map((attempt) => attempt.provider), ["primary", "backup"]);
+  });
+});
+
+test("messages endpoint strips llmproxy metadata from prior conversation turns before proxying", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-strip-metadata-history-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-history" });
+
+  const requestBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    requestBodies.push(body);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          choices: [{
+            message: {
+              role: "assistant",
+              content: "ok",
+            },
+          }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+          model: body.model,
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 0 (in 0, out 0) | today 980728 | week 1196086" }],
+          },
+          {
+            role: "user",
+            content: [{ type: "text", text: "continua" }],
+          },
+        ],
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    const proxiedAssistantMessage = requestBodies[0].messages[0];
+    assert.equal(proxiedAssistantMessage.role, "assistant");
+    assert.equal(String(proxiedAssistantMessage.content || "").includes("[llmproxy]"), false);
+    assert.match(String(proxiedAssistantMessage.content || ""), /build ok/);
   });
 });
 
@@ -317,7 +571,7 @@ test("messages endpoint truncates oversized Copilot tool lists and records the a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceFooter("trim ok", "default", "gpt-5.4"));
+    assert.equal(payload.content[0].text, withInferenceFooter("trim ok", "default", "gpt-5.4", 9, 3));
     assert.equal(fetchBodies.length, 1);
     assert.equal(fetchBodies[0].tools.length, 128);
 
@@ -398,7 +652,7 @@ test("messages endpoint trims oldest messages and retries when Copilot rejects p
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceFooter("context trimmed ok", "default", "claude-sonnet-4.5"));
+    assert.equal(payload.content[0].text, withInferenceFooter("context trimmed ok", "default", "claude-sonnet-4.5", 100, 5));
     assert.equal(requestBodies.length, 2);
     assert.equal(requestBodies[0].messages.length, 3);
     assert.equal(requestBodies[1].messages.length, 2);
@@ -464,7 +718,7 @@ test("messages endpoint retries transient socket-close errors before failing", a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceFooter("retry success", "default", "claude-sonnet-4.5"));
+    assert.equal(payload.content[0].text, withInferenceFooter("retry success", "default", "claude-sonnet-4.5", 10, 3));
     assert.equal(attempts, 2);
   });
 });
@@ -540,7 +794,7 @@ test("messages endpoint falls back to the next Copilot provider when the first o
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceFooter("served by backup after safety block", "backup", "gpt-5.4"));
+    assert.equal(payload.content[0].text, withInferenceFooter("served by backup after safety block", "backup", "gpt-5.4", 11, 4));
     assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
   });
 });
@@ -717,7 +971,7 @@ test("messages endpoint falls back from Copilot to Z.ai for GLM models", async (
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "glm-5");
-    assert.equal(payload.content[0].text, withInferenceFooter("served by z.ai", "zai", "glm-5"));
+    assert.equal(payload.content[0].text, withInferenceFooter("served by z.ai", "zai", "glm-5", 9, 4));
     assert.deepEqual(calls, [
       {
         url: "https://api.githubcopilot.com/chat/completions",
@@ -829,9 +1083,13 @@ test("messages endpoint can fall back to every configurable API-key provider", a
 
         const payload = await response.json();
         assert.equal(response.status, 200);
-        const expectedModel = providerId === "deepseek" ? "deepseek-v4-flash" : "provider-native-model";
+        const expectedModel = providerId === "deepseek"
+          ? "deepseek-v4-flash"
+          : providerId === "qwen"
+            ? "qwen3.7-max"
+            : "provider-native-model";
         assert.equal(payload.model, expectedModel);
-        assert.equal(payload.content[0].text, withInferenceFooter(`served by ${providerId}`, providerId, expectedModel));
+        assert.equal(payload.content[0].text, withInferenceFooter(`served by ${providerId}`, providerId, expectedModel, 3, 2));
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
         assert.equal(calls[1].model, expectedModel);
@@ -840,7 +1098,7 @@ test("messages endpoint can fall back to every configurable API-key provider", a
   }
 });
 
-test("messages endpoint prioritizes vision-capable providers when request contains images", async () => {
+test("messages endpoint still tries providers in configured order when request contains images", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-vision-priority-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
   tokenStore.saveProvider("deepseek", {
@@ -862,14 +1120,14 @@ test("messages endpoint prioritizes vision-capable providers when request contai
   const fetchFn = async (url, options = {}) => {
     const auth = options.headers?.Authorization || options.headers?.["x-api-key"] || "";
     const body = JSON.parse(String(options.body || "{}"));
-    calls.push({ url: String(url), auth, model: body.model });
+    calls.push({ url: String(url), auth, model: body.model, messages: body.messages });
 
     if (auth === "Bearer token-deepseek") {
       return {
         ok: false,
         status: 400,
         async text() {
-          return "deepseek should be skipped for image requests when a vision provider exists";
+          return "deepseek does not support vision input directly";
         },
       };
     }
@@ -924,10 +1182,13 @@ test("messages endpoint prioritizes vision-capable providers when request contai
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceFooter("served by openai vision", "openai", "gpt-4o-mini"));
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].auth, "Bearer token-openai");
-    assert.equal(calls[0].model, "gpt-4o-mini");
+    assert.equal(payload.content[0].text, withInferenceFooter("served by openai vision", "openai", "gpt-4o-mini", 7, 4));
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].auth, "Bearer token-deepseek");
+    assert.equal(calls[0].model, "deepseek-v4-flash");
+    assert.match(JSON.stringify(calls[0].messages), /\[image\]/);
+    assert.equal(calls[1].auth, "Bearer token-openai");
+    assert.equal(calls[1].model, "gpt-4o-mini");
   });
 });
 
@@ -997,7 +1258,7 @@ test("messages endpoint tries a provider default model before moving to the next
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "kimi-k2.5");
-    assert.equal(payload.content[0].text, withInferenceFooter("served by provider default", "kimi", "kimi-k2.5"));
+    assert.equal(payload.content[0].text, withInferenceFooter("served by provider default", "kimi", "kimi-k2.5", 1, 2));
     assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
   });
 });
@@ -1206,7 +1467,7 @@ test("messages endpoint uses default models for providers not listed in Claude s
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "kimi-k2.5");
-    assert.equal(payload.content[0].text, withInferenceFooter("served by kimi default", "kimi", "kimi-k2.5"));
+    assert.equal(payload.content[0].text, withInferenceFooter("served by kimi default", "kimi", "kimi-k2.5", 1, 2));
     assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
   });
 });
@@ -1283,7 +1544,7 @@ test("messages endpoint falls back when DeepSeek returns 402 insufficient balanc
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "gpt-4.1");
-    assert.equal(payload.content[0].text, withInferenceFooter("served by openai fallback", "openai", "gpt-4.1"));
+    assert.equal(payload.content[0].text, withInferenceFooter("served by openai fallback", "openai", "gpt-4.1", 3, 2));
     assert.deepEqual(calls, [
       { auth: "Bearer token-deepseek", model: "deepseek-v4-flash" },
       { auth: "Bearer token-openai", model: "gpt-4.1" },
@@ -1455,6 +1716,137 @@ test("messages endpoint prefers the Claude project-configured model over the inc
     assert.equal(attempt.entry.effectiveModel, "gpt-5.4");
     assert.equal(result.entry.actualModel, "gpt-5.4");
     assert.equal(result.entry.requestedModel, "gpt-5.4");
+  });
+});
+
+test("messages endpoint injects a short-answer system instruction from Claude project settings", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-short-answer-project-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-short-answer-project" });
+  const requestBodies = [];
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_SHORT_ANSWER: "1",
+    },
+  }, null, 2));
+
+  const fetchFn = async (_url, options = {}) => {
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "claude-sonnet-4.5",
+          choices: [
+            {
+              message: { content: "ok" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 3, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(requestBodies.length, 1);
+    assert.match(String(requestBodies[0].messages[0].content || ""), /Respond as briefly as possible/);
+    assert.equal("shortAnswer" in requestBodies[0], false);
+  });
+});
+
+test("messages endpoint lets a request disable project shortAnswer with shortAnswer false", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-short-answer-override-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-short-answer-override" });
+  const requestBodies = [];
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_SHORT_ANSWER: "true",
+    },
+  }, null, 2));
+
+  const fetchFn = async (_url, options = {}) => {
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "claude-sonnet-4.5",
+          choices: [
+            {
+              message: { content: "ok" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 3, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        shortAnswer: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(requestBodies.length, 1);
+    assert.doesNotMatch(String(requestBodies[0].messages[0].content || ""), /Respond as briefly as possible/);
+    assert.equal("shortAnswer" in requestBodies[0], false);
   });
 });
 

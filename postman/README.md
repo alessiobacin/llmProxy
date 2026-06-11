@@ -78,6 +78,11 @@ La collection è organizzata in 4 cartelle:
 - `provider:rename` → `POST /api/providers/:id/rename`
 - `provider:remove` → `DELETE /api/providers/:id`
 
+Comandi solo CLI, senza endpoint REST equivalente diretto:
+
+- `provider:available`
+- `stats`
+
 Endpoint non equivalenti alla CLI (solo API runtime/platform):
 
 - `GET /health`
@@ -95,6 +100,7 @@ Endpoint non equivalenti alla CLI (solo API runtime/platform):
 
 - La request `GET /api/logs/stream` è SSE: nel runner di Postman può restare aperta, quindi conviene eseguirla singolarmente.
 - I test della collection usano assert tolleranti (`200/400`, `200/401`) per accomodare ambienti autenticati e non autenticati.
-- Le risposte LLM riuscite tramite llmProxy aggiungono in coda un footer testuale con provider e modello effettivamente usati. La collection lo verifica su `POST /v1/messages`.
+- Le risposte LLM riuscite tramite llmProxy aggiungono una riga iniziale con provider/modello effettivamente usati e un footer finale con le statistiche token della richiesta. La collection lo verifica su `POST /v1/messages`.
+- La request `POST /v1/messages` puo` includere `shortAnswer: true` per chiedere una risposta piu` concisa; in alternativa puoi renderlo il default del progetto con `LLMPROXY_SHORT_ANSWER=1` in `.claude/settings.json`.
 - La request `POST /api/claude/setup` usa un indice numerico (`claudeSetupModelIndex`) coerente con la CLI attuale, non il nome raw del modello.
 - La request `POST /v1/llm/providers` salva automaticamente l'id in `providerEntryId` per la request di delete successiva.

@@ -128,6 +128,7 @@ http://127.0.0.1:3015
 ### 4. Aggiungere un provider Copilot di fallback
 
 ```bash
+llmproxy provider:available
 llmproxy provider:add backup --name "Backup Copilot"
 llmproxy provider:list
 llmproxy provider:status
@@ -168,6 +169,8 @@ llmproxy claude:setup --model 2
 ```bash
 llmproxy status
 llmproxy test
+llmproxy test --all-providers
+llmproxy stats
 llmproxy logs
 llmproxy logs --follow
 llmproxy help
@@ -197,10 +200,50 @@ Se preferisci configurare a mano, imposta sia il campo top-level `model` sia la 
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
     "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "LLMPROXY_SHORT_ANSWER": "1"
   }
 }
 ```
+
+### Risposte concise opzionali con `shortAnswer`
+
+Se vuoi ridurre la lunghezza delle completion e risparmiare token in uscita, puoi attivare una modalita` di risposta concisa.
+
+Default a livello progetto in `.claude/settings.json`:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
+    "LLMPROXY_SHORT_ANSWER": "1"
+  }
+}
+```
+
+Override per singola request su `/v1/messages`:
+
+```json
+{
+  "model": "claude-sonnet-4-5",
+  "shortAnswer": true,
+  "stream": false,
+  "max_tokens": 128,
+  "messages": [
+    {
+      "role": "user",
+      "content": [{ "type": "text", "text": "Riassumi questa diff" }]
+    }
+  ]
+}
+```
+
+Note:
+
+- `LLMPROXY_SHORT_ANSWER=1` rende concise le risposte per default nel progetto quando Claude usa il proxy locale.
+- `shortAnswer: true` la attiva solo per una request.
+- `shortAnswer: false` la disattiva per una request anche se il default di progetto e` attivo.
 
 ### Preferenze modello per provider e catena di fallback
 
@@ -261,6 +304,8 @@ llmproxy provider:list
   Puoi lasciare un timeout alto se vuoi evitare timeout prematuri su task lunghi.
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`
   Utile per mantenere un comportamento piu` prevedibile lato Claude Code.
+- `LLMPROXY_SHORT_ANSWER`
+  Opzionale. Impostalo a `1`, `true`, `yes` o `on` per chiedere a llmProxy di iniettare una istruzione di risposta concisa su ogni inferenza proxata di quel progetto.
 
 ### Differenze rispetto ad altre configurazioni locali
 
@@ -464,6 +509,7 @@ Body minimo di esempio:
 ```json
 {
   "model": "claude-sonnet-4-5",
+  "shortAnswer": true,
   "stream": false,
   "max_tokens": 128,
   "messages": [
@@ -513,6 +559,11 @@ x-project-path: /assoluto/percorso/del/progetto
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 
+Comandi disponibili solo via CLI, senza wrapper REST dedicato:
+
+- `llmproxy provider:available`
+- `llmproxy stats`
+
 ## Comandi CLI
 
 ### `llmproxy setup`
@@ -559,18 +610,39 @@ Ciao! rispondimi solo: ciao creatore
 Se il proxy risponde correttamente, il comando stampa a terminale solo il testo restituito dall'assistant.
 E` utile per verificare rapidamente che il servizio locale sia attivo e che il percorso `/v1/messages` stia funzionando.
 
+Usa `llmproxy test --all-providers` se vuoi verificare tutti i provider configurati invece del solo provider attivo.
+Il comando rimuove le righe di metadati llmProxy dal testo stampato, cosi` nel terminale vedi solo la risposta leggibile.
+
+### `llmproxy stats`
+
+Mostra statistiche aggregate di utilizzo token raggruppate per provider e modello.
+
+In base alla modalita` runtime, il comando legge le statistiche da:
+
+- sink db-layer configurato, quando disponibile
+- fallback locale JSONL, quando db-layer non e` disponibile
+- file metering locale standalone, quando il proxy non gira in platform mode
+
+Usalo quando vuoi una vista rapida operativa di:
+
+- richieste totali, riuscite e fallite
+- token input/output/totali
+- utilizzo per provider
+- utilizzo per modello
+
 ### `llmproxy provider:add <id> [--name <name>] [--api-key <key>]`
 
 Aggiunge un provider identificato da `<id>`. Il comportamento dipende dal tipo di provider:
 
 - **Provider Copilot OAuth** (id sconosciuti o `copilot`): avvia il device flow di GitHub Copilot.
-- **Provider con API-key** (es. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `zai`): salva direttamente la `--api-key` fornita, senza flusso browser.
+- **Provider con API-key** (es. `openrouter`, `qwen`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `zai`): salva direttamente la `--api-key` fornita, senza flusso browser.
 
 Provider noti con API-key:
 
 | id | Servizio |
 |---|---|
 | `openrouter` | OpenRouter |
+| `qwen` | Qwen |
 | `openai` | OpenAI |
 | `anthropic` | Anthropic |
 | `groq` | Groq |
@@ -589,6 +661,16 @@ Esempio:
 llmproxy provider:add openrouter --api-key sk-or-...
 llmproxy provider:add groq --api-key gsk_...
 ```
+
+### `llmproxy provider:available`
+
+Mostra i provider supportati dalla CLI prima della configurazione.
+
+Usalo per confermare:
+
+- l'id canonico da passare a `provider:add`
+- il display name mostrato da llmProxy
+- quali provider usano OAuth e quali API-key
 
 ### `llmproxy provider:key <id> --api-key <key>`
 

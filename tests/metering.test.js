@@ -249,6 +249,7 @@ test("computeMeteringStats on empty array returns zeroes and nulls", () => {
   assert.equal(stats.earliest_timestamp, null);
   assert.equal(stats.latest_timestamp, null);
   assert.deepEqual(stats.by_provider, {});
+  assert.deepEqual(stats.by_model, {});
 });
 
 test("computeMeteringStats aggregates token counts, latency, and breakdowns", () => {
@@ -260,6 +261,7 @@ test("computeMeteringStats aggregates token counts, latency, and breakdowns", ()
       duration_ms: 500,
       timestamp: "2026-05-01T10:00:00Z",
       provider: "copilot",
+      model_used: "claude-sonnet-4.5",
       scope_type: "project",
       project_id: "p-1",
     },
@@ -270,6 +272,7 @@ test("computeMeteringStats aggregates token counts, latency, and breakdowns", ()
       duration_ms: 1000,
       timestamp: "2026-05-02T10:00:00Z",
       provider: "copilot",
+      model_used: "claude-sonnet-4.5",
       scope_type: "project",
       project_id: "p-1",
     },
@@ -280,6 +283,7 @@ test("computeMeteringStats aggregates token counts, latency, and breakdowns", ()
       duration_ms: 200,
       timestamp: "2026-05-03T10:00:00Z",
       provider: "openai",
+      model_used: "gpt-4.1",
       scope_type: "project",
       project_id: "p-2",
     },
@@ -299,8 +303,24 @@ test("computeMeteringStats aggregates token counts, latency, and breakdowns", ()
   assert.equal(stats.latest_timestamp, "2026-05-03T10:00:00Z");
   assert.equal(stats.by_provider["copilot"].requests, 2);
   assert.equal(stats.by_provider["openai"].requests, 1);
+  assert.equal(stats.by_model["claude-sonnet-4.5"].requests, 2);
+  assert.equal(stats.by_model["gpt-4.1"].requests, 1);
   assert.equal(stats.by_project_id["p-1"].requests, 2);
   assert.equal(stats.by_project_id["p-2"].requests, 1);
+});
+
+test("createJsonlMeteringSink.computeStats returns aggregate stats with by_model", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-sink-stats-"));
+  const filePath = path.join(dir, "meter.jsonl");
+  const sink = createJsonlMeteringSink({ filePath });
+  await sink.record({ request_id: "r-1", provider: "openai", model_used: "gpt-4.1", success: true, tokens_input: 10, tokens_output: 5, timestamp: "2026-05-01T10:00:00Z" });
+  await sink.record({ request_id: "r-2", provider: "openai", model_used: "gpt-4.1", success: true, tokens_input: 20, tokens_output: 10, timestamp: "2026-05-02T10:00:00Z" });
+
+  const stats = sink.computeStats({});
+  assert.equal(stats.total_requests, 2);
+  assert.equal(stats.by_provider.openai.requests, 2);
+  assert.equal(stats.by_model["gpt-4.1"].requests, 2);
+  assert.equal(stats.filtered_total, 2);
 });
 
 // ---------------------------------------------------------------------------

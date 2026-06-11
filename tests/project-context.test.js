@@ -110,3 +110,23 @@ test("resolveClaudeProjectSettings ignores proxy UI labels and defers model rout
   assert.equal(result.configuredModel, null);
   assert.equal(result.configuredModelSource, "settings.json:model");
 });
+
+test("resolveClaudeProjectSettings reads shortAnswer from Claude env when using local proxy", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-short-answer-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_SHORT_ANSWER: "1",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.shortAnswer, true);
+});

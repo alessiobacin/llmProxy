@@ -160,3 +160,19 @@ test("translateResponse maps tool_calls into tool_use blocks", () => {
   assert.equal(response.content[1].name, "lookup");
   assert.deepEqual(response.content[1].input, { query: "test" });
 });
+
+test("translateResponse accepts input_tokens and output_tokens usage fields", () => {
+  const response = translateResponse({
+    model: "qwen3.7-max",
+    choices: [
+      {
+        message: { content: "ok" },
+        finish_reason: "stop",
+      },
+    ],
+    usage: { input_tokens: 20, output_tokens: 236, total_tokens: 256 },
+  }, "qwen3.7-max");
+
+  assert.equal(response.usage.input_tokens, 20);
+  assert.equal(response.usage.output_tokens, 236);
+});

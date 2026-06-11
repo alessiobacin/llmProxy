@@ -89,6 +89,9 @@ components:
         max_tokens: {type: integer}
         stream: {type: boolean}
         system: {oneOf: [{type: string}, {type: array}]}
+        shortAnswer:
+          type: boolean
+          description: When true, llmproxy injects a concise-answer instruction before forwarding the request upstream.
       required: [model, messages]
     AnthropicMessagesResponse:
       type: object

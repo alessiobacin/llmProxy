@@ -741,6 +741,97 @@ Crea o aggiorna `.claude/settings.json` nella cartella corrente con le variabili
 
 Supporta `--model <indice>` per mostrare in output il modello selezionato dalla lista, mantenendo `.claude/settings.json` minimale (`model: llmProxy` piu` base URL del proxy).
 
+### Smart Router
+
+Lo smart router seleziona automaticamente il modello migliore per ogni richiesta in base a complessità, visione e strumenti. Usa un LLM classifier leggero per analizzare le richieste in arrivo e instradarle al modello più economico che soddisfa i requisiti.
+
+#### Come funziona
+
+1. **Classifier**: Un LLM piccolo e veloce (es. DeepSeek su OpenRouter) analizza ogni richiesta e la classifica per:
+   - `complexity`: simple, moderate, complex
+   - `needsVision`: se la richiesta contiene immagini
+   - `needsTools`: se la richiesta usa definizioni di tool
+   - `type`: coding, creative, reasoning, qa
+
+2. **Regole di routing**: In base alla classificazione, il router seleziona un modello dai provider registrati:
+   - Tier `economy` (deepseek-chat, gpt-4o-mini, ecc.) per richieste semplici senza tool
+   - Tier `standard` (claude-haiku-4.5, gpt-4.1, ecc.) per richieste con visione o complessità moderata
+   - Tier `premium` (claude-opus-4, gpt-5, ecc.) per richieste complesse con molti tool o contesto lungo
+
+3. **Modalità di preferenza**: Puoi orientare il routing con `LLMPROXY_SMART_PREFERENCE`:
+   - `balanced` (default): preferisci il tier più basso che soddisfa i requisiti, poi il costo più basso
+   - `economy`: preferisci sempre il modello più economico che funziona
+   - `quality`: preferisci sempre il modello più capace che funziona
+
+#### Configurazione
+
+**Passo 1: Aggiungi il classifier**
+
+Configura un LLM leggero come classifier. Usa un modello veloce ed economico come `deepseek-chat` su OpenRouter:
+
+```bash
+llmproxy smart:add --provider openrouter --model deepseek-chat --api-key sk-or-xxx
+```
+
+Questo salva la configurazione del classifier in `~/.local/share/llmProxy/smart-router.json` (Linux) o `~/Library/Application Support/llmProxy/smart-router.json` (macOS).
+
+**Passo 2: Abilita lo smart routing nel tuo progetto**
+
+Aggiungi queste variabili d'ambiente al `.claude/settings.json` del tuo progetto:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "LLMPROXY_SMART_ROUTE": "hybrid",
+    "LLMPROXY_SMART_PREFERENCE": "balanced"
+  }
+}
+```
+
+**Variabili d'ambiente:**
+
+| Variabile | Valori | Default | Descrizione |
+|-----------|--------|---------|-------------|
+| `LLMPROXY_SMART_ROUTE` | `rules`, `llm`, `hybrid`, disabilitato | disabilitato | Modalità di routing: `rules` usa euristiche statiche, `llm` usa solo il classifier, `hybrid` combina entrambi |
+| `LLMPROXY_SMART_PREFERENCE` | `balanced`, `economy`, `quality` | `balanced` | Tradeoff costo vs qualità |
+| `LLMPROXY_SMART_CACHE_TTL` | millisecondi | `300000` (5 min) | Quanto tempo tenere in cache i check di disponibilità dei provider |
+
+**Passo 3: Verifica la configurazione**
+
+Controlla lo stato dello smart router e simula il routing:
+
+```bash
+llmproxy smart:status    # mostra config classifier, API key (mascherata), provider registrati
+llmproxy smart:test      # simula routing per scenari simple/moderate/complex
+```
+
+#### Comandi CLI
+
+| Comando | Descrizione |
+|---------|-------------|
+| `llmproxy smart:add --provider <p> --model <m> --api-key <k>` | Configura il classifier LLM |
+| `llmproxy smart:status` | Mostra stato smart router e config classifier |
+| `llmproxy smart:test` | Simula routing per 3 scenari (simple, moderate, complex) |
+| `llmproxy smart:refresh` | Invalida cache disponibilità provider |
+
+#### Esempio: comportamento di routing
+
+Con provider `qwen (qwen3.7-max)`, `deepseek (deepseek-v4-pro)`, e `kimi (kimi-k2.6)`:
+
+- **Chat semplice** (no tool, no visione) → `qwen3.7-max` (tier economy, costo più basso)
+- **Moderato con tool** → `qwen3.7-max` (tier economy, supporta tool)
+- **Complesso con visione + tool** → nessun modello adatto (nessuno dei modelli registrati supporta visione)
+
+Per gestire richieste con visione, aggiungi un provider con un modello che supporti visione:
+
+```bash
+llmproxy provider:add openrouter --model claude-sonnet-4 --api-key sk-or-xxx
+```
+
 ### `llmproxy model:set <model>`
 
 Aggiorna rapidamente `model` e `env.ANTHROPIC_DEFAULT_MODEL` nel progetto corrente senza rifare `claude:setup`.
@@ -923,6 +1014,7 @@ All'interno del data root vengono creati:
 - `copilot-token.json`
 - `copilot-models.json`
 - `copilot-endpoints.json`
+- `smart-router.json`
 - `logs/service.out.log`
 - `logs/service.err.log`
 - `logs/requests-YYYY-MM-DD.jsonl`

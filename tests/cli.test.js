@@ -1884,3 +1884,176 @@ test("uninstall removes both npm and pnpm global installs", async () => {
   ]]);
   assert.match(stdout.toString(), /Disinstallazione completata/);
 });
+
+test("smart:add salva configurazione classifier con provider, model e api-key", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-config-"));
+  const stdout = createWritableBuffer();
+  const { createSmartRouterStore } = require("../lib/smart-router-store");
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:add", "--provider", "openrouter", "--model", "deepseek-chat", "--api-key", "sk-or-classifier-key"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const store = createSmartRouterStore({ filePath: path.join(runtimeRoot, "smart-router.json") });
+  const config = store.getConfig();
+
+  assert.equal(exitCode, 0);
+  assert.equal(config.classifierProvider, "openrouter");
+  assert.equal(config.classifierModel, "deepseek-chat");
+  assert.equal(config.classifierApiKey, "sk-or-classifier-key");
+  assert.equal(config.enabled, true);
+  assert.match(stdout.toString(), /Smart router configurato/);
+  assert.match(stdout.toString(), /openrouter/);
+  assert.match(stdout.toString(), /deepseek-chat/);
+  assert.doesNotMatch(stdout.toString(), /sk-or-classifier-key/);
+});
+
+test("smart:add richiede tutti e tre i flag obbligatori", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-config-missing-"));
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:add", "--provider", "openrouter"], {
+    dataRoot: runtimeRoot,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /--model/);
+  assert.match(stderr.toString(), /--api-key/);
+});
+
+test("smart:add rifiuta provider non supportati", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-config-bad-provider-"));
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:add", "--provider", "unknown-provider", "--model", "deepseek-chat", "--api-key", "sk-key"], {
+    dataRoot: runtimeRoot,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /Provider non supportato/);
+});
+
+test("smart:add mostra la guida con --help", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-config-help-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "smart:add"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /smart:add/);
+});
+
+test("smart:status mostra stato quando non configurato", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-status-empty-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:status"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /non configurato/i);
+  assert.match(stdout.toString(), /Enabled: no/i);
+});
+
+test("smart:status mostra stato con config attivo e API key mascherata", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-status-configured-"));
+  const stdout = createWritableBuffer();
+  const { createSmartRouterStore } = require("../lib/smart-router-store");
+
+  const store = createSmartRouterStore({ filePath: path.join(runtimeRoot, "smart-router.json") });
+  store.setConfig({
+    classifierProvider: "openrouter",
+    classifierModel: "deepseek-chat",
+    classifierApiKey: "sk-or-secret-key-1234",
+    enabled: true,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "claude-sonnet-4",
+  }, { name: "Copilot" });
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:status"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Enabled: yes/i);
+  assert.match(stdout.toString(), /openrouter/);
+  assert.match(stdout.toString(), /deepseek-chat/);
+  assert.match(stdout.toString(), /sk-or-\*\*\*\*/);
+  assert.doesNotMatch(stdout.toString(), /sk-or-secret-key-1234/);
+});
+
+test("smart:test mostra simulazione routing con scenari esempio", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-test-"));
+  const stdout = createWritableBuffer();
+  const { createSmartRouterStore } = require("../lib/smart-router-store");
+
+  const store = createSmartRouterStore({ filePath: path.join(runtimeRoot, "smart-router.json") });
+  store.setConfig({
+    classifierProvider: "openrouter",
+    classifierModel: "deepseek-chat",
+    classifierApiKey: "sk-or-key",
+    enabled: true,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "claude-sonnet-4",
+  }, { name: "Copilot" });
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /simple/i);
+  assert.match(stdout.toString(), /complex/i);
+});
+
+test("smart:test avvisa quando smart router non e configurato", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-test-not-configured-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /non configurato/i);
+});
+
+test("smart:refresh forza invalidamento cache availability", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-smart-refresh-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "smart:refresh"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /cache.*invalidata|refresh.*completato/i);
+});

@@ -889,6 +889,83 @@ Restarts the native persistent service.
 
 Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
 
+### Smart Router
+
+The smart router automatically selects the best model for each request based on complexity, vision, and tool requirements. It uses a lightweight LLM classifier to analyze incoming requests and route them to the most cost-effective model that meets the requirements.
+
+#### How it works
+
+1. **Classifier**: A small, fast LLM (e.g., DeepSeek on OpenRouter) analyzes each request and classifies it by:
+   - `complexity`: simple, moderate, complex
+   - `needsVision`: whether the request contains images
+   - `needsTools`: whether the request uses tool definitions
+   - `type`: coding, creative, reasoning, qa
+
+2. **Routing rules**: Based on the classification, the router selects a model from the registered providers:
+   - `economy` tier (deepseek-chat, gpt-4o-mini, etc.) for simple requests without tools
+   - `standard` tier (claude-haiku-4.5, gpt-4.1, etc.) for requests with vision or moderate complexity
+   - `premium` tier (claude-opus-4, gpt-5, etc.) for complex requests with many tools or long context
+
+3. **Preference modes**: You can bias the routing with `LLMPROXY_SMART_PREFERENCE`:
+   - `balanced` (default): prefer lowest tier that meets requirements, then lowest cost
+   - `economy`: always prefer the cheapest model that works
+   - `quality`: always prefer the most capable model that works
+
+#### Configuration
+
+**Step 1: Add the classifier**
+
+Configure a lightweight LLM as the classifier. Use a fast, cheap model like `deepseek-chat` on OpenRouter:
+
+```bash
+llmproxy smart:add --provider openrouter --model deepseek-chat --api-key sk-or-xxx
+```
+
+This saves the classifier configuration to `~/.local/share/llmProxy/smart-router.json` (Linux) or `~/Library/Application Support/llmProxy/smart-router.json` (macOS).
+
+**Step 2: Enable smart routing in your project**
+
+Add these environment variables to your project's `.claude/settings.json`:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "LLMPROXY_SMART_ROUTE": "hybrid",
+    "LLMPROXY_SMART_PREFERENCE": "balanced"
+  }
+}
+```
+
+**Environment variables:**
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `LLMPROXY_SMART_ROUTE` | `rules`, `llm`, `hybrid`, disabled | disabled | Routing mode: `rules` uses static heuristics, `llm` uses classifier only, `hybrid` combines both |
+| `LLMPROXY_SMART_PREFERENCE` | `balanced`, `economy`, `quality` | `balanced` | Cost vs quality tradeoff |
+| `LLMPROXY_SMART_CACHE_TTL` | milliseconds | `300000` (5 min) | How long to cache provider availability checks |
+
+**Step 3: Verify configuration**
+
+Check the smart router status and simulate routing:
+
+```bash
+llmproxy smart:status    # shows classifier config, API key (masked), registered providers
+llmproxy smart:test      # simulates routing for simple/moderate/complex scenarios
+```
+
+#### CLI commands
+
+| Command | Description |
+|---------|-------------|
+| `llmproxy smart:add --provider <p> --model <m> --api-key <k>` | Configure the classifier LLM |
+| `llmproxy smart:status` | Show smart router status and classifier config |
+| `llmproxy smart:test` | Simulate routing for 3 scenarios (simple, moderate, complex) |
+| `llmproxy smart:refresh` | Invalidate provider availability cache |
+
 ## Runtime Paths
 
 You can override the data root with `LLMPROXY_HOME`.
@@ -910,6 +987,7 @@ Inside the data root, the following files are created:
 - `copilot-token.json`
 - `copilot-models.json`
 - `copilot-endpoints.json`
+- `smart-router.json`
 - `logs/service.out.log`
 - `logs/service.err.log`
 - `logs/requests-YYYY-MM-DD.jsonl`

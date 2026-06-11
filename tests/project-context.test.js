@@ -130,3 +130,66 @@ test("resolveClaudeProjectSettings reads shortAnswer from Claude env when using 
 
   assert.equal(result.shortAnswer, true);
 });
+
+test("resolveClaudeProjectSettings reads LLMPROXY_SMART_ROUTE from env", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-smart-route-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "src");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_SMART_ROUTE: "hybrid",
+      LLMPROXY_SMART_PREFERENCE: "economy",
+      LLMPROXY_SMART_CACHE_TTL: "600000",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.smartRoute, "hybrid");
+  assert.equal(result.smartPreference, "economy");
+  assert.equal(result.smartCacheTtl, 600000);
+});
+
+test("resolveClaudeProjectSettings returns null smartRoute when env var not set", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-no-smart-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "src");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:7045" },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.smartRoute, null);
+  assert.equal(result.smartPreference, "balanced");
+  assert.equal(result.smartCacheTtl, 300000);
+});
+
+test("resolveClaudeProjectSettings validates smart route mode values", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-smart-invalid-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "src");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_SMART_ROUTE: "invalid-mode",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.smartRoute, null, "invalid mode must be rejected");
+});

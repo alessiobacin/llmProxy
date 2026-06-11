@@ -73,6 +73,7 @@ interface GatewayRequestParams {
   fetchFn: typeof fetch;
   endpointPreferences: unknown;
   availableModels: string[];
+  smartRouteInfo?: Record<string, unknown> | null;
 }
 
 // ---------- provider selection ----------
@@ -182,6 +183,7 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
     fetchFn: params.fetchFn,
     endpointPreferences: params.endpointPreferences,
     availableModels: params.availableModels,
+    smartRouteInfo: params.smartRouteInfo,
   });
 }
 

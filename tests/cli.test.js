@@ -1586,13 +1586,14 @@ test("update runs the package manager command for the latest llmproxy release", 
     ["npm", ["--version"]],
     ["npm", ["prefix", "-g"]],
   ]);
-  assert.deepEqual(executed.at(-1), [
-    "sh",
-    [
-      "-c",
-      "set -e\ntmpdir=$(mktemp -d)\ncleanup() { rm -rf \"$tmpdir\"; }\ntrap cleanup EXIT\nexisting_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nused_sudo=0\ngh repo clone alessiobacin/llmProxy \"$tmpdir/repo\" -- --depth=1 >/dev/null\ncd \"$tmpdir/repo\"\ntarget_version=$(node -p \"require('./package.json').version\")\ncommit_message_base64=$(git log -1 --pretty=%B | base64 | tr -d '\\n')\npnpm pack --pack-destination \"$tmpdir\" >/dev/null\npackage_file=$(find \"$tmpdir\" -maxdepth 1 -name \"*.tgz\" -print | head -n 1)\n[ -n \"$package_file\" ]\nif ! npm install -g \"$package_file\"; then\n  if command -v sudo >/dev/null 2>&1; then\n    sudo npm install -g \"$package_file\"\n    used_sudo=1\n  else\n    exit 1\n  fi\nfi\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi\nif [ \"$used_sudo\" -eq 1 ]; then\n  npm_prefix=$(sudo npm prefix -g)\nelse\n  npm_prefix=$(npm prefix -g)\nfi\nresolved_bins=$(which -a llmproxy 2>/dev/null | awk '!seen[$0]++')\nnew_bin=\"\"\nfor candidate_bin in $resolved_bins; do\n  if [ -x \"$candidate_bin\" ]; then\n    candidate_version=$(\"$candidate_bin\" version 2>/dev/null || true)\n    if [ \"$candidate_version\" = \"$target_version\" ]; then\n      new_bin=\"$candidate_bin\"\n      break\n    fi\n  fi\ndone\nif [ -z \"$new_bin\" ]; then\n  new_bin=\"$npm_prefix/bin/llmproxy\"\nfi\n[ -x \"$new_bin\" ]\nversion_output=$(\"$new_bin\" version)\n[ \"$version_output\" = \"$target_version\" ]\nfor installed_bin in $resolved_bins; do\n  if [ -n \"$installed_bin\" ] && [ \"$installed_bin\" != \"$new_bin\" ]; then\n    rm -f \"$installed_bin\" >/dev/null 2>&1 || { if [ \"$used_sudo\" -eq 1 ]; then sudo rm -f \"$installed_bin\" >/dev/null 2>&1 || true; else true; fi; }\n  fi\ndone\nservice_restart_status=0\nservice_restart_output=$(\"$new_bin\" service:restart 2>&1 >/dev/null) || service_restart_status=$?\ndocker_compose_file=\"$npm_prefix/lib/node_modules/llmproxy/docker-compose.production.yml\"\nif command -v docker >/dev/null 2>&1 && [ -f \"$docker_compose_file\" ]; then\n  if docker compose -f \"$docker_compose_file\" ps --services --status running 2>/dev/null | grep -qx \"llmproxy\"; then\n    docker compose -f \"$docker_compose_file\" up -d --build llmproxy >/dev/null || true\n  fi\nfi\nrelease_notes_output=$(\"$new_bin\" release-notes --version \"$version_output\" --locale 'it' --commit-message-base64 \"$commit_message_base64\")\nprintf \"__LLMPROXY_VERSION__=%s\\n\" \"$version_output\"\nprintf \"__LLMPROXY_RELEASE_NOTES_START__\\n%s\\n__LLMPROXY_RELEASE_NOTES_END__\\n\" \"$release_notes_output\"\nif [ \"$service_restart_status\" -ne 0 ]; then\n  printf \"__LLMPROXY_SERVICE_RESTART_WARNING__=%s\\n\" \"$service_restart_output\"\nfi",
-    ],
-  ]);
+  assert.equal(executed.at(-1)[0], "sh");
+  assert.equal(executed.at(-1)[1][0], "-c");
+  const scriptText = executed.at(-1)[1][1];
+  assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /if \[ -n "\$installed_bin" \] && \[ "\$installed_bin" != "\$new_bin" \] && \[ "\$installed_bin" != "\$current_bin" \]; then/);
+  assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \]; then/);
+  assert.match(scriptText, /cat > "\$current_bin" <<EOF/);
+  assert.match(scriptText, /exec "\$new_bin" "\$@"/);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
 });
@@ -1667,6 +1668,7 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
 
   const scriptText = executed[0][1][1];
   assert.equal(typeof runSelfUpdate, "function");
+  assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /used_sudo=0/);
   assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
   assert.match(scriptText, /sudo npm install -g \"\$package_file\"\n    used_sudo=1/);
@@ -1675,6 +1677,8 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ \"\$candidate_version\" = \"\$target_version\" \]; then\n      new_bin=\"\$candidate_bin\"/);
   assert.match(scriptText, /version_output=\$\(\"\$new_bin\" version\)\n\[ \"\$version_output\" = \"\$target_version\" \]/);
+  assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \]; then/);
+  assert.match(scriptText, /cat > "\$current_bin" <<EOF/);
   assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
 });
 

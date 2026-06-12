@@ -16,6 +16,7 @@ interface ProviderToken {
   scope: string;
   default_model: string;
   endpoint_variant: string;
+  vision?: boolean;
   created_at: number;
   updated_at: number;
 }
@@ -94,6 +95,7 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
     scope: String(provider?.scope ?? "read:user"),
     default_model: provider?.default_model ? String(provider.default_model).trim() : "",
     endpoint_variant: provider?.endpoint_variant ? String(provider.endpoint_variant).trim() : "",
+    vision: provider?.vision === true ? true : provider?.vision === false ? false : undefined,
     created_at: Number(provider?.created_at) || Date.now(),
     updated_at: Number(provider?.updated_at) || Date.now(),
   };

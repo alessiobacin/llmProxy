@@ -309,7 +309,7 @@ test("provider:add supports api-key providers like openrouter", async () => {
   const stdout = createWritableBuffer();
   const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--name", "OpenRouter", "--api-key", "sk-or-test", "--model", "openai/gpt-4o"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--name", "OpenRouter", "--api-key", "sk-or-test", "--model", "openai/gpt-4o", "--vision", "true"], {
     dataRoot: runtimeRoot,
     stdout,
     fetchFn,
@@ -344,7 +344,7 @@ test("provider:add supports api-key providers like qwen", async () => {
     };
   };
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--name", "Qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--name", "Qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--vision", "false"], {
     dataRoot: runtimeRoot,
     stdout,
     fetchFn,
@@ -356,9 +356,10 @@ test("provider:add supports api-key providers like qwen", async () => {
   assert.equal(saved.provider, "qwen");
   assert.equal(saved.default_model, "qwen3.7-max");
   assert.equal(saved.endpoint_variant, "dashscope");
+  assert.equal(saved.vision, false);
   assert.equal(requestUrls[0], "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions");
   assert.equal(requestBodies[0].model, "qwen3.7-max");
-  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, plan: payg\)/);
+  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, vision: false, plan: payg\)/);
 });
 
 test("provider:add supports qwen subscription plan explicitly", async () => {
@@ -376,7 +377,7 @@ test("provider:add supports qwen subscription plan explicitly", async () => {
     };
   };
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--name", "Qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--plan", "subscription"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--name", "Qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--vision", "true", "--plan", "subscription"], {
     dataRoot: runtimeRoot,
     stdout,
     fetchFn,
@@ -386,8 +387,9 @@ test("provider:add supports qwen subscription plan explicitly", async () => {
   const saved = tokenStore.getProvider("qwen");
   assert.equal(exitCode, 0);
   assert.equal(saved.endpoint_variant, "token_plan");
+  assert.equal(saved.vision, true);
   assert.equal(requestUrls[0], "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
-  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, plan: subscription\)/);
+  assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, vision: true, plan: subscription\)/);
 });
 
 test("provider:key routes qwen token-plan keys to the token-plan endpoint", async () => {
@@ -433,13 +435,43 @@ test("provider:add rejects invalid qwen plan values", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-invalid-plan-"));
   const stderr = createWritableBuffer();
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--plan", "enterprise"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--vision", "false", "--plan", "enterprise"], {
     dataRoot: runtimeRoot,
     stderr,
   });
 
   assert.equal(exitCode, 1);
   assert.match(stderr.toString(), /--plan subscription oppure --plan payg/);
+});
+
+test("provider:add requires --vision flag for api-key providers", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-missing-vision-"));
+  const stderr = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return { id: "ok" }; } });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max"], {
+    dataRoot: runtimeRoot,
+    stderr,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /--vision <true\|false>/);
+});
+
+test("provider:add rejects invalid --vision values", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-bad-vision-"));
+  const stderr = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return { id: "ok" }; } });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "qwen", "--api-key", "sk-qwen-test", "--model", "qwen3.7-max", "--vision", "maybe"], {
+    dataRoot: runtimeRoot,
+    stderr,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /--vision deve essere 'true' oppure 'false'/);
 });
 
 test("provider:add rejects api-key providers when the default model probe fails", async () => {
@@ -453,7 +485,7 @@ test("provider:add rejects api-key providers when the default model probe fails"
     },
   });
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--api-key", "sk-or-test", "--model", "bad-model"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--api-key", "sk-or-test", "--model", "bad-model", "--vision", "false"], {
     dataRoot: runtimeRoot,
     stderr,
     fetchFn,

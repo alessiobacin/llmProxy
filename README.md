@@ -690,9 +690,9 @@ x-project-path: /absolute/path/to/project
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
 | `llmproxy provider:list` | `GET /api/providers` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
-| `llmproxy provider:add <id> [--name <n>]` | `POST /api/providers/{id}/login` |
-| `llmproxy provider:add <id> --api-key <key>` | `POST /api/providers/{id}/api-key` |
-| `llmproxy provider:key <id> --api-key <key>` | `POST /api/providers/{id}/api-key` |
+| `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
+| `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
+| `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
@@ -768,12 +768,14 @@ Use it when you want a quick operator view of:
 - per-provider usage
 - per-model usage
 
-### `llmproxy provider:add <id> [--name <name>] [--api-key <key>] [--model <model>] [--plan <plan>]`
+### `llmproxy provider:add <id> [--name <name>] [--api-key <key>] [--model <model>] [--vision <true|false>] [--plan <plan>]`
 
 Adds a provider identified by `<id>`. Behaviour depends on the provider type:
 
 - **Copilot OAuth providers** (unknown ids or `copilot`): starts the GitHub Copilot device flow.
-- **API-key providers** (e.g. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `zai`): stores the supplied `--api-key` directly without any browser flow.
+- **API-key providers** (e.g. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `zai`): stores the supplied `--api-key` directly without any browser flow. Requires `--vision <true|false>` to indicate whether the model supports image input.
+
+The `--vision` flag is **mandatory** for API-key providers. When a request contains images, providers with `vision: false` are automatically skipped during fallback.
 
 Known API-key providers:
 
@@ -798,10 +800,12 @@ Known API-key providers:
 Example:
 
 ```bash
-llmproxy provider:add openrouter --api-key sk-or-...
-llmproxy provider:add groq --api-key gsk_...
-llmproxy provider:add qwen --api-key sk-sp-... --model qwen3.7-max --plan subscription
-llmproxy provider:add qwen --api-key sk-qwen-... --model qwen3.7-max --plan payg
+llmproxy provider:add openrouter --api-key sk-or-... --model claude-sonnet-4 --vision true
+llmproxy provider:add groq --api-key gsk_... --model llama-3.3-70b-versatile --vision false
+llmproxy provider:add qwen --api-key sk-sp-... --model qwen3.7-plus --vision true --plan subscription
+llmproxy provider:add qwen --api-key sk-qwen-... --model qwen3.7-max --vision false --plan payg
+llmproxy provider:add deepseek --api-key sk-... --model deepseek-v4-pro --vision false
+llmproxy provider:add kimi --api-key sk-... --model kimi-k2.6 --vision true
 ```
 
 ### `llmproxy provider:available`
@@ -814,18 +818,18 @@ Use it to confirm:
 - the display name shown by llmProxy
 - which providers use OAuth vs API-key authentication
 
-### `llmproxy provider:key <id> --api-key <key> [--model <model>] [--plan <plan>]`
+### `llmproxy provider:key <id> --api-key <key> [--model <model>] [--vision <true|false>] [--plan <plan>]`
 
-Sets or replaces the API-key credential for an existing API-key provider without going through the OAuth flow. Equivalent to `provider:add <id> --api-key <key>` when the provider is already registered.
+Sets or replaces the API-key credential for an existing API-key provider without going through the OAuth flow. Equivalent to `provider:add <id> --api-key <key>` when the provider is already registered. The `--vision` flag is optional; if omitted, the existing vision setting is preserved.
 
 ```bash
-llmproxy provider:key openrouter --api-key sk-or-new-key
-llmproxy provider:key qwen --api-key sk-sp-... --plan subscription
+llmproxy provider:key openrouter --api-key sk-or-new-key --vision true
+llmproxy provider:key qwen --api-key sk-sp-... --vision true --plan subscription
 ```
 
 ### `llmproxy provider:list`
 
-Shows the current fallback order of configured providers. For `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`.
+Shows the current fallback order of configured providers. For each provider, the vision capability is shown as `vision=true` or `vision=false`. For `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`.
 
 ### `llmproxy provider:status`
 

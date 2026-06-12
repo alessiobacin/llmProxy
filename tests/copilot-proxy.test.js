@@ -7,6 +7,7 @@ const {
   sanitizeToolsForMoonshot,
   sanitizeVisionContent,
   VISION_CAPABLE_PROVIDERS,
+  isVisionCapableModel,
   shouldFallbackToNextProvider,
   isContextLimitError,
   trimOldestNonSystemMessage,
@@ -195,6 +196,57 @@ test("VISION_CAPABLE_PROVIDERS includes copilot and openai but not deepseek", ()
   assert.ok(!VISION_CAPABLE_PROVIDERS.has("deepseek"), "deepseek non deve supportare vision");
   assert.ok(!VISION_CAPABLE_PROVIDERS.has("kimi"), "kimi non deve supportare vision");
   assert.ok(!VISION_CAPABLE_PROVIDERS.has("groq"), "groq non deve supportare vision");
+});
+
+test("isVisionCapableModel: qwen VL variants and qwen3.7-plus are vision, qwen3.7-max/qwen3/qwen-max are not", () => {
+  // VL variants — vision YES
+  assert.equal(isVisionCapableModel("qwen-vl-plus", "qwen"), true);
+  assert.equal(isVisionCapableModel("qwen-vl-max", "qwen"), true);
+  assert.equal(isVisionCapableModel("qwen3-vl-plus", "qwen"), true);
+  assert.equal(isVisionCapableModel("qwen3-vl-max", "qwen"), true);
+  // qwen3.7-plus — vision YES (multimodal)
+  assert.equal(isVisionCapableModel("qwen3.7-plus", "qwen"), true);
+  // qwen3.7-max — vision NO (text-only)
+  assert.equal(isVisionCapableModel("qwen3.7-max", "qwen"), false);
+  // qwen3 text family — vision NO
+  assert.equal(isVisionCapableModel("qwen3-max", "qwen"), false);
+  assert.equal(isVisionCapableModel("qwen3-plus", "qwen"), false);
+  // qwen-max — vision NO
+  assert.equal(isVisionCapableModel("qwen-max", "qwen"), false);
+});
+
+test("isVisionCapableModel: copilot and openrouter are always vision", () => {
+  assert.equal(isVisionCapableModel("claude-sonnet-4", "copilot"), true);
+  assert.equal(isVisionCapableModel("gpt-5.4", "copilot"), true);
+  assert.equal(isVisionCapableModel("any-model", "openrouter"), true);
+});
+
+test("isVisionCapableModel: openai vision models detected correctly", () => {
+  assert.equal(isVisionCapableModel("gpt-4o", "openai"), true);
+  assert.equal(isVisionCapableModel("gpt-4o-mini", "openai"), true);
+  assert.equal(isVisionCapableModel("gpt-4.1", "openai"), true);
+  assert.equal(isVisionCapableModel("gpt-4.1-nano", "openai"), true);
+  assert.equal(isVisionCapableModel("o1", "openai"), true);
+  assert.equal(isVisionCapableModel("o3", "openai"), true);
+  assert.equal(isVisionCapableModel("o4-mini", "openai"), true);
+  assert.equal(isVisionCapableModel("gpt-3.5-turbo", "openai"), false);
+});
+
+test("isVisionCapableModel: non-vision providers correctly identified", () => {
+  assert.equal(isVisionCapableModel("deepseek-chat", "deepseek"), false);
+  assert.equal(isVisionCapableModel("deepseek-v4-flash", "deepseek"), false);
+  assert.equal(isVisionCapableModel("deepseek-v4-pro", "deepseek"), false);
+  assert.equal(isVisionCapableModel("deepseek-vl", "deepseek"), true);
+  assert.equal(isVisionCapableModel("grok-2", "xai"), false);
+  assert.equal(isVisionCapableModel("grok-3", "xai"), true);
+  assert.equal(isVisionCapableModel("llama-3.3-70b-versatile", "groq"), false);
+  assert.equal(isVisionCapableModel("kimi-k2.6", "kimi"), true);
+  assert.equal(isVisionCapableModel("kimi-k2", "kimi"), false);
+});
+
+test("isVisionCapableModel: unknown provider returns false", () => {
+  assert.equal(isVisionCapableModel("some-model", "unknown-provider"), false);
+  assert.equal(isVisionCapableModel("", "openai"), false);
 });
 
 test("isContextLimitError detects Moonshot token limit errors", () => {

@@ -189,6 +189,7 @@ interface AnthropicResponse {
     input_tokens: number;
     output_tokens: number;
   };
+  reasoning_content?: string;
 }
 
 interface OpenAIResponse {
@@ -483,13 +484,7 @@ function translateResponse(openai: OpenAIResponse | null | undefined, responseMo
   }
 
   const content: AnthropicContentBlock[] = [];
-  
-  // Alcuni modelli (Kimi, DeepSeek R1, ecc.) usano reasoning_content per il thinking/reasoning
-  // Lo aggiungiamo come testo separato prima del content principale
-  if (choice.message?.reasoning_content) {
-    content.push({ type: "text", text: choice.message.reasoning_content });
-  }
-  
+
   if (choice.message?.content) {
     content.push({ type: "text", text: choice.message.content });
   }
@@ -519,6 +514,9 @@ function translateResponse(openai: OpenAIResponse | null | undefined, responseMo
   const promptTokens = openai?.usage?.prompt_tokens ?? 0;
   const completionTokens = openai?.usage?.completion_tokens ?? 0;
 
+  // Preserva reasoning_content come campo separato (per modelli come Kimi, DeepSeek R1, ecc.)
+  const reasoningContent = choice.message?.reasoning_content;
+
   return {
     id: msgId(),
     type: "message",
@@ -531,6 +529,7 @@ function translateResponse(openai: OpenAIResponse | null | undefined, responseMo
       input_tokens: promptTokens,
       output_tokens: completionTokens,
     },
+    ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
   };
 }
 

@@ -153,6 +153,7 @@ type AnthropicResponse = {
     input_tokens?: number;
     output_tokens?: number;
   };
+  reasoning_content?: string;
 };
 
 import crypto from "node:crypto";
@@ -167,6 +168,7 @@ type OpenAIChatResponse = {
     message: {
       role: "assistant";
       content: string | null;
+      reasoning_content?: string;
       tool_calls?: Array<{
         id?: string;
         type: "function";
@@ -367,6 +369,9 @@ function anthropicResponseToOpenAI(anthropic: AnthropicResponse): OpenAIChatResp
   const promptTokens = anthropic.usage?.input_tokens ?? 0;
   const completionTokens = anthropic.usage?.output_tokens ?? 0;
 
+  // Estrai reasoning_content se presente (per modelli come Kimi, DeepSeek R1, ecc.)
+  const reasoningContent = anthropic.reasoning_content;
+
   return {
     id,
     object: "chat.completion",
@@ -377,6 +382,7 @@ function anthropicResponseToOpenAI(anthropic: AnthropicResponse): OpenAIChatResp
       message: {
         role: "assistant",
         content: textParts.join("") || null,
+        ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
         ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       },
       finish_reason: finishReason,

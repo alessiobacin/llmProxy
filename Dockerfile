@@ -8,6 +8,7 @@ RUN npm install --omit=dev --no-audit --no-fund
 
 # Copy application sources
 COPY api ./api
+COPY assets ./assets
 COPY bin ./bin
 COPY lib ./lib
 COPY server.js ./server.js

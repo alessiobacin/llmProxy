@@ -681,6 +681,31 @@ llmproxy provider:key qwen --api-key sk-sp-... --vision true --plan subscription
 
 Shows the current fallback order of configured providers. For each provider, the vision capability is shown as `vision=true` or `vision=false`. For `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`.
 
+### `llmproxy provider:test`
+
+Tests the vision capability of all configured providers by sending a test image and analyzing responses.
+
+Use it to verify:
+
+- that the `--vision` flag is correctly set for each provider
+- that vision-capable models actually process images
+- that non-vision models correctly skip image processing
+
+Example output:
+
+```
+Test visione provider...
+
+🔍 Qwen (qwen3.7-plus) - atteso: visione ✅
+  ✅ PASS - Visione confermata
+     Risposta: L'immagine è molto semplice e astratta, composta da...
+🔍 DeepSeek (deepseek-v4-pro) - atteso: testo ❌
+  ✅ PASS - Visione correttamente disabilitata
+     Risposta: [empty response]
+
+Risultati: 2 pass, 0 fail, 0 skip
+```
+
 ### `llmproxy provider:status`
 
 Shows the active provider and the ordered list of providers with the current fallback state.

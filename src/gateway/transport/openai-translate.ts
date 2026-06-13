@@ -196,6 +196,7 @@ interface OpenAIResponse {
   choices?: Array<{
     message?: {
       content?: string;
+      reasoning_content?: string;
       tool_calls?: Array<{
         id?: string;
         type?: string;
@@ -482,6 +483,13 @@ function translateResponse(openai: OpenAIResponse | null | undefined, responseMo
   }
 
   const content: AnthropicContentBlock[] = [];
+  
+  // Alcuni modelli (Kimi, DeepSeek R1, ecc.) usano reasoning_content per il thinking/reasoning
+  // Lo aggiungiamo come testo separato prima del content principale
+  if (choice.message?.reasoning_content) {
+    content.push({ type: "text", text: choice.message.reasoning_content });
+  }
+  
   if (choice.message?.content) {
     content.push({ type: "text", text: choice.message.content });
   }

@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.61",
+  "version": "0.2.62",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -29,6 +29,14 @@
       "treat missing launchd bootout targets as already stopped during service recovery",
       "cap forwarded Copilot tools to 128 on both /responses and /chat/completions",
       "make claude:setup and model:set target the installed llmproxy service port when LLMPROXY_HOME is set"
+    ],
+    "0.2.62": [
+      "release 0.2.62",
+      "add explicit vision capability for providers with --vision flag in provider:add and provider:key",
+      "implement automatic fallback skip for non-vision providers when requests contain images",
+      "add provider:test command to verify vision capability of all configured providers",
+      "add reasoning_content support for Kimi and other thinking models",
+      "add qwen3.7-plus, deepseek-v4-pro, kimi-k2.6 to model-capabilities registry"
     ]
   },
   "dependencies": {

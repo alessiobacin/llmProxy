@@ -6,6 +6,14 @@
   "bin": {
     "llmproxy": "bin/llmproxy.js"
   },
+  "files": [
+    "api/",
+    "assets/",
+    "bin/",
+    "lib/",
+    "server.js",
+    "manifest.json"
+  ],
   "packageManager": "pnpm@10.4.1",
   "scripts": {
     "start": "node server.js",

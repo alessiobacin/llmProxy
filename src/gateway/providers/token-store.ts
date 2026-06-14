@@ -85,7 +85,7 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
   const id = normalizeProviderId(provider?.id) || `${DEFAULT_PROVIDER_ID}-${idx + 1}`;
   const providerKind = String(provider?.provider ?? provider?.kind ?? "copilot").toLowerCase();
   const authType = String(provider?.auth_type ?? (providerKind === "copilot" ? "oauth" : "api_key")).toLowerCase();
-  return {
+  const token: ProviderToken = {
     id,
     name: String(provider?.name ?? (id === DEFAULT_PROVIDER_ID ? DEFAULT_PROVIDER_NAME : id)),
     provider: providerKind,
@@ -95,10 +95,13 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
     scope: String(provider?.scope ?? "read:user"),
     default_model: provider?.default_model ? String(provider.default_model).trim() : "",
     endpoint_variant: provider?.endpoint_variant ? String(provider.endpoint_variant).trim() : "",
-    vision: provider?.vision === true ? true : provider?.vision === false ? false : undefined,
     created_at: Number(provider?.created_at) || Date.now(),
     updated_at: Number(provider?.updated_at) || Date.now(),
   };
+  if (provider?.vision === true || provider?.vision === false) {
+    token.vision = provider.vision;
+  }
+  return token;
 }
 
 function normalizeRegistry(data: Record<string, unknown> | null): ProviderRegistry {

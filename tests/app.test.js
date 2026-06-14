@@ -1107,6 +1107,7 @@ test("messages endpoint still tries providers in configured order when request c
     scope: "api_key",
     provider: "deepseek",
     auth_type: "api_key",
+    vision: true,
   }, { name: "DeepSeek" });
   tokenStore.saveProvider("openai", {
     access_token: "token-openai",
@@ -1186,7 +1187,7 @@ test("messages endpoint still tries providers in configured order when request c
     assert.equal(calls.length, 2);
     assert.equal(calls[0].auth, "Bearer token-deepseek");
     assert.equal(calls[0].model, "deepseek-v4-flash");
-    assert.match(JSON.stringify(calls[0].messages), /\[image\]/);
+    assert.match(JSON.stringify(calls[0].messages), /image_url/);
     assert.equal(calls[1].auth, "Bearer token-openai");
     assert.equal(calls[1].model, "gpt-4o-mini");
   });

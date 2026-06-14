@@ -212,6 +212,8 @@ interface OpenAIResponse {
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
   };
 }
 
@@ -511,8 +513,8 @@ function translateResponse(openai: OpenAIResponse | null | undefined, responseMo
 
   if (content.length === 0) content.push({ type: "text", text: "" });
 
-  const promptTokens = openai?.usage?.prompt_tokens ?? 0;
-  const completionTokens = openai?.usage?.completion_tokens ?? 0;
+  const promptTokens = openai?.usage?.prompt_tokens ?? openai?.usage?.input_tokens ?? 0;
+  const completionTokens = openai?.usage?.completion_tokens ?? openai?.usage?.output_tokens ?? 0;
 
   // Preserva reasoning_content come campo separato (per modelli come Kimi, DeepSeek R1, ecc.)
   const reasoningContent = choice.message?.reasoning_content;

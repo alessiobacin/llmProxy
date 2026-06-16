@@ -19,6 +19,7 @@ const SUPPORTED_PROVIDERS = [
   "perplexity",
   "together",
   "fireworks",
+  "commandcode",
 ] as const;
 
 const VALID_SCOPE_TYPES = ["master", "agency", "client", "project", "user"] as const;

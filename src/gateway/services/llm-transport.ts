@@ -34,6 +34,7 @@ interface ProviderSelection {
   provider: string;
   defaultModel: string | null;
   source: string;
+  providerCandidates?: Record<string, unknown>[];
 }
 
 interface ProviderSelectionError {
@@ -73,6 +74,7 @@ interface GatewayRequestParams {
   fetchFn: typeof fetch;
   endpointPreferences: unknown;
   availableModels: string[];
+  providerCandidates?: Record<string, unknown>[] | null;
   smartRouteInfo?: Record<string, unknown> | null;
 }
 
@@ -115,30 +117,49 @@ function resolveProviderSelection({
   }
 
   const resolved = (providerRegistry as {
-    resolve: (hc: HierarchyContext | null, req: string) => {
+    resolveCandidates: (hc: HierarchyContext | null, req: string) => Array<{
       provider: string;
       default_model?: string;
       credentials?: Record<string, string>;
-    } | null;
-  }).resolve(hierarchyContext, requestedProvider);
+      metadata?: Record<string, unknown>;
+      priority?: number;
+    }>;
+  }).resolveCandidates(hierarchyContext, requestedProvider);
 
-  if (resolved) {
-    if (resolved.provider !== "copilot" && !IMPLEMENTED_API_KEY_PROVIDERS.has(resolved.provider)) {
+  if (resolved.length > 0) {
+    const implementedCandidates = resolved.filter((entry) => entry.provider === "copilot" || IMPLEMENTED_API_KEY_PROVIDERS.has(entry.provider));
+    const firstCandidate = implementedCandidates[0];
+    if (!firstCandidate) {
       return {
         error: {
           status: 501,
           body: {
             code: "PROVIDER_NOT_IMPLEMENTED",
-            message: `provider adapter not implemented yet: ${resolved.provider}`,
+            message: `provider adapter not implemented yet: ${resolved[0]!.provider}`,
             trace_id: traceId,
           },
         },
       };
     }
     return {
-      provider: resolved.provider,
-      defaultModel: resolved.default_model || null,
+      provider: provider && provider !== "auto" ? firstCandidate.provider : "auto",
+      defaultModel: firstCandidate.default_model || null,
       source: "registry",
+      providerCandidates: implementedCandidates.map((entry) => {
+        const authType = String(entry.metadata?.auth_type || (entry.provider === "copilot" ? "oauth" : "api_key"));
+        return {
+          id: entry.provider,
+          name: String(entry.metadata?.name || entry.provider),
+          provider: entry.provider,
+          access_token: String(entry.credentials?.access_token || entry.credentials?.api_key || ""),
+          auth_type: authType,
+          token_type: String(entry.metadata?.token_type || (authType === "api_key" ? "api_key" : "bearer")),
+          scope: String(entry.metadata?.scope || (authType === "api_key" ? "api_key" : "read:user")),
+          default_model: entry.default_model || "",
+          endpoint_variant: entry.metadata?.endpoint_variant ? String(entry.metadata.endpoint_variant) : "",
+          ...(entry.metadata?.vision === true || entry.metadata?.vision === false ? { vision: entry.metadata.vision } : {}),
+        };
+      }),
     };
   }
 
@@ -183,6 +204,7 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
     fetchFn: params.fetchFn,
     endpointPreferences: params.endpointPreferences,
     availableModels: params.availableModels,
+    providerCandidates: params.providerCandidates,
     smartRouteInfo: params.smartRouteInfo,
   });
 }

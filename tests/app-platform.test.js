@@ -7,6 +7,7 @@ const path = require("node:path");
 const { createApp } = require("../lib/app");
 const { createTokenStore } = require("../lib/token-store");
 const { createNoopMeteringSink } = require("../lib/metering");
+const { createProviderRegistry } = require("../lib/provider-registry");
 
 async function withServer(app, callback) {
   const server = await new Promise((resolve) => {
@@ -251,6 +252,61 @@ test("/v1/messages keeps backward compatibility without HierarchyContext", async
       body: JSON.stringify({ model: "claude-sonnet-4.5", messages: [{ role: "user", content: "hi" }] }),
     });
     assert.equal(res.status, 200);
+  });
+});
+
+test("/v1/messages can resolve a shared user-scoped provider from the local auth token", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-platform-local-user-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  const providerRegistry = createProviderRegistry({ filePath: path.join(tempRoot, "provider-registry.json"), secret: null });
+  providerRegistry.upsert({
+    provider: "openrouter",
+    scope_type: "user",
+    scope_id: "aqdas",
+    default_model: "openai/gpt-4.1-mini",
+    priority: 1,
+    credentials: { access_token: "sk-user-openrouter" },
+    metadata: { name: "OpenRouter", auth_type: "api_key", token_type: "api_key", scope: "api_key" },
+  });
+  let capturedAuth = "";
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    providerRegistry,
+    mode: "platform",
+    fetchFn: async (url, options = {}) => {
+      const headerEntries = options.headers && typeof options.headers.entries === "function"
+        ? Array.from(options.headers.entries())
+        : Object.entries(options.headers || {});
+      const serializedHeaders = JSON.stringify(Object.fromEntries(headerEntries));
+      if (String(url).includes("openrouter.ai") || /sk-user-openrouter/.test(serializedHeaders)) {
+        capturedAuth = serializedHeaders;
+      }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            model: "openai/gpt-4.1-mini",
+            choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 },
+          };
+        },
+      };
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": "llmproxy-local-user:aqdas",
+      },
+      body: JSON.stringify({ provider: "openrouter", model: "openai/gpt-4.1-mini", messages: [{ role: "user", content: "hi" }] }),
+    });
+    assert.equal(res.status, 200);
+    assert.match(capturedAuth, /sk-user-openrouter/);
   });
 });
 

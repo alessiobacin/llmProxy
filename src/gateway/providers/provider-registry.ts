@@ -189,14 +189,42 @@ function buildScopeMatchSet(hierarchyContext: HierarchyContext | null): Array<{ 
 
 interface ProviderRegistry {
   list: (filter?: { scope_type?: string; scope_id?: string; provider?: string }) => PublicView[];
+  listResolved: (filter?: { scope_type?: string; scope_id?: string; provider?: string }) => ResolvedEntry[];
   upsert: (entry: ProviderEntry) => PublicView;
   remove: (id: string) => boolean;
+  resolveCandidates: (hierarchyContext: HierarchyContext | null, requestedProvider: string | null | undefined) => ResolvedEntry[];
   resolve: (hierarchyContext: HierarchyContext | null, requestedProvider: string | null | undefined) => ResolvedEntry | null;
 }
 
 function createProviderRegistry(options: { persistence: PersistenceLayer; secret?: string | null }): ProviderRegistry {
   const persistence = options.persistence;
   const secret = options.secret || null;
+
+  function hydrateEntry(entry: ProviderEntry): ResolvedEntry {
+    return {
+      ...publicView(entry),
+      credentials: decryptCredentials(entry.credentials || {}, secret),
+    };
+  }
+
+  function collectHierarchyCandidates(store: StoreFile, hierarchyContext: HierarchyContext | null): Array<{ entry: ProviderEntry; scopeRank: number }> {
+    const matches = buildScopeMatchSet(hierarchyContext);
+    const candidates: Array<{ entry: ProviderEntry; scopeRank: number }> = [];
+
+    for (const match of matches) {
+      const scopeRank = SCOPE_PRIORITY[match.scope_type] || 0;
+      const found = store.entries.filter((entry) => {
+        if (entry.scope_type !== match.scope_type) return false;
+        if (match.scope_type === "master") return true;
+        return entry.scope_id === match.scope_id;
+      });
+      for (const entry of found) {
+        candidates.push({ entry, scopeRank });
+      }
+    }
+
+    return candidates;
+  }
 
   function list(filter: { scope_type?: string; scope_id?: string; provider?: string } = {}): PublicView[] {
     const store = persistence.read();
@@ -205,6 +233,16 @@ function createProviderRegistry(options: { persistence: PersistenceLayer; secret
       .filter((e) => (filter.scope_id ? e.scope_id === filter.scope_id : true))
       .filter((e) => (filter.provider ? e.provider === filter.provider : true))
       .map(publicView);
+  }
+
+  function listResolved(filter: { scope_type?: string; scope_id?: string; provider?: string } = {}): ResolvedEntry[] {
+    const store = persistence.read();
+    return store.entries
+      .filter((e) => (filter.scope_type ? e.scope_type === filter.scope_type : true))
+      .filter((e) => (filter.scope_id ? e.scope_id === filter.scope_id : true))
+      .filter((e) => (filter.provider ? e.provider === filter.provider : true))
+      .sort((a, b) => a.priority - b.priority || a.provider.localeCompare(b.provider))
+      .map(hydrateEntry);
   }
 
   function upsert(entry: ProviderEntry): PublicView {
@@ -241,45 +279,27 @@ function createProviderRegistry(options: { persistence: PersistenceLayer; secret
     return store.entries.length < before;
   }
 
-  function resolve(hierarchyContext: HierarchyContext | null, requestedProvider: string | null | undefined): ResolvedEntry | null {
+  function resolveCandidates(hierarchyContext: HierarchyContext | null, requestedProvider: string | null | undefined): ResolvedEntry[] {
     const store = persistence.read();
-    const matches = buildScopeMatchSet(hierarchyContext);
-    const candidates: Array<{ entry: ProviderEntry; scopeRank: number }> = [];
-
-    for (const match of matches) {
-      const scopeRank = SCOPE_PRIORITY[match.scope_type] || 0;
-      const found = store.entries.filter((e) => {
-        if (e.scope_type !== match.scope_type) return false;
-        if (match.scope_type === "master") return true;
-        return e.scope_id === match.scope_id;
-      });
-      for (const entry of found) {
-        candidates.push({ entry, scopeRank });
+    const candidates = collectHierarchyCandidates(store, hierarchyContext);
+    if (requestedProvider && requestedProvider !== "auto") {
+      candidates.splice(0, candidates.length, ...candidates.filter((candidate) => candidate.entry.provider === requestedProvider));
+    }
+    candidates.sort((a, b) => b.scopeRank - a.scopeRank || a.entry.priority - b.entry.priority);
+    const winners = new Map<string, ProviderEntry>();
+    for (const candidate of candidates) {
+      if (!winners.has(candidate.entry.provider)) {
+        winners.set(candidate.entry.provider, candidate.entry);
       }
     }
-
-    if (requestedProvider && requestedProvider !== "auto") {
-      const filtered = candidates.filter((c) => c.entry.provider === requestedProvider);
-      if (filtered.length === 0) return null;
-      filtered.sort((a, b) => b.scopeRank - a.scopeRank || a.entry.priority - b.entry.priority);
-      const winner = filtered[0]!.entry;
-      return {
-        ...publicView(winner),
-        credentials: decryptCredentials(winner.credentials || {}, secret),
-      };
-    }
-
-    if (candidates.length === 0) return null;
-
-    candidates.sort((a, b) => b.scopeRank - a.scopeRank || a.entry.priority - b.entry.priority);
-    const winner = candidates[0]!.entry;
-    return {
-      ...publicView(winner),
-      credentials: decryptCredentials(winner.credentials || {}, secret),
-    };
+    return Array.from(winners.values()).map(hydrateEntry);
   }
 
-  return { list, upsert, remove, resolve };
+  function resolve(hierarchyContext: HierarchyContext | null, requestedProvider: string | null | undefined): ResolvedEntry | null {
+    return resolveCandidates(hierarchyContext, requestedProvider)[0] || null;
+  }
+
+  return { list, listResolved, upsert, remove, resolveCandidates, resolve };
 }
 
 export {

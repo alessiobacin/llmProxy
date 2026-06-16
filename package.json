@@ -11,6 +11,8 @@
     "assets/",
     "bin/",
     "lib/",
+    "Dockerfile",
+    "docker-compose.production.yml",
     "server.js",
     "manifest.json"
   ],

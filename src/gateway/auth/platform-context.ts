@@ -1,6 +1,8 @@
 // V11 platform-context — auth, tenancy, and hierarchy enforcement.
 // Strict TypeScript replacement for the old platform-context.js.
 
+import crypto from "node:crypto";
+
 const VALID_SCOPE_TYPES = new Set(["master", "agency", "client", "project", "user"]);
 
 // V11-compliant role set
@@ -81,6 +83,47 @@ function safeJsonParse(value: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function normalizeAuthHeaderToken(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (/^bearer\s+/i.test(text)) {
+    return text.replace(/^bearer\s+/i, "").trim();
+  }
+  return text;
+}
+
+function parseLocalScopeToken(req: Record<string, unknown> | null | undefined): HierarchyContext | null {
+  if (!req) return null;
+  const headers = (req.headers ?? {}) as Record<string, unknown>;
+  const secret = String(process.env.LLMPROXY_SECRET || "").trim();
+  const token = normalizeAuthHeaderToken(headers["x-api-key"] ?? headers["X-API-Key"] ?? headers.authorization ?? headers.Authorization);
+  if (!token.startsWith("llmproxy-local-user:")) return null;
+  const parts = token.split(":");
+  if (parts.length < 2) return null;
+  const userId = String(parts[1] || "").trim();
+  if (!userId) return null;
+  if (parts.length >= 3) {
+    if (!secret) return null;
+    const expected = crypto.createHmac("sha256", secret).update(userId).digest("hex");
+    if (parts[2] !== expected) return null;
+  }
+  return {
+    master_company: null,
+    tenant_id: null,
+    agency_id: null,
+    client_id: null,
+    project_id: null,
+    user_id: userId,
+    master_user_id: null,
+    tenant_user_id: null,
+    client_user_id: null,
+    project_user_id: null,
+    roles: ["owner"],
+    scope_type: "user",
+    scope_id: userId,
+  };
 }
 
 function normalizeRoles(roles: unknown): string[] {
@@ -165,7 +208,7 @@ function parseHierarchyContext(req: Record<string, unknown> | null | undefined):
     : null;
 
   const raw = (fromHeader || fromBody) as Record<string, unknown> | null;
-  if (!raw || typeof raw !== "object") return null;
+  if (!raw || typeof raw !== "object") return parseLocalScopeToken(req);
 
   const scopeType = String(raw.scope_type ?? "").trim();
   const scopeId = String(raw.scope_id ?? "").trim();

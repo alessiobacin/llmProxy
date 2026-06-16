@@ -83,6 +83,18 @@ test("resolve respects requested provider filter", () => {
   assert.equal(openrouter.credentials.api_key, "o");
 });
 
+test("resolveCandidates deduplicates inherited providers and keeps fallback order", () => {
+  const registry = createProviderRegistry({ filePath: tempPath(), secret: "s" });
+  registry.upsert({ provider: "openrouter", scope_type: "master", scope_id: "*", priority: 20, credentials: { access_token: "master-openrouter" } });
+  registry.upsert({ provider: "deepseek", scope_type: "master", scope_id: "*", priority: 30, credentials: { access_token: "master-deepseek" } });
+  registry.upsert({ provider: "openrouter", scope_type: "user", scope_id: "aqdas", priority: 1, credentials: { access_token: "user-openrouter" } });
+  registry.upsert({ provider: "qwen", scope_type: "user", scope_id: "aqdas", priority: 2, credentials: { access_token: "user-qwen" } });
+
+  const candidates = registry.resolveCandidates({ user_id: "aqdas", scope_type: "user", scope_id: "aqdas" });
+  assert.deepEqual(candidates.map((entry) => entry.provider), ["openrouter", "qwen", "deepseek"]);
+  assert.equal(candidates[0].credentials.access_token, "user-openrouter");
+});
+
 test("resolve returns null when no match for requested provider", () => {
   const registry = createProviderRegistry({ filePath: tempPath(), secret: "s" });
   registry.upsert({ provider: "copilot", scope_type: "project", scope_id: "p-1", credentials: { api_key: "c" } });
@@ -114,4 +126,22 @@ test("remove deletes by composite id", () => {
   assert.equal(registry.remove(id), true);
   assert.equal(registry.list({}).length, 0);
   assert.equal(registry.remove(id), false);
+});
+
+test("shared provider registry writes group-writable files", () => {
+  const filePath = tempPath();
+  const previous = process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY;
+  process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY = "1";
+  try {
+    const registry = createProviderRegistry({ filePath, secret: "s" });
+    registry.upsert({ provider: "copilot", scope_type: "user", scope_id: "aqdas", credentials: { api_key: "c" } });
+    const mode = fs.statSync(filePath).mode & 0o777;
+    assert.equal(mode, 0o660);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY;
+    } else {
+      process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY = previous;
+    }
+  }
 });

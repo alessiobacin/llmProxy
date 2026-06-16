@@ -59,14 +59,14 @@ test("resolveServiceEntryFile uses the Docker wrapper for production service mod
   assert.equal(entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
 });
 
-test("resolveServiceEntryFile uses the native server entrypoint on Linux even in production", () => {
+test("resolveServiceEntryFile uses the Docker wrapper on Linux in production", () => {
   const entryFile = resolveServiceEntryFile({
     env: { LLMPROXY_ENV: "production" },
     packageRoot: "/tmp/node_modules/llmproxy",
     targetPlatform: "linux",
   });
 
-  assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
+  assert.equal(entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
 });
 
 test("resolveServiceEntryFile uses the native server entrypoint in local development", () => {
@@ -109,7 +109,7 @@ test("resolveCliServiceManagerOptions uses the Docker wrapper for installed prod
   assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
 });
 
-test("resolveCliServiceManagerOptions uses the native server entrypoint on Linux", () => {
+test("resolveCliServiceManagerOptions uses the Docker wrapper on Linux in production", () => {
   const options = resolveCliServiceManagerOptions({
     env: {
       LLMPROXY_RUNTIME_PROFILE: "production",
@@ -125,10 +125,11 @@ test("resolveCliServiceManagerOptions uses the native server entrypoint on Linux
     targetPlatform: "linux",
   });
 
-  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/server.js");
+  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
   assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
+  assert.equal(options.environment.LLMPROXY_SHARED_PROVIDER_REGISTRY, "1");
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -248,6 +249,27 @@ test("claude:setup uses the production service port 7045 when the installed CLI 
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
 });
 
+test("claude:setup writes a local scope auth token when shared provider registry is enabled", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-claude-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-runtime-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    env: {
+      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
+      LLMPROXY_SCOPE_USER: "aqdas",
+    },
+    stdout,
+  });
+
+  const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
+  assert.equal(exitCode, 0);
+  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "llmproxy-local-user:aqdas");
+  assert.match(stdout.toString(), /ANTHROPIC_BASE_URL/);
+});
+
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-"));
   const stdout = createWritableBuffer();
@@ -329,6 +351,29 @@ test("provider:add supports api-key providers like openrouter", async () => {
   assert.equal(provider.auth_type, "api_key");
   assert.equal(provider.provider, "openrouter");
   assert.equal(provider.default_model, "openai/gpt-4o");
+  assert.match(stdout.toString(), /Provider configurato con API key/);
+});
+
+test("provider:add stores shared user-scoped providers in provider-registry when enabled", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-provider-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--api-key", "sk-shared", "--model", "openai/gpt-4.1-mini", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    env: {
+      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
+      LLMPROXY_SCOPE_USER: "aqdas",
+    },
+    stdout,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { choices: [{ message: { content: "ok" } }] }; } }),
+  });
+
+  const registry = JSON.parse(fs.readFileSync(path.join(runtimeRoot, "provider-registry.json"), "utf8"));
+  assert.equal(exitCode, 0);
+  assert.equal(Array.isArray(registry.entries), true);
+  assert.equal(registry.entries[0].scope_type, "user");
+  assert.equal(registry.entries[0].scope_id, "aqdas");
+  assert.equal(registry.entries[0].provider, "openrouter");
   assert.match(stdout.toString(), /Provider configurato con API key/);
 });
 
@@ -1630,6 +1675,13 @@ test("package scripts expose install:persistent-it and install:persistent-en", a
 
   assert.equal(pkg.scripts["install:persistent-it"], "node bin/llmproxy.js install:persistent-it");
   assert.equal(pkg.scripts["install:persistent-en"], "node bin/llmproxy.js install:persistent-en");
+});
+
+test("package files include the Docker runtime assets for production service mode", async () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+
+  assert.ok(pkg.files.includes("Dockerfile"));
+  assert.ok(pkg.files.includes("docker-compose.production.yml"));
 });
 
 test("help <command> prints detailed guidance for a specific command", async () => {

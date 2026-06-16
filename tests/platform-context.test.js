@@ -104,6 +104,18 @@ test("parseHierarchyContext falls back to body when header is missing", () => {
   assert.equal(ctx.tenant_id, "ag-9");
 });
 
+test("parseHierarchyContext falls back to a local shared-service user token", () => {
+  const ctx = parseHierarchyContext({
+    headers: {
+      "x-api-key": "llmproxy-local-user:aqdas",
+    },
+    body: {},
+  });
+  assert.equal(ctx.scope_type, "user");
+  assert.equal(ctx.scope_id, "aqdas");
+  assert.equal(ctx.user_id, "aqdas");
+});
+
 test("validateHierarchyContextForBilling accepts master_company + project_id (MC direct)", () => {
   const result = validateHierarchyContextForBilling({
     scope_type: "project", scope_id: "p-1",

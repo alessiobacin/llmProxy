@@ -29,6 +29,7 @@ services:
       NODE_ENV: "production"
       LLMPROXY_ENV: "production"
       LLMPROXY_GLOBAL_SERVICE: "1"
+      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1"
       LLMPROXY_MODE: "platform"
       LLMPROXY_METERING_SINK: "dblayer"
       # db-layer is a Docker sibling service; use the service name as hostname

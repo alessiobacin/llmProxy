@@ -1087,6 +1087,10 @@ test("messages endpoint can fall back to every configurable API-key provider", a
           ? "deepseek-v4-flash"
           : providerId === "qwen"
             ? "qwen3.7-max"
+            : providerId === "opencode"
+              ? "deepseek-v4-flash"
+              : providerId === "opencode-go"
+                ? "minimax-m3"
             : "provider-native-model";
         assert.equal(payload.model, expectedModel);
         assert.equal(payload.content[0].text, withInferenceFooter(`served by ${providerId}`, providerId, expectedModel, 3, 2));

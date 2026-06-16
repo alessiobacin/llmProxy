@@ -34,7 +34,7 @@ test("upsert validates provider and scope", () => {
   assert.throws(() => registry.upsert({ provider: "copilot", scope_type: "project", scope_id: "" }));
 });
 
-test("upsert accepts newly supported providers like kimi and qwen", () => {
+test("upsert accepts newly supported providers like kimi, qwen, and opencode", () => {
   const registry = createProviderRegistry({ filePath: tempPath(), secret: "s" });
   const kimiEntry = registry.upsert({
     provider: "kimi",
@@ -48,8 +48,15 @@ test("upsert accepts newly supported providers like kimi and qwen", () => {
     scope_id: "p-2",
     credentials: { api_key: "qwen-key" },
   });
+  const opencodeEntry = registry.upsert({
+    provider: "opencode-go",
+    scope_type: "project",
+    scope_id: "p-3",
+    credentials: { api_key: "opencode-key" },
+  });
   assert.equal(kimiEntry.provider, "kimi");
   assert.equal(qwenEntry.provider, "qwen");
+  assert.equal(opencodeEntry.provider, "opencode-go");
 });
 
 test("resolve picks most specific scope (project > client > agency)", () => {

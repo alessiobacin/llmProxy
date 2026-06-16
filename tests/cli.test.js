@@ -41,6 +41,7 @@ test("resolveServiceEnvironment aligns service ports with the CLI runtime env", 
 
   assert.equal(serviceEnv.PORT, "5045");
   assert.equal(serviceEnv.HOST, "127.0.0.1");
+  assert.equal(serviceEnv.LLMPROXY_GLOBAL_SERVICE, "1");
   assert.equal(serviceEnv.NODE_ENV, "development");
   assert.equal(serviceEnv.LLMPROXY_ENV, "development");
   assert.equal(serviceEnv.DBLAYER_URL, "http://localhost:5046");
@@ -105,6 +106,7 @@ test("resolveCliServiceManagerOptions uses the Docker wrapper for installed prod
   assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
+  assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
 });
 
 test("resolveCliServiceManagerOptions uses the native server entrypoint on Linux", () => {
@@ -126,6 +128,7 @@ test("resolveCliServiceManagerOptions uses the native server entrypoint on Linux
   assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/server.js");
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
+  assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -302,6 +305,8 @@ test("provider:available shows supported providers with aliases and auth type", 
   assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\) auth=api_key/);
   assert.match(stdout.toString(), /3\. zai \(Z\.AI\) auth=api_key aliases=z\.ai/);
   assert.match(stdout.toString(), /qwen \(Qwen \(DashScope\)\) auth=api_key/);
+  assert.match(stdout.toString(), /opencode \(OpenCode Zen\) auth=api_key aliases=zen/);
+  assert.match(stdout.toString(), /opencode-go \(OpenCode Go\) auth=api_key aliases=go, opencodego/);
 });
 
 test("provider:add supports api-key providers like openrouter", async () => {
@@ -390,6 +395,43 @@ test("provider:add supports qwen subscription plan explicitly", async () => {
   assert.equal(saved.vision, true);
   assert.equal(requestUrls[0], "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
   assert.match(stdout.toString(), /Provider configurato con API key: qwen \(default model: qwen3\.7-max, vision: true, plan: subscription\)/);
+});
+
+test("provider:add supports anthropic-style API-key providers like opencode-go", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-opencode-go-"));
+  const stdout = createWritableBuffer();
+  const requestUrls = [];
+  const requestBodies = [];
+  const requestHeaders = [];
+  const fetchFn = async (url, options = {}) => {
+    requestUrls.push(url);
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    requestHeaders.push(options.headers || {});
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { id: "msg_opencode_go" };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "opencode-go", "--name", "OpenCode Go", "--api-key", "sk-opencode-go-test", "--model", "minimax-m3", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const saved = tokenStore.getProvider("opencode-go");
+  assert.equal(exitCode, 0);
+  assert.equal(saved.provider, "opencode-go");
+  assert.equal(saved.default_model, "minimax-m3");
+  assert.equal(saved.vision, false);
+  assert.equal(requestUrls[0], "https://opencode.ai/zen/go/v1/messages");
+  assert.equal(requestBodies[0].model, "minimax-m3");
+  assert.equal(requestHeaders[0]["x-api-key"], "sk-opencode-go-test");
+  assert.match(stdout.toString(), /Provider configurato con API key: opencode-go \(default model: minimax-m3, vision: false\)/);
 });
 
 test("provider:key routes qwen token-plan keys to the token-plan endpoint", async () => {
@@ -824,12 +866,13 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].url, "http://127.0.0.1:5045/v1/messages");
-  assert.equal(requests[0].options.method, "POST");
-  assert.equal(requests[0].options.headers["content-type"], "application/json");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, "http://127.0.0.1:5045/v1/llm/health");
+  assert.equal(requests[1].url, "http://127.0.0.1:5045/v1/messages");
+  assert.equal(requests[1].options.method, "POST");
+  assert.equal(requests[1].options.headers["content-type"], "application/json");
 
-  const body = JSON.parse(requests[0].options.body);
+  const body = JSON.parse(requests[1].options.body);
   assert.equal(body.stream, false);
   assert.equal(body.max_tokens, 256);
   assert.equal(body.model, "claude-sonnet-4.5");
@@ -868,7 +911,8 @@ test("test uses a deterministic per-user port when no explicit PORT is configure
   });
 
   assert.equal(exitCode, 0);
-  assert.equal(requests[0], `http://127.0.0.1:${deriveUserScopedPort(runtimeRoot)}/v1/messages`);
+  assert.equal(requests[0], `http://127.0.0.1:${deriveUserScopedPort(runtimeRoot)}/v1/llm/health`);
+  assert.equal(requests[1], `http://127.0.0.1:${deriveUserScopedPort(runtimeRoot)}/v1/messages`);
 });
 
 test("test uses the production service port 7045 when the installed CLI profile is active", async () => {
@@ -903,7 +947,8 @@ test("test uses the production service port 7045 when the installed CLI profile 
   });
 
   assert.equal(exitCode, 0);
-  assert.equal(requests[0], "http://127.0.0.1:7045/v1/messages");
+  assert.equal(requests[0], "http://127.0.0.1:7045/v1/llm/health");
+  assert.equal(requests[1], "http://127.0.0.1:7045/v1/messages");
 });
 
 test("different runtime roots resolve to different default proxy ports", async () => {
@@ -957,7 +1002,7 @@ test("test probes only the active provider by default", async () => {
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"]]);
+  assert.deepEqual(requestBodies.filter((body) => body.model).map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"]]);
   assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
   assert.doesNotMatch(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
@@ -1003,11 +1048,20 @@ test("test retries once after a transient local fetch failure", async () => {
     default_model: "gpt-5.4",
   }, { name: "Copilot" });
 
-  let attempts = 0;
+  let messageAttempts = 0;
   const sleepCalls = [];
-  const fetchFn = async () => {
-    attempts += 1;
-    if (attempts === 1) throw new Error("fetch failed");
+  const fetchFn = async (url) => {
+    if (String(url).includes("/v1/llm/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v8" };
+        },
+      };
+    }
+    messageAttempts += 1;
+    if (messageAttempts === 1) throw new Error("fetch failed");
     return {
       ok: true,
       status: 200,
@@ -1031,7 +1085,7 @@ test("test retries once after a transient local fetch failure", async () => {
   });
 
   assert.equal(exitCode, 0);
-  assert.equal(attempts, 2);
+  assert.equal(messageAttempts, 2);
   assert.deepEqual(sleepCalls, [250]);
   assert.match(stdout.toString(), /default: ok \(gpt-5\.4\) llmproxy-test-default/);
 });
@@ -1522,7 +1576,7 @@ test("test probes every configured provider with --all-providers", async () => {
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(requestBodies.map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"], ["kimi", "kimi-k2.5"]]);
+  assert.deepEqual(requestBodies.filter((body) => body.model).map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"], ["kimi", "kimi-k2.5"]]);
   assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
   assert.match(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
@@ -1738,14 +1792,13 @@ test("update runs the package manager command for the latest llmproxy release", 
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(executed.slice(0, 5), [
+  assert.deepEqual(executed.slice(0, 3), [
     ["gh", ["--version"]],
     ["git", ["--version"]],
-    ["pnpm", ["--version"]],
     ["npm", ["--version"]],
-    ["npm", ["prefix", "-g"]],
   ]);
-  assert.equal(executed.at(-1)[0], "sh");
+  assert.ok(executed.some(([command, args]) => command === "npm" && args[0] === "prefix" && args[1] === "-g"));
+  assert.equal(executed.at(-1)[0], "bash");
   assert.equal(executed.at(-1)[1][0], "-c");
   const scriptText = executed.at(-1)[1][1];
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
@@ -1786,8 +1839,8 @@ test("update stops early and reports missing base prerequisites", async () => {
   assert.match(stderr.toString(), /prerequisiti.*non sono soddisfatti/i);
   assert.match(stderr.toString(), /GitHub CLI \(`gh`\) non trovato/i);
   assert.match(stderr.toString(), /Git \(`git`\) non trovato/i);
-  assert.match(stderr.toString(), /pnpm non trovato/i);
-  assert.equal(executed.some(([command]) => command === "sh"), false);
+  assert.doesNotMatch(stderr.toString(), /pnpm non trovato/i);
+  assert.equal(executed.some(([command]) => command === "bash"), false);
 });
 
 test("update reports Docker prerequisites when the service runtime uses Docker", async () => {
@@ -1815,7 +1868,7 @@ test("update reports Docker prerequisites when the service runtime uses Docker",
   assert.equal(exitCode, 1);
   assert.equal(stdout.toString(), "");
   assert.match(stderr.toString(), /Docker non trovato nel PATH/i);
-  assert.equal(executed.some(([command]) => command === "sh"), false);
+  assert.equal(executed.some(([command]) => command === "bash"), false);
 });
 
 test("runSelfUpdate resolves the refreshed llmproxy binary by matching the target version", () => {
@@ -1830,8 +1883,8 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /used_sudo=0/);
   assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
-  assert.match(scriptText, /sudo npm install -g \"\$package_file\"\n    used_sudo=1/);
-  assert.match(scriptText, /if \[ \"\$used_sudo\" -eq 1 \]; then\n  npm_prefix=\$\(sudo npm prefix -g\)\nelse\n  npm_prefix=\$\(npm prefix -g\)\nfi/);
+  assert.match(scriptText, /if sudo npm install -g "\$package_file" 2>\/dev\/null; then\n\s+used_sudo=1/);
+  assert.match(scriptText, /if \[ "\$used_sudo" -eq 1 \]; then\n\s+npm_prefix=\$\(sudo npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nelse\n\s+npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nfi/);
   assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ \"\$candidate_version\" = \"\$target_version\" \]; then\n      new_bin=\"\$candidate_bin\"/);
@@ -2039,7 +2092,7 @@ test("uninstall removes both npm and pnpm global installs", async () => {
 
   assert.equal(exitCode, 0);
   assert.deepEqual(executed, [[
-    "sh",
+    "bash",
     [
       "-c",
       "set -e\nnpm uninstall -g llmproxy >/dev/null 2>&1 || true\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi",

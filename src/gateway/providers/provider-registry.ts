@@ -10,6 +10,8 @@ const SUPPORTED_PROVIDERS = [
   "zai",
   "kimi",
   "qwen",
+  "opencode",
+  "opencode-go",
   "openai",
   "anthropic",
   "deepseek",

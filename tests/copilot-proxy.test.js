@@ -42,6 +42,22 @@ test("API_KEY_PROVIDER_CONFIGS.qwen accepts only qwen model family", () => {
   assert.equal(qwen.supportsModel("gpt-5.4"), false);
 });
 
+test("API_KEY_PROVIDER_CONFIGS.opencode accepts only OpenCode Zen chat-completions models", () => {
+  const opencode = API_KEY_PROVIDER_CONFIGS.opencode;
+  assert.equal(typeof opencode.supportsModel, "function");
+  assert.equal(opencode.supportsModel("deepseek-v4-flash"), true);
+  assert.equal(opencode.supportsModel("minimax-m2.7"), true);
+  assert.equal(opencode.supportsModel("minimax-m3"), false);
+});
+
+test("API_KEY_PROVIDER_CONFIGS.opencode-go accepts only OpenCode Go messages models", () => {
+  const opencodeGo = API_KEY_PROVIDER_CONFIGS["opencode-go"];
+  assert.equal(typeof opencodeGo.supportsModel, "function");
+  assert.equal(opencodeGo.supportsModel("minimax-m3"), true);
+  assert.equal(opencodeGo.supportsModel("qwen3.7-max"), true);
+  assert.equal(opencodeGo.supportsModel("deepseek-v4-flash"), false);
+});
+
 test("getApiKeyProviderRequestUrls routes qwen token-plan keys to the token-plan endpoint first", () => {
   const urls = getApiKeyProviderRequestUrls({ provider: "qwen", access_token: "sk-sp-test" });
   assert.deepEqual(urls, [
@@ -54,6 +70,13 @@ test("getApiKeyProviderRequestUrls honors an explicit qwen payg plan", () => {
   const urls = getApiKeyProviderRequestUrls({ provider: "qwen", access_token: "sk-sp-test", endpoint_variant: "dashscope" });
   assert.deepEqual(urls, [
     "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",
+  ]);
+});
+
+test("getApiKeyProviderRequestUrls returns the OpenCode Go messages endpoint", () => {
+  const urls = getApiKeyProviderRequestUrls({ provider: "opencode-go", access_token: "sk-opencode-test" });
+  assert.deepEqual(urls, [
+    "https://opencode.ai/zen/go/v1/messages",
   ]);
 });
 

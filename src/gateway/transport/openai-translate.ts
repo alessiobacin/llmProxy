@@ -192,11 +192,15 @@ interface AnthropicResponse {
   reasoning_content?: string;
 }
 
+type OpenAIMessageContent =
+  | string
+  | Array<string | { type?: string; text?: string; content?: string }>;
+
 interface OpenAIResponse {
   model?: string;
   choices?: Array<{
     message?: {
-      content?: string;
+      content?: OpenAIMessageContent;
       reasoning_content?: string;
       tool_calls?: Array<{
         id?: string;
@@ -470,6 +474,22 @@ function translateStopReason(reason: string | null | undefined): string {
   }
 }
 
+function extractOpenAIMessageText(content: OpenAIMessageContent | undefined): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (!item || typeof item !== "object") return "";
+      if (typeof item.text === "string") return item.text;
+      if (typeof item.content === "string") return item.content;
+      return "";
+    })
+    .filter((value) => value.length > 0)
+    .join("\n");
+}
+
 function translateResponse(openai: OpenAIResponse | null | undefined, responseModel?: string): AnthropicResponse {
   const choice = openai?.choices?.[0];
   if (!choice) {
@@ -486,9 +506,9 @@ function translateResponse(openai: OpenAIResponse | null | undefined, responseMo
   }
 
   const content: AnthropicContentBlock[] = [];
-
-  if (choice.message?.content) {
-    content.push({ type: "text", text: choice.message.content });
+  const messageText = extractOpenAIMessageText(choice.message?.content);
+  if (messageText) {
+    content.push({ type: "text", text: messageText });
   }
 
   if (choice.message?.tool_calls) {

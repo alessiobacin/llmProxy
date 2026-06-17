@@ -176,3 +176,26 @@ test("translateResponse accepts input_tokens and output_tokens usage fields", ()
   assert.equal(response.usage.input_tokens, 20);
   assert.equal(response.usage.output_tokens, 236);
 });
+
+test("translateResponse extracts text from structured message content arrays", () => {
+  const response = translateResponse({
+    model: "deepseek-v4-flash",
+    choices: [
+      {
+        message: {
+          content: [
+            { type: "text", text: "llmproxy-test-opencode" },
+            { type: "metadata", content: "ignored metadata text" },
+            "second-line",
+          ],
+        },
+        finish_reason: "stop",
+      },
+    ],
+    usage: { prompt_tokens: 12, completion_tokens: 8 },
+  }, "deepseek-v4-flash");
+
+  assert.equal(response.content.length, 1);
+  assert.equal(response.content[0].type, "text");
+  assert.equal(response.content[0].text, "llmproxy-test-opencode\nignored metadata text\nsecond-line");
+});

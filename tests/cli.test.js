@@ -252,12 +252,25 @@ test("claude:setup uses the production service port 7045 when the installed CLI 
 test("claude:setup writes a local scope auth token when shared provider registry is enabled", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-claude-"));
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-runtime-"));
+  const homeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-home-"));
   const stdout = createWritableBuffer();
+
+  fs.mkdirSync(path.join(homeRoot, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(homeRoot, ".claude", "settings.json"), JSON.stringify({
+    enabledPlugins: {
+      "supabase@claude-plugins-official": true,
+    },
+    env: {
+      ANTHROPIC_AUTH_TOKEN: "proxy-local",
+      ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
+    },
+  }, null, 2));
 
   const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
     cwd: tempRoot,
     dataRoot: runtimeRoot,
     env: {
+      HOME: homeRoot,
       LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
       LLMPROXY_SCOPE_USER: "aqdas",
     },
@@ -265,9 +278,14 @@ test("claude:setup writes a local scope auth token when shared provider registry
   });
 
   const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
+  const homeSettings = JSON.parse(fs.readFileSync(path.join(homeRoot, ".claude", "settings.json"), "utf8"));
   assert.equal(exitCode, 0);
   assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "llmproxy-local-user:aqdas");
+  assert.equal(homeSettings.env.ANTHROPIC_AUTH_TOKEN, "llmproxy-local-user:aqdas");
+  assert.equal("ANTHROPIC_DEFAULT_MODEL" in homeSettings.env, false);
+  assert.deepEqual(homeSettings.enabledPlugins, { "supabase@claude-plugins-official": true });
   assert.match(stdout.toString(), /ANTHROPIC_BASE_URL/);
+  assert.match(stdout.toString(), /Configurazione Claude globale aggiornata/);
 });
 
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {

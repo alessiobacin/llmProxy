@@ -45,7 +45,7 @@ test("/v1/llm/health returns mode and manifest_version", async () => {
     const body = await res.json();
     assert.equal(res.status, 200);
     assert.equal(body.mode, "platform");
-    assert.equal(body.manifest_version, "v8");
+    assert.equal(body.manifest_version, "v11");
     assert.equal(body.authenticated, true);
   });
 });

@@ -3,19 +3,23 @@ info:
   title: llmProxy API
   version: 0.2.2
   description: |
-    Deterministic LLM transport tool (architecture v8, tool #45).
+    Deterministic LLM transport tool (architecture v11, tool #45).
 
     Two control planes:
-    - Standalone: configured and operated via the `llmproxy` CLI. Filesystem token store.
+    - Standalone: default mode, configured and operated via the `llmproxy` CLI plus the local REST control plane.
       HierarchyContext is optional. `/v1/messages` is used directly by Claude Code.
-    - Platform: configured and operated via this HTTP API. HierarchyContext is required
+    - Platform: opt-in compatibility mode, configured and operated via this HTTP API. HierarchyContext is required
       on platform endpoints. Metering records are emitted via the configured sink.
 
     llmProxy never runs LLM-driven logic. It transports requests, manages provider
     fallback, and produces deterministic audit and metering records.
 servers:
-  - url: http://127.0.0.1:3015
-    description: Local standalone proxy
+  - url: http://127.0.0.1:5045
+    description: Local standalone proxy (development)
+  - url: http://127.0.0.1:6045
+    description: Local standalone proxy (staging)
+  - url: http://127.0.0.1:7045
+    description: Local standalone proxy (production)
   - url: https://llmproxy.platform.local
     description: Platform deployment
 tags:
@@ -130,6 +134,19 @@ components:
             message: {type: string}
             trace_id: {type: string}
             provider_attempts: {type: array, items: {type: object}}
+    CliCommandResponse:
+      type: object
+      required: [success, exitCode, command, data, timestamp]
+      properties:
+        success: {type: boolean}
+        exitCode: {type: integer}
+        command: {type: string}
+        data:
+          type: object
+          properties:
+            output: {type: string}
+            error: {type: string}
+        timestamp: {type: string, format: date-time}
     MeteringRecord:
       type: object
       description: |
@@ -250,6 +267,247 @@ paths:
                 properties:
                   ok: {type: boolean}
                   authenticated: {type: boolean}
+  /api/release-notes:
+    get:
+      tags: [control-plane]
+      summary: Release notes for the current or requested llmProxy version.
+      parameters:
+        - in: query
+          name: version
+          schema: {type: string}
+        - in: query
+          name: locale
+          schema: {type: string, enum: [it, en]}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/model/set:
+    post:
+      tags: [control-plane]
+      summary: Set the effective Claude model chain for a project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              properties:
+                model: {type: string}
+                projectPath: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/available:
+    get:
+      tags: [control-plane]
+      summary: List providers from the canonical provider catalog.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/usage:
+    get:
+      tags: [control-plane]
+      summary: Show token usage breakdown by provider and model.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/stats:
+    get:
+      tags: [control-plane]
+      summary: Show aggregate llmProxy usage statistics.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/smart/add:
+    post:
+      tags: [control-plane]
+      summary: Configure the SMART classifier provider.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, model, apiKey]
+              properties:
+                provider: {type: string}
+                model: {type: string}
+                apiKey: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/smart/status:
+    get:
+      tags: [control-plane]
+      summary: Show SMART router status.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/smart/test:
+    post:
+      tags: [control-plane]
+      summary: Simulate SMART routing.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/smart/refresh:
+    post:
+      tags: [control-plane]
+      summary: Refresh SMART availability cache.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/config:
+    get:
+      tags: [control-plane]
+      summary: List supported configuration values for project or service scope.
+      parameters:
+        - in: query
+          name: scope
+          schema: {type: string, enum: [project, service]}
+        - in: query
+          name: projectPath
+          schema: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/config/{key}:
+    get:
+      tags: [control-plane]
+      summary: Read one supported configuration key.
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: {type: string}
+        - in: query
+          name: scope
+          schema: {type: string, enum: [project, service]}
+        - in: query
+          name: projectPath
+          schema: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+    post:
+      tags: [control-plane]
+      summary: Set one supported configuration key.
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: {type: string}
+                scope: {type: string, enum: [project, service]}
+                projectPath: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+        "400":
+          description: Unsupported key or invalid scope for the requested key.
+    delete:
+      tags: [control-plane]
+      summary: Unset one supported configuration key.
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope: {type: string, enum: [project, service]}
+                projectPath: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/update:
+    post:
+      tags: [control-plane]
+      summary: Update the installed llmProxy runtime.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/uninstall:
+    post:
+      tags: [control-plane]
+      summary: Remove the installed llmProxy runtime.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
   /v1/messages:
     post:
       tags: [runtime]

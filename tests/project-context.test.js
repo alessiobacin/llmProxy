@@ -90,7 +90,7 @@ test("resolveClaudeProjectSettings prefers the top-level Claude model when prese
   assert.equal(result.configuredModelSource, "settings.json:model");
 });
 
-test("resolveClaudeProjectSettings ignores proxy UI labels and defers model routing to the proxy", () => {
+test("resolveClaudeProjectSettings gives precedence to ANTHROPIC_DEFAULT_MODEL even when model is llmProxy", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-proxy-label-"));
   const projectRoot = path.join(root, "workspace");
   const nestedDir = path.join(projectRoot, "packages", "api");
@@ -107,8 +107,9 @@ test("resolveClaudeProjectSettings ignores proxy UI labels and defers model rout
 
   const result = resolveClaudeProjectSettings(nestedDir);
 
-  assert.equal(result.configuredModel, null);
-  assert.equal(result.configuredModelSource, "settings.json:model");
+  assert.equal(result.configuredModel, "copilot:gpt-5.4,kimi:kimi-k2.5");
+  assert.equal(result.configuredModelSource, "settings.json");
+  assert.equal(result.proxyControlsModel, false);
 });
 
 test("resolveClaudeProjectSettings reads shortAnswer from Claude env when using local proxy", () => {

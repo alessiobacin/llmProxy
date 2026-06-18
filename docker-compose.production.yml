@@ -40,6 +40,8 @@ services:
     volumes:
       # Reuse host token store/logs so container has the same authenticated providers
       - "${LLMPROXY_HOME}:/root/.local/share/llmProxy"
+      # Allow the proxy to read per-project Claude settings on the host.
+      - "/home:/home:ro"
     networks:
       - llmproxy-production
 

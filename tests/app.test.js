@@ -1712,7 +1712,7 @@ test("messages endpoint prefers the Claude project-configured model over the inc
   fs.writeFileSync(path.join(workspaceRoot, "package.json"), JSON.stringify({ name: "yt-monitor" }, null, 2));
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     env: {
-      ANTHROPIC_BASE_URL: "http://127.0.0.1:3015",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:5045",
       ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
     },
   }, null, 2));
@@ -1787,6 +1787,86 @@ test("messages endpoint prefers the Claude project-configured model over the inc
     assert.equal(attempt.entry.effectiveModel, "gpt-5.4");
     assert.equal(result.entry.actualModel, "gpt-5.4");
     assert.equal(result.entry.requestedModel, "gpt-5.4");
+  });
+});
+
+test("messages endpoint ignores sticky Claude models when project settings delegate model routing to llmproxy", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-proxy-controlled-model-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3",
+  }, { name: "OpenRouter" });
+  tokenStore.setProviderOrder(["deepseek", "openrouter"]);
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+  }, null, 2));
+
+  const requestBodies = [];
+  const authHeaders = [];
+  const fetchFn = async (_url, options = {}) => {
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    authHeaders.push(String(options.headers?.Authorization || ""));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "deepseek-v4-pro",
+          choices: [
+            {
+              message: { content: "proxy order respected" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 4, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "minimax/minimax-m3",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "deepseek-v4-pro");
+    assert.equal(requestBodies.length, 1);
+    assert.equal(requestBodies[0].model, "deepseek-v4-pro");
+    assert.deepEqual(authHeaders, ["Bearer token-deepseek"]);
   });
 });
 
@@ -2072,17 +2152,34 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     assert.equal(modelsPayload.success, true);
     assert.match(modelsPayload.data.output, /gpt-4\.1/);
 
+    const releaseNotesResponse = await fetch(`${baseUrl}/api/release-notes?version=0.2.62`);
+    const releaseNotesPayload = await releaseNotesResponse.json();
+    assert.equal(releaseNotesResponse.status, 200);
+    assert.equal(releaseNotesPayload.success, true);
+    assert.match(releaseNotesPayload.data.output, /0\.2\.62/);
+
     const providersResponse = await fetch(`${baseUrl}/api/providers`);
     const providersPayload = await providersResponse.json();
     assert.equal(providersResponse.status, 200);
     assert.equal(providersPayload.success, true);
     assert.match(providersPayload.data.output, /default/);
 
+    const providersAvailableResponse = await fetch(`${baseUrl}/api/providers/available`);
+    const providersAvailablePayload = await providersAvailableResponse.json();
+    assert.equal(providersAvailableResponse.status, 200);
+    assert.equal(providersAvailablePayload.success, true);
+    assert.match(providersAvailablePayload.data.output, /copilot/);
+
     const providerStatusResponse = await fetch(`${baseUrl}/api/providers/status`);
     const providerStatusPayload = await providerStatusResponse.json();
     assert.equal(providerStatusResponse.status, 200);
     assert.equal(providerStatusPayload.success, true);
     assert.match(providerStatusPayload.data.output, /Active provider:/);
+
+    const providerUsageResponse = await fetch(`${baseUrl}/api/providers/usage`);
+    const providerUsagePayload = await providerUsageResponse.json();
+    assert.equal(providerUsageResponse.status, 200);
+    assert.equal(providerUsagePayload.success, true);
 
     const providerOrderResponse = await fetch(`${baseUrl}/api/providers/order`, {
       method: "POST",
@@ -2115,6 +2212,21 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     const providerRemovePayload = await providerRemoveResponse.json();
     assert.equal(providerRemoveResponse.status, 200);
     assert.equal(providerRemovePayload.success, true);
+
+    const statsResponse = await fetch(`${baseUrl}/api/stats`);
+    const statsPayload = await statsResponse.json();
+    assert.equal(statsResponse.status, 200);
+    assert.equal(statsPayload.success, true);
+
+    const smartStatusResponse = await fetch(`${baseUrl}/api/smart/status`);
+    const smartStatusPayload = await smartStatusResponse.json();
+    assert.equal(smartStatusResponse.status, 200);
+    assert.equal(smartStatusPayload.success, true);
+
+    const smartRefreshResponse = await fetch(`${baseUrl}/api/smart/refresh`, { method: "POST" });
+    const smartRefreshPayload = await smartRefreshResponse.json();
+    assert.equal(smartRefreshResponse.status, 200);
+    assert.equal(smartRefreshPayload.success, true);
   });
 
   assert.ok(serviceCalls.includes("status"));
@@ -2163,6 +2275,92 @@ test("claude setup is exposed via REST endpoint", async () => {
   const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
   assert.equal(settings.model, "llmProxy");
   assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
+});
+
+test("model:set and config endpoints are exposed via REST", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-config-api-"));
+  const projectRoot = path.join(tempRoot, "project-b");
+  fs.mkdirSync(projectRoot, { recursive: true });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { ok: true };
+      },
+    }),
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const modelResponse = await fetch(`${baseUrl}/api/model/set`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ projectPath: projectRoot, model: "deepseek:deepseek-v4-flash" }),
+    });
+    const modelPayload = await modelResponse.json();
+    assert.equal(modelResponse.status, 200);
+    assert.equal(modelPayload.success, true);
+
+    const configSetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SMART_ROUTE`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ projectPath: projectRoot, scope: "project", value: "hybrid" }),
+    });
+    const configSetPayload = await configSetResponse.json();
+    assert.equal(configSetResponse.status, 200);
+    assert.equal(configSetPayload.success, true);
+
+    const configGetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SMART_ROUTE?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
+    const configGetPayload = await configGetResponse.json();
+    assert.equal(configGetResponse.status, 200);
+    assert.equal(configGetPayload.success, true);
+    assert.match(configGetPayload.data.output, /project\.LLMPROXY_SMART_ROUTE=hybrid/);
+
+    const configListResponse = await fetch(`${baseUrl}/api/config?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
+    const configListPayload = await configListResponse.json();
+    assert.equal(configListResponse.status, 200);
+    assert.equal(configListPayload.success, true);
+    assert.match(configListPayload.data.output, /Project configuration:/);
+
+    const configUnsetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SMART_ROUTE`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ projectPath: projectRoot, scope: "project" }),
+    });
+    const configUnsetPayload = await configUnsetResponse.json();
+    assert.equal(configUnsetResponse.status, 200);
+    assert.equal(configUnsetPayload.success, true);
+  });
+
+  const settings = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
+  assert.equal(settings.model, "deepseek:deepseek-v4-flash");
+  assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "deepseek:deepseek-v4-flash");
+  assert.equal("LLMPROXY_SMART_ROUTE" in settings.env, false);
+});
+
+test("REST surface covers the CLI command families that are meant to have HTTP equivalents", () => {
+  const appSource = fs.readFileSync(path.join(__dirname, "..", "lib", "app.js"), "utf8");
+  const requiredRoutes = [
+    "/api/release-notes",
+    "/api/model/set",
+    "/api/providers/available",
+    "/api/providers/usage",
+    "/api/stats",
+    "/api/smart/add",
+    "/api/smart/status",
+    "/api/smart/test",
+    "/api/smart/refresh",
+    "/api/config",
+    "/api/config/:key",
+    "/api/update",
+    "/api/uninstall",
+  ];
+
+  for (const route of requiredRoutes) {
+    assert.match(appSource, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
 });
 
 test("logs stream endpoint exposes live logs over SSE", async () => {

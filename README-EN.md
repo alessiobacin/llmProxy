@@ -1,8 +1,8 @@
 # llmProxy
 
-`llmProxy` is a standalone package that exposes a GitHub Copilot proxy with an Anthropic-compatible `/v1/messages` endpoint plus a global CLI for login, startup, status, logs, persistent service management, and fallback across multiple GitHub Copilot accounts. It is currently optimized for Claude Code workflows.
+`llmProxy` is a standalone package that exposes a GitHub Copilot and multi-provider proxy with an Anthropic-compatible `/v1/messages` endpoint plus a global CLI for setup, provider management, status, logs, persistent service management, and fallback across multiple providers. It is currently optimized for Claude Code workflows.
 
-> **v8 platform mode**: llmProxy can also run as Tool #45 of the v8 architecture, exposing `/v1/llm/messages` and `/v1/llm/health` with mandatory HierarchyContext / MeteringContext. Set `LLMPROXY_MODE=platform`. Full details in [docs/CHANGELOG-v8-platform-tool.md](docs/CHANGELOG-v8-platform-tool.md).
+> **v11 platform mode**: `LLMPROXY_MODE=standalone` is the default and is the recommended path for local checkout, `llmproxy run`, and the persistent user install. `LLMPROXY_MODE=platform` remains available as an explicit compatibility mode for the V11 gateway boundary on `/v1/llm/*`. Background and refactor notes: [docs/V11-REFACTOR-IMPLEMENTATION-PLAN.md](docs/V11-REFACTOR-IMPLEMENTATION-PLAN.md).
 
 ## Quick Start
 
@@ -100,10 +100,10 @@ Shows:
 - the package data root
 - the native service manager selected for the OS
 
-### 2. Log in to GitHub Copilot
+### 2. Add the Copilot provider
 
 ```bash
-llmproxy login
+llmproxy provider:add copilot
 ```
 
 The CLI:
@@ -111,7 +111,9 @@ The CLI:
 1. requests a device code from GitHub
 2. prints the authorization URL and code
 3. waits for login completion
-4. stores the token locally
+4. stores the provider locally
+
+`llmproxy login` still exists as a deprecated compatibility alias of `llmproxy provider:add copilot`.
 
 ### 3. Start in foreground
 
@@ -122,18 +124,19 @@ llmproxy run
 By default the server starts on:
 
 ```text
-http://127.0.0.1:3015
+http://127.0.0.1:5045
 ```
 
-### 4. Add a fallback Copilot provider
+### 4. Add additional providers and fallback order
 
 ```bash
 llmproxy provider:available
-llmproxy provider:add backup --name "Backup Copilot"
+llmproxy provider:add copilot --name "Copilot Primary"
+llmproxy provider:add kimi --api-key "$KIMI_API_KEY" --model kimi-k2.5 --vision false
 llmproxy provider:list
 llmproxy provider:status
-llmproxy provider:order backup 1
-llmproxy provider:rename backup "Backup EU"
+llmproxy provider:order kimi 2
+llmproxy provider:rename kimi "Kimi Fallback"
 ```
 
 ### 5. Install as a persistent service
@@ -191,6 +194,7 @@ llmproxy claude:setup --model 2
 The command creates or updates `.claude/settings.json` in the current folder by merging the `env` section with values compatible with `llmProxy`.
 The `--model` option accepts the numeric index from `llmproxy models:list`.
 When you are authenticated, `llmproxy models:list` reads the live catalog from GitHub Copilot and stores it in the local cache, so the index reflects the models actually available for your account.
+When `LLMPROXY_SHARED_PROVIDER_REGISTRY=1` is enabled, `llmproxy claude:setup` also writes `env.ANTHROPIC_AUTH_TOKEN` for the current user and aligns `~/.claude/settings.json` so Claude Code uses the same local auth token even outside the current project.
 
 If you prefer manual configuration, set both the top-level `model` field and the `env` section consistently:
 
@@ -198,7 +202,7 @@ If you prefer manual configuration, set both the top-level `model` field and the
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
     "LLMPROXY_SHORT_ANSWER": "1"
@@ -206,9 +210,43 @@ If you prefer manual configuration, set both the top-level `model` field and the
 }
 ```
 
+If you are using the shared provider registry mode, include the local auth token as well:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
+    "ANTHROPIC_AUTH_TOKEN": "llmproxy-local-user:aqdas",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+  }
+}
+```
+
+### Rule for `ANTHROPIC_AUTH_TOKEN`
+
+`ANTHROPIC_AUTH_TOKEN` is required only when the proxy runs in shared provider registry mode and Claude must identify which user-scoped provider set to use. This cross-user selection is intentional: it is how a project can explicitly reuse another user's provider registry.
+
+Valid formats:
+
+- unsigned local token: `llmproxy-local-user:<user>`
+- signed local token: `llmproxy-local-user:<user>:<hmac>`
+
+Rules:
+
+- `<user>` must be the same logical user that owns the provider configuration in the shared registry
+- `<hmac>` is optional and is `HMAC-SHA256(user, LLMPROXY_SECRET)` encoded as lowercase hex
+- if `LLMPROXY_SECRET` is not configured, the unsigned form is accepted
+- if `LLMPROXY_SECRET` is configured, the signed form is accepted and should be preferred
+- if `ANTHROPIC_AUTH_TOKEN` is missing, llmProxy falls back to `LLMPROXY_SCOPE_USER` and then to the current OS user
+- the legacy value `proxy-local` is obsolete and should not be used
+
+In normal standalone mode, do not set `ANTHROPIC_AUTH_TOKEN`; the local proxy uses the local token store directly.
+
 ### Optional concise answers with `shortAnswer`
 
-If you want shorter completions to save output tokens, you can enable concise-answer mode.
+If you want to reduce completion length and save output tokens, you can enable a concise-answer mode.
 
 Project-level default in `.claude/settings.json`:
 
@@ -216,7 +254,7 @@ Project-level default in `.claude/settings.json`:
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
     "LLMPROXY_SHORT_ANSWER": "1"
   }
 }
@@ -242,7 +280,7 @@ Per-request override on `/v1/messages`:
 Notes:
 
 - `LLMPROXY_SHORT_ANSWER=1` makes concise answers the project default when Claude uses the local proxy.
-- `shortAnswer: true` enables it only for one request.
+- `shortAnswer: true` enables it for one request only.
 - `shortAnswer: false` disables it for one request even if the project default is enabled.
 
 ### Provider-targeted model preferences and fallback chain
@@ -252,32 +290,21 @@ You can route different models to different providers directly from `ANTHROPIC_D
 ```json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
     "ANTHROPIC_DEFAULT_MODEL": "copilot:gpt-5.4,kimi:kimi-k2.5",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   },
-  "model": "llmProxy",
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Glob|Grep",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: Knowledge graph exists. Read graphify-out/GRAPH_REPORT.md for god nodes and community structure before searching raw files.\"}}' || true"
-          }
-        ]
-      }
-    ]
-  }
+  "model": "llmProxy"
 }
 ```
 
 How it works:
 
 - `copilot:gpt-5.4,kimi:kimi-k2.5` means: use `gpt-5.4` when the active provider is Copilot, and use `kimi-k2.5` when the request falls back to Kimi.
-- Provider fallback order follows your configured provider order (`llmproxy provider:list`). You can change priority with `llmproxy provider:order <providerId> <position>`.
+- Precedence is explicit: project override from `.claude/settings.json` `ANTHROPIC_DEFAULT_MODEL` > provider/model chain explicitly sent in the request > provider `default_model` and user fallback order.
+- If the chain is partial, llmProxy appends the remaining configured providers in the user's current order and uses each provider's `default_model`.
+- Inside a project with `ANTHROPIC_DEFAULT_MODEL`, `llmproxy provider:list` shows the effective execution chain in the real order used by fallback.
 - On retryable failures (for example `401`, `408`, `429`, many `5xx`, network errors, or invalid model errors), `llmProxy` moves to the next provider.
 - `model` can be a UI label such as `llmProxy`; routing logic is driven by `ANTHROPIC_DEFAULT_MODEL` and provider defaults.
 
@@ -288,6 +315,7 @@ llmproxy provider:add default --name "Default GitHub Copilot" --model "gpt-5.4"
 llmproxy provider:add kimi --provider kimi --api-key "$KIMI_API_KEY" --model "kimi-k2.5"
 llmproxy provider:order default 1
 llmproxy provider:order kimi 2
+llmproxy provider:order qwen 3
 llmproxy provider:list
 ```
 
@@ -297,7 +325,7 @@ llmproxy provider:list
   This is mainly the label Claude Code shows in the UI/session. You can keep it as `llmProxy`.
 
 - `ANTHROPIC_BASE_URL`
-  It must point to the `llmProxy` service. The default for this package is `http://127.0.0.1:3015`.
+  It must point to the `llmProxy` service. The default for this package is `http://127.0.0.1:5045`.
 - `ANTHROPIC_DEFAULT_MODEL`
   Optional. Use it only when you want project-local routing overrides such as a single model or a provider chain like `copilot:gpt-5.4,kimi:kimi-k2.5`.
 - `API_TIMEOUT_MS`
@@ -313,10 +341,10 @@ If you were already using another local proxy or a previous Claude Code configur
 
 - `ANTHROPIC_BASE_URL` must point to the `llmProxy` service
 - `model` can be a stable UI label (`llmProxy`) and does not need to match the routing chain
-- `ANTHROPIC_DEFAULT_MODEL` should contain your explicit primary model or chain if you want deterministic routing
+- `ANTHROPIC_DEFAULT_MODEL` is optional and should be set only if you want project-local routing overrides
 - PM2 is not needed: the persistent service is managed by the native service manager (`launchd` or `systemd --user`)
 
-If `ANTHROPIC_DEFAULT_MODEL` is empty:
+If `ANTHROPIC_DEFAULT_MODEL` is empty or omitted:
 
 - `llmProxy` does not derive a provider chain from `model: llmProxy`.
 - Routing falls back to request model and/or provider `default_model` values (if configured with `provider:add ... --model ...`).
@@ -328,7 +356,19 @@ Minimal example:
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3015"
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045"
+  }
+}
+```
+
+Project-local override example:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
+    "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-4.5"
   }
 }
 ```
@@ -336,7 +376,7 @@ Minimal example:
 ### Recommended sequence
 
 1. install or start `llmProxy`
-2. run `llmproxy login`
+2. run `llmproxy provider:add copilot`
 3. run `llmproxy service:start` or `llmproxy run`
 4. run `llmproxy models:list`
 5. run `llmproxy claude:setup --model <index>` in the project where you want to use Claude Code
@@ -348,21 +388,49 @@ In addition to the core endpoints (`/health`, `/auth/status`, `/auth/logout`, `/
 
 ### Billing attribution context for `/v1/llm/*`
 
-For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`) the caller must provide a complete hierarchy context for chargeback attribution.
+For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`) the caller must provide a hierarchy context for chargeback attribution.
 
-Required fields in `X-Hierarchy-Context`:
+Always required in `X-Hierarchy-Context`:
 
 - `master_company`
-- `tenant_id`
-- `client_id`
 - `project_id`
 - `scope_type`
 - `scope_id`
 
-Example:
+Optional, depending on the billing hierarchy:
+
+- `tenant_id` — present when the masterCompany provides the SaaS platform to a tenant
+- `client_id` — present when the project belongs to a client (of the masterCompany or of a tenant)
+
+Optional user identity fields (per org level):
+
+- `user_id` — generic identifier for the end-user within the current scope (backward-compatible alias)
+- `master_user_id` — user ID within the masterCompany identity system
+- `tenant_user_id` — user ID within the tenant identity system
+- `client_user_id` — user ID within the client identity system
+- `project_user_id` — user ID within the project identity system
+
+All `*_user_id` fields are optional and independent of each other. They are emitted as-is in metering records for chargeback attribution at the user level.
+
+Valid combinations:
+
+| Scenario | Required fields |
+|---|---|
+| MC direct project | `master_company` + `project_id` |
+| Tenant project | `master_company` + `tenant_id` + `project_id` |
+| MC → direct client | `master_company` + `client_id` + `project_id` |
+| Full chain | `master_company` + `tenant_id` + `client_id` + `project_id` |
+
+Example (full chain with per-level user IDs):
 
 ```http
-X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","tenant_id":"t-1","client_id":"c-1","project_id":"p-1"}
+X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","tenant_id":"t-1","client_id":"c-1","project_id":"p-1","master_user_id":"u-mc","tenant_user_id":"u-tenant","client_user_id":"u-client","project_user_id":"u-project"}
+```
+
+Example (MC direct client, no tenant, with user identity):
+
+```http
+X-Hierarchy-Context: {"scope_type":"project","scope_id":"p-1","master_company":"mc-1","client_id":"c-1","project_id":"p-1","master_user_id":"u-mc","project_user_id":"u-project"}
 ```
 
 Optional metering dimensions can be sent via `X-Metering-Context` under `custom_dimensions` and are emitted in metering records:
@@ -387,6 +455,128 @@ Standard response format for runtime REST endpoints:
 ```
 
 `success=true` means `exitCode=0`. For application-level command failures, the API returns `400` with `success=false`.
+
+### Metering query API (platform mode)
+
+When the proxy runs in platform mode (`LLMPROXY_MODE=platform`), every proxied request is appended as a JSON line to the metering sink file. Two HTTP endpoints let you query that data without having to parse the file directly.
+
+#### `GET /v1/llm/metering` — paginated record list
+
+Returns raw metering records. Each record is an audit-ready snapshot of a single inference request:
+
+| Field | Description |
+|---|---|
+| `timestamp` | UTC ISO 8601, when the response was sent |
+| `request_id` | Proxy-generated unique ID (`req_<16 hex chars>`) |
+| `trace_id` | Caller-supplied `X-Trace-Id`, for correlation |
+| `provider` / `model_used` | What actually served the request |
+| `duration_ms` | Wall-clock latency from receipt to response |
+| `success` / `error_code` | Outcome |
+| `tokens_input` / `tokens_output` | Token counts |
+| `fallback_count` | How many providers were tried before success |
+| `master_company` / `tenant_id` / `client_id` / `project_id` | Billing hierarchy |
+| `scope_type` / `scope_id` | Current billing scope |
+| `master_user_id` / `tenant_user_id` / `client_user_id` / `project_user_id` | Per-level end-user IDs |
+| `caller_module` / `operation_id` / `custom_dimensions` | Metering context dimensions |
+| `agent` / `mansione` / `task_id` | Agent-level dimensions (from `custom_dimensions`) |
+
+**Query parameters** (all optional):
+
+| Parameter | Type | Description |
+|---|---|---|
+| `limit` | integer 1–1000 | Records per page (default `100`) |
+| `offset` | integer ≥ 0 | Skip N records (default `0`) |
+| `order` | `desc` \| `asc` | Newest first (default) or oldest first |
+| `from` | ISO 8601 | Filter: `timestamp >= from` |
+| `to` | ISO 8601 | Filter: `timestamp <= to` |
+| `success` | `true` \| `false` | Filter by outcome |
+| `project_id` | string | Exact-match filter |
+| `tenant_id` | string | Exact-match filter |
+| `client_id` | string | Exact-match filter |
+| `master_company` | string | Exact-match filter |
+| `scope_type` | string | Exact-match filter |
+| `scope_id` | string | Exact-match filter |
+| `provider` | string | Exact-match filter |
+| `master_user_id` / `tenant_user_id` / `client_user_id` / `project_user_id` / `user_id` | string | Exact-match per-level user filter |
+| `request_id` | string | Look up a single specific request |
+
+**Example — last 20 requests for a project:**
+
+```http
+GET /v1/llm/metering?project_id=p-1&limit=20&order=desc
+```
+
+**Example — failed requests in a time window:**
+
+```http
+GET /v1/llm/metering?success=false&from=2026-05-01T00:00:00Z&to=2026-05-01T23:59:59Z
+```
+
+**Response shape:**
+
+```json
+{
+  "records": [ /* array of MeteringRecord */ ],
+  "total": 142,
+  "limit": 20,
+  "offset": 0,
+  "order": "desc"
+}
+```
+
+`total` is the count of all records matching the filters (not just the current page). Use `offset` for pagination:
+
+```
+page 1: offset=0,  limit=20  → records 0–19
+page 2: offset=20, limit=20  → records 20–39
+```
+
+#### `GET /v1/llm/metering/stats` — aggregate statistics
+
+Accepts the same filter parameters as the list endpoint (pagination params are ignored). Returns aggregate statistics over the entire filtered record set:
+
+**Example — cost summary for a project, current month:**
+
+```http
+GET /v1/llm/metering/stats?project_id=p-1&from=2026-05-01T00:00:00Z
+```
+
+**Response shape:**
+
+```json
+{
+  "filtered_total": 1284,
+  "total_requests": 1284,
+  "success_count": 1279,
+  "error_count": 5,
+  "total_tokens_input": 4820000,
+  "total_tokens_output": 612000,
+  "total_tokens": 5432000,
+  "avg_tokens_input": 3754,
+  "avg_tokens_output": 477,
+  "avg_duration_ms": 1823,
+  "p50_duration_ms": 1640,
+  "p95_duration_ms": 4210,
+  "earliest_timestamp": "2026-05-01T08:12:43.000Z",
+  "latest_timestamp": "2026-05-04T17:58:02.000Z",
+  "by_provider": {
+    "copilot": { "requests": 1001, "tokens_input": 3800000, "tokens_output": 490000 },
+    "openai":  { "requests":  283, "tokens_input": 1020000, "tokens_output": 122000 }
+  },
+  "by_scope_type": {
+    "project": { "requests": 1284, "tokens_input": 4820000, "tokens_output": 612000 }
+  },
+  "by_project_id": {
+    "p-1": { "requests": 1284, "tokens_input": 4820000, "tokens_output": 612000 }
+  }
+}
+```
+
+**Notes:**
+- Both endpoints return `404` if the proxy is not in platform mode.
+- The JSONL file is read on every HTTP request — no in-memory cache is maintained.
+- Records are appended in chronological order; `order=desc` reverses the slice after filtering.
+- Fields are redacted of sensitive content (message bodies, API keys) before being written to disk, so the stored records do not contain prompt text.
 
 ### Health
 
@@ -417,11 +607,14 @@ POST /auth/logout
 
 ### Runtime API (CLI via REST)
 
+The CLI progressively uses this REST control plane as its primary path when the local service is reachable. Bootstrap commands that may run before the service exists (`run`, `service:start`, install flows) keep a local fallback.
+
 ```http
 GET  /api/version
 GET  /api/help
 GET  /api/help?command=status
 GET  /api/setup
+GET  /api/release-notes
 
 POST /api/auth/login
 POST /api/auth/logout
@@ -434,16 +627,33 @@ POST /api/service/restart
 GET  /api/logs
 GET  /api/logs/stream
 GET  /api/models
+POST /api/model/set
 POST /api/test
 POST /api/claude/setup
 
 GET    /api/providers
+GET    /api/providers/available
 GET    /api/providers/status
+GET    /api/providers/usage
 POST   /api/providers/{id}/login
 POST   /api/providers/{id}/api-key
 POST   /api/providers/order
 POST   /api/providers/{id}/rename
 DELETE /api/providers/{id}
+
+GET    /api/stats
+POST   /api/smart/add
+GET    /api/smart/status
+POST   /api/smart/test
+POST   /api/smart/refresh
+
+GET    /api/config
+GET    /api/config/{key}
+POST   /api/config/{key}
+DELETE /api/config/{key}
+
+POST   /api/update
+POST   /api/uninstall
 ```
 
 Operational notes:
@@ -527,7 +737,8 @@ x-project-path: /absolute/path/to/project
 | `llmproxy version` | `GET /api/version` |
 | `llmproxy help [cmd]` | `GET /api/help[?command=cmd]` |
 | `llmproxy setup` | `GET /api/setup` |
-| `llmproxy login` | `POST /api/auth/login` |
+| `llmproxy release-notes [--version <v>]` | `GET /api/release-notes` |
+| `llmproxy login` | `POST /api/auth/login` (legacy alias of `provider:add copilot`) |
 | `llmproxy logout` | `POST /api/auth/logout` |
 | `llmproxy status` | `GET /api/service/status` |
 | `llmproxy service:start` | `POST /api/service/start` |
@@ -536,21 +747,30 @@ x-project-path: /absolute/path/to/project
 | `llmproxy logs` | `GET /api/logs` |
 | `llmproxy logs --follow` | `GET /api/logs/stream` |
 | `llmproxy models:list` | `GET /api/models` |
+| `llmproxy model:set <model>` | `POST /api/model/set` |
 | `llmproxy test` | `POST /api/test` |
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
+| `llmproxy provider:available` | `GET /api/providers/available` |
 | `llmproxy provider:list` | `GET /api/providers` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
+| `llmproxy provider:usage` | `GET /api/providers/usage` |
 | `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
 | `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
-
-CLI-only commands without a dedicated REST wrapper:
-
-- `llmproxy provider:available`
-- `llmproxy stats`
+| `llmproxy stats` | `GET /api/stats` |
+| `llmproxy smart:add ...` | `POST /api/smart/add` |
+| `llmproxy smart:status` | `GET /api/smart/status` |
+| `llmproxy smart:test` | `POST /api/smart/test` |
+| `llmproxy smart:refresh` | `POST /api/smart/refresh` |
+| `llmproxy config:list [--project\|--service]` | `GET /api/config` |
+| `llmproxy config:get <key> [--project\|--service]` | `GET /api/config/{key}` |
+| `llmproxy config:set <key> <value> [--project\|--service]` | `POST /api/config/{key}` |
+| `llmproxy config:unset <key> [--project\|--service]` | `DELETE /api/config/{key}` |
+| `llmproxy update` | `POST /api/update` |
+| `llmproxy uninstall` | `POST /api/uninstall` |
 
 ## CLI Commands
 
@@ -560,7 +780,7 @@ Prepares runtime directories and shows the selected service manager.
 
 ### `llmproxy login`
 
-Runs the GitHub Copilot device flow and stores or updates the default provider `default`.
+Deprecated compatibility alias. It runs the same GitHub Copilot device flow as `llmproxy provider:add copilot` and stores or updates the default Copilot provider.
 
 ### `llmproxy logout`
 
@@ -755,13 +975,114 @@ The single-command card includes syntax, description, when to use it, and a prac
 
 ### `llmproxy service:restart`
 
-Restarts the native persistent service.
+Restarts the persistent service and also validates the Docker runtime when the installed profile is Docker-backed. If the managed `llmproxy` container is missing or stopped, the command also recreates it with `docker compose up -d` (or `--build` when required by the wrapper) before the final health check.
 
 ### `llmproxy claude:setup`
 
 Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
 
-Supports `--model <index>` to set `ANTHROPIC_DEFAULT_MODEL` from the available model catalog.
+In shared provider registry mode it also writes `ANTHROPIC_AUTH_TOKEN` and synchronizes `~/.claude/settings.json` so stale global Claude settings do not override the project token.
+
+Supports `--model <index>` to show the selected default model in CLI output while keeping `.claude/settings.json` minimal (`model: llmProxy` plus proxy base URL).
+
+### `llmproxy config:list|get|set|unset`
+
+These commands expose the full supported configuration surface both from CLI and REST.
+
+- `--project` writes only variables that belong in `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_SMART_ROUTE`, and `LLMPROXY_SHORT_ANSWER`.
+- `--service` writes only variables that govern the runtime service, such as `PORT`, `LLMPROXY_MODE`, `LLMPROXY_SHARED_PROVIDER_REGISTRY`, and `LLMPROXY_SECRET`.
+- Scope mismatches are rejected both by CLI and REST. For example, `PORT` cannot be written with `--project`.
+
+### Smart Router
+
+The smart router automatically selects the best model for each request based on complexity, vision, and tool requirements. It uses a lightweight LLM classifier to analyze incoming requests and route them to the most cost-effective model that meets the requirements.
+
+#### How it works
+
+1. **Classifier**: A small, fast LLM (e.g., DeepSeek on OpenRouter) analyzes each request and classifies it by:
+   - `complexity`: simple, moderate, complex
+   - `needsVision`: whether the request contains images
+   - `needsTools`: whether the request uses tool definitions
+   - `type`: coding, creative, reasoning, qa
+
+2. **Routing rules**: Based on the classification, the router selects a model from the registered providers:
+   - `economy` tier (deepseek-chat, gpt-4o-mini, etc.) for simple requests without tools
+   - `standard` tier (claude-haiku-4.5, gpt-4.1, etc.) for requests with vision or moderate complexity
+   - `premium` tier (claude-opus-4, gpt-5, etc.) for complex requests with many tools or long context
+
+3. **Preference modes**: You can bias the routing with `LLMPROXY_SMART_PREFERENCE`:
+   - `balanced` (default): prefer lowest tier that meets requirements, then lowest cost
+   - `economy`: always prefer the cheapest model that works
+   - `quality`: always prefer the most capable model that works
+
+#### Configuration
+
+**Step 1: Add the classifier**
+
+Configure a lightweight LLM as the classifier. Use a fast, cheap model like `deepseek-chat` on OpenRouter:
+
+```bash
+llmproxy smart:add --provider openrouter --model deepseek-chat --api-key sk-or-xxx
+```
+
+This saves the classifier configuration to `~/.local/share/llmProxy/smart-router.json` (Linux) or `~/Library/Application Support/llmProxy/smart-router.json` (macOS).
+
+**Step 2: Enable smart routing in your project**
+
+Add these environment variables to your project's `.claude/settings.json`:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "LLMPROXY_SMART_ROUTE": "hybrid",
+    "LLMPROXY_SMART_PREFERENCE": "balanced"
+  }
+}
+```
+
+**Environment variables:**
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `LLMPROXY_SMART_ROUTE` | `rules`, `llm`, `hybrid`, disabled | disabled | Routing mode: `rules` uses only static heuristics, `llm` uses only the classifier, `hybrid` combines rules plus classifier |
+| `LLMPROXY_SMART_PREFERENCE` | `balanced`, `economy`, `quality` | `balanced` | Cost vs quality tradeoff |
+| `LLMPROXY_SMART_CACHE_TTL` | milliseconds | `300000` (5 min) | How long to cache provider availability checks |
+
+**Step 3: Verify configuration**
+
+Check the smart router status and simulate routing:
+
+```bash
+llmproxy smart:status    # shows classifier config, API key (masked), registered providers
+llmproxy smart:test      # simulates routing for simple/moderate/complex scenarios
+```
+
+#### CLI commands
+
+| Command | Description |
+|---------|-------------|
+| `llmproxy smart:add --provider <p> --model <m> --api-key <k>` | Configure the classifier LLM |
+| `llmproxy smart:status` | Show smart router status and classifier config |
+| `llmproxy smart:test` | Simulate routing for 3 scenarios (simple, moderate, complex) |
+| `llmproxy smart:refresh` | Invalidate provider availability cache |
+
+#### Example: routing behavior
+
+With providers `qwen (qwen3.7-max)`, `deepseek (deepseek-v4-pro)`, and `kimi (kimi-k2.6)`:
+
+- **Simple chat** (no tools, no vision) → `qwen3.7-max` (economy tier, lowest cost)
+- **Moderate with tools** → `qwen3.7-max` (economy tier, supports tools)
+- **Complex with vision + tools** → no suitable model (none of the registered models support vision)
+
+To handle vision requests, add a provider with a vision-capable model:
+
+```bash
+llmproxy provider:add openrouter --model claude-sonnet-4 --api-key sk-or-xxx
+```
 
 ### `llmproxy model:set <model>`
 
@@ -774,6 +1095,7 @@ Use it when you want to switch to a raw provider-aware value such as `deepseek:d
 Updates the global `llmproxy` installation by cloning the latest version from the GitHub repository `alessiobacin/llmProxy` and reinstalling it globally.
 After the update, it relaunches the updated binary with `llmproxy version` to verify that the new installation is active.
 During the update, only one active global installation is kept, and any duplicate `pnpm` wrappers are removed.
+The reinstall is forced even when the package version string is unchanged, so same-version maintenance builds still replace the installed files.
 
 On Linux systems where npm global is under `/usr/local` (owned by root), the command automatically detects the permission error and retries with `sudo`. There is no need to manually run `sudo llmproxy update`.
 
@@ -923,83 +1245,6 @@ Restarts the native persistent service.
 
 Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
 
-### Smart Router
-
-The smart router automatically selects the best model for each request based on complexity, vision, and tool requirements. It uses a lightweight LLM classifier to analyze incoming requests and route them to the most cost-effective model that meets the requirements.
-
-#### How it works
-
-1. **Classifier**: A small, fast LLM (e.g., DeepSeek on OpenRouter) analyzes each request and classifies it by:
-   - `complexity`: simple, moderate, complex
-   - `needsVision`: whether the request contains images
-   - `needsTools`: whether the request uses tool definitions
-   - `type`: coding, creative, reasoning, qa
-
-2. **Routing rules**: Based on the classification, the router selects a model from the registered providers:
-   - `economy` tier (deepseek-chat, gpt-4o-mini, etc.) for simple requests without tools
-   - `standard` tier (claude-haiku-4.5, gpt-4.1, etc.) for requests with vision or moderate complexity
-   - `premium` tier (claude-opus-4, gpt-5, etc.) for complex requests with many tools or long context
-
-3. **Preference modes**: You can bias the routing with `LLMPROXY_SMART_PREFERENCE`:
-   - `balanced` (default): prefer lowest tier that meets requirements, then lowest cost
-   - `economy`: always prefer the cheapest model that works
-   - `quality`: always prefer the most capable model that works
-
-#### Configuration
-
-**Step 1: Add the classifier**
-
-Configure a lightweight LLM as the classifier. Use a fast, cheap model like `deepseek-chat` on OpenRouter:
-
-```bash
-llmproxy smart:add --provider openrouter --model deepseek-chat --api-key sk-or-xxx
-```
-
-This saves the classifier configuration to `~/.local/share/llmProxy/smart-router.json` (Linux) or `~/Library/Application Support/llmProxy/smart-router.json` (macOS).
-
-**Step 2: Enable smart routing in your project**
-
-Add these environment variables to your project's `.claude/settings.json`:
-
-```json
-{
-  "model": "llmProxy",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
-    "LLMPROXY_SMART_ROUTE": "hybrid",
-    "LLMPROXY_SMART_PREFERENCE": "balanced"
-  }
-}
-```
-
-**Environment variables:**
-
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `LLMPROXY_SMART_ROUTE` | `rules`, `llm`, `hybrid`, disabled | disabled | Routing mode: `rules` uses static heuristics, `llm` uses classifier only, `hybrid` combines both |
-| `LLMPROXY_SMART_PREFERENCE` | `balanced`, `economy`, `quality` | `balanced` | Cost vs quality tradeoff |
-| `LLMPROXY_SMART_CACHE_TTL` | milliseconds | `300000` (5 min) | How long to cache provider availability checks |
-
-**Step 3: Verify configuration**
-
-Check the smart router status and simulate routing:
-
-```bash
-llmproxy smart:status    # shows classifier config, API key (masked), registered providers
-llmproxy smart:test      # simulates routing for simple/moderate/complex scenarios
-```
-
-#### CLI commands
-
-| Command | Description |
-|---------|-------------|
-| `llmproxy smart:add --provider <p> --model <m> --api-key <k>` | Configure the classifier LLM |
-| `llmproxy smart:status` | Show smart router status and classifier config |
-| `llmproxy smart:test` | Simulate routing for 3 scenarios (simple, moderate, complex) |
-| `llmproxy smart:refresh` | Invalidate provider availability cache |
-
 ## Runtime Paths
 
 You can override the data root with `LLMPROXY_HOME`.
@@ -1021,6 +1266,7 @@ Inside the data root, the following files are created:
 - `copilot-token.json`
 - `copilot-models.json`
 - `copilot-endpoints.json`
+- `provider-registry.json` (when `LLMPROXY_SHARED_PROVIDER_REGISTRY=1`)
 - `smart-router.json`
 - `logs/service.out.log`
 - `logs/service.err.log`
@@ -1028,6 +1274,7 @@ Inside the data root, the following files are created:
 
 `copilot-token.json` stores both the default provider and any additional Copilot providers together with their fallback order.
 `copilot-models.json` stores the latest model catalog fetched from the GitHub Copilot live endpoint.
+`provider-registry.json` stores the shared provider list and encrypted credentials for user-, project-, client-, tenant-, or agency-scoped provider routing.
 
 ## Environment Variables
 
@@ -1035,9 +1282,15 @@ See also [.env.example](.env.example).
 
 | Variable | Default | Usage |
 | --- | --- | --- |
-| `PORT` | `3015` | proxy port |
+| `PORT` | `5045` | local development proxy port (`6045` staging, `7045` production) |
 | `HOST` | `127.0.0.1` | server bind host |
 | `LLMPROXY_HOME` | auto | runtime data directory |
+| `LLMPROXY_MODE` | `standalone` | runtime mode; `platform` is opt-in compatibility mode |
+| `LLMPROXY_SHARED_PROVIDER_REGISTRY` | disabled | enable the shared provider registry instead of per-user `copilot-token.json` only |
+| `LLMPROXY_SECRET` | unset | optional HMAC secret for signed `llmproxy-local-user:<user>:<hmac>` Claude auth tokens |
+| `LLMPROXY_SCOPE_USER` | current OS user | user name used when generating the local Claude auth token in shared mode |
+| `LLMPROXY_RUNTIME_PROFILE` | auto | `development`, `staging`, or `production`; production binds the shared service to `127.0.0.1:7045` |
+| `LLMPROXY_SERVICE_RUNTIME` | auto | native or Docker-backed persistent runtime selection |
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` | JSONL log retention |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | maximum size of a JSONL log file before rotation |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | maximum number of archived JSONL log files per day |
@@ -1064,6 +1317,8 @@ Practical note:
 
 - in many environments the user service starts when the user logs in
 - if you need persistence even without a graphical or shell login, you may need to configure `linger`
+- in production/shared setups, use one global `llmproxy` service only, backed by the Docker runtime and bound to `127.0.0.1:7045`
+- in that setup, user-specific provider order and credentials belong in the shared `provider-registry.json`, not in separate per-user proxy processes
 
 With the one-shot bootstrap:
 
@@ -1130,18 +1385,18 @@ command -v llmproxy
 
 If the command resolves to a path inside `.pnpm-global/bin`, the CLI is ready.
 
-### `llmproxy login` fails
+### `llmproxy provider:add copilot` fails
 
 - verify that you are connected to the Internet
 - run the command again and complete the GitHub device flow
-- if the token expired, use `llmproxy logout` and then `llmproxy login`
+- if the token expired, use `llmproxy logout` and then `llmproxy provider:add copilot`
 
 ### The proxy responds with `authentication_error`
 
 The local token is missing or no longer valid:
 
 ```bash
-llmproxy login
+llmproxy provider:add copilot
 ```
 
 ### The service does not start

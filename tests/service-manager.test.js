@@ -14,7 +14,7 @@ test("launchd service manager renders a plist with expected paths and label", ()
     serviceFile: path.join("/Users/example/Library/LaunchAgents", "com.example.llmproxy.plist"),
     stdoutPath: "/Users/example/Library/Application Support/llmProxy/logs/service.out.log",
     stderrPath: "/Users/example/Library/Application Support/llmProxy/logs/service.err.log",
-    environment: { PORT: "3015", LLMPROXY_HOME: "/Users/example/Library/Application Support/llmProxy" },
+    environment: { PORT: "5045", LLMPROXY_HOME: "/Users/example/Library/Application Support/llmProxy" },
   });
 
   const plist = manager.renderServiceDefinition();

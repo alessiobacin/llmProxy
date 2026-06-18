@@ -26,7 +26,7 @@ test("resolveServiceEnvironment aligns service ports with the CLI runtime env", 
       HOST: "127.0.0.1",
       NODE_ENV: "development",
       LLMPROXY_ENV: "development",
-      LLMPROXY_MODE: "platform",
+      LLMPROXY_MODE: "standalone",
       LLMPROXY_METERING_SINK: "dblayer",
       DBLAYER_URL: "http://localhost:5046",
       EVENTBUS_URL: "http://localhost:5048",
@@ -44,6 +44,7 @@ test("resolveServiceEnvironment aligns service ports with the CLI runtime env", 
   assert.equal(serviceEnv.LLMPROXY_GLOBAL_SERVICE, "1");
   assert.equal(serviceEnv.NODE_ENV, "development");
   assert.equal(serviceEnv.LLMPROXY_ENV, "development");
+  assert.equal(serviceEnv.LLMPROXY_MODE, "standalone");
   assert.equal(serviceEnv.DBLAYER_URL, "http://localhost:5046");
   assert.equal(serviceEnv.EVENTBUS_URL, "http://localhost:5048");
   assert.equal(serviceEnv.LLMPROXY_LOG_RETENTION_DAYS, "7");
@@ -204,7 +205,7 @@ test("claude:setup loads HOST and PORT from the llmproxy package .env file", asy
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-dotenv-package-"));
   const stdout = createWritableBuffer();
 
-  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=3015\nHOST=127.0.0.1\n", "utf8");
+  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nHOST=127.0.0.1\n", "utf8");
 
   const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
     cwd: tempRoot,
@@ -218,9 +219,9 @@ test("claude:setup loads HOST and PORT from the llmproxy package .env file", asy
 
   assert.equal(exitCode, 0);
   assert.equal(settings.model, "llmProxy");
-  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:3015");
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:5045");
   assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
-  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:3015/);
+  assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:5045/);
 });
 
 test("claude:setup uses the production service port 7045 when the installed CLI profile is active", async () => {
@@ -288,6 +289,27 @@ test("claude:setup writes a local scope auth token when shared provider registry
   assert.match(stdout.toString(), /Configurazione Claude globale aggiornata/);
 });
 
+test("claude:setup writes a signed local scope auth token when LLMPROXY_SECRET is configured", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-claude-signed-"));
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-runtime-signed-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
+    cwd: tempRoot,
+    dataRoot: runtimeRoot,
+    env: {
+      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
+      LLMPROXY_SCOPE_USER: "aqdas",
+      LLMPROXY_SECRET: "super-secret",
+    },
+    stdout,
+  });
+
+  const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
+  assert.equal(exitCode, 0);
+  assert.match(settings.env.ANTHROPIC_AUTH_TOKEN, /^llmproxy-local-user:aqdas:[a-f0-9]{64}$/);
+});
+
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-"));
   const stdout = createWritableBuffer();
@@ -329,6 +351,60 @@ test("provider:add performs a dedicated Copilot login and provider:list shows fa
   assert.equal(listExitCode, 0);
   assert.match(stdout.toString(), /Login completato/);
   assert.match(listStdout.toString(), /1\. backup \(Backup Copilot\)/);
+});
+
+test("provider:list shows the effective project fallback chain when Claude settings override the model routing", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-project-"));
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-project-workspace-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("default", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Default Copilot" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "token-qwen",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:5045",
+      ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4,kimi:kimi-k2.5",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Provider effettivi per il progetto/);
+  assert.match(stdout.toString(), /1\. default \(Default Copilot\) model=gpt-5\.4/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\) model=kimi-k2\.5/);
+  assert.match(stdout.toString(), /3\. qwen \(Qwen\) model=qwen3\.7-max/);
 });
 
 test("provider:available shows supported providers with aliases and auth type", async () => {
@@ -795,6 +871,7 @@ test("service:restart on launchd reinstalls the agent directly", async () => {
     dataRoot: runtimeRoot,
     stdout,
     stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
     serviceManager: {
       kind: "launchd",
       stop() {
@@ -834,6 +911,7 @@ test("service:restart on launchd falls back to start when install is unavailable
     dataRoot: runtimeRoot,
     stdout,
     stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
     serviceManager: {
       kind: "launchd",
       stop() {
@@ -851,6 +929,90 @@ test("service:restart on launchd falls back to start when install is unavailable
   assert.deepEqual(calls, ["start"]);
   assert.match(stdout.toString(), /Servizio riavviato/);
   assert.equal(stderr.toString(), "");
+});
+
+test("service:restart recovers the Docker runtime when the managed container is not running", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-docker-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-docker-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "service:restart"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+    },
+    stdout,
+    stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
+    commandRunner(command, args) {
+      commandCalls.push([command, ...args]);
+      const joined = args.join(" ");
+      if (joined.includes("ps --status running --services llmproxy")) {
+        const wasRestarted = commandCalls.some((call) => call.join(" ").includes("up -d --build llmproxy"));
+        return { status: 0, stdout: wasRestarted ? "llmproxy\n" : "", stderr: "" };
+      }
+      if (joined.includes("up -d --build llmproxy")) {
+        return { status: 0, stdout: "started", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    serviceManager: {
+      kind: "launchd",
+      install() {
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
+  assert.match(stdout.toString(), /Health check OK/);
+  assert.equal(stderr.toString(), "");
+});
+
+test("runCli uses the REST wrapper when the local service is reachable", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-rest-wrapper-"));
+  const stdout = createWritableBuffer();
+  const requests = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    restFetchFn: async (url) => {
+      requests.push(String(url));
+      if (String(url).endsWith("/health")) {
+        return { ok: true, async json() { return { ok: true }; } };
+      }
+      return {
+        ok: true,
+        async json() {
+          return {
+            success: true,
+            exitCode: 0,
+            data: {
+              output: "1. rest (REST Provider) model=gpt-5.4",
+              error: "",
+            },
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requests, [
+    "http://127.0.0.1:5045/health",
+    "http://127.0.0.1:5045/api/providers",
+  ]);
+  assert.match(stdout.toString(), /REST Provider/);
 });
 
 test("models:list prints a numbered list of available models", async () => {
@@ -1014,11 +1176,12 @@ test("test uses the production service port 7045 when the installed CLI profile 
   assert.equal(requests[1], "http://127.0.0.1:7045/v1/messages");
 });
 
-test("different runtime roots resolve to different default proxy ports", async () => {
+test("development runtime uses the fixed local proxy port 5045", async () => {
   const leftRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-left-"));
   const rightRuntimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-port-right-"));
 
-  assert.notEqual(deriveUserScopedPort(leftRuntimeRoot), deriveUserScopedPort(rightRuntimeRoot));
+  assert.equal(deriveUserScopedPort(leftRuntimeRoot), "5045");
+  assert.equal(deriveUserScopedPort(rightRuntimeRoot), "5045");
 });
 
 test("test probes only the active provider by default", async () => {
@@ -1119,7 +1282,7 @@ test("test retries once after a transient local fetch failure", async () => {
         ok: true,
         status: 200,
         async json() {
-          return { ok: true, manifest_version: "v8" };
+          return { ok: true, manifest_version: "v11" };
         },
       };
     }
@@ -1253,6 +1416,83 @@ test("model:set rejects an empty model value", async () => {
   assert.equal(exitCode, 1);
   assert.equal(stdout.toString(), "");
   assert.match(stderr.toString(), /Uso: llmproxy model:set <model>/);
+});
+
+test("config:set/get/unset manages project-scoped variables in Claude settings", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-project-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  let exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_SMART_ROUTE", "hybrid", "--project"], {
+    cwd: tempRoot,
+    stdout,
+    stderr,
+  });
+  assert.equal(exitCode, 0);
+
+  const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
+  assert.equal(settings.env.LLMPROXY_SMART_ROUTE, "hybrid");
+
+  const getStdout = createWritableBuffer();
+  exitCode = await runCli(["node", "llmproxy", "config:get", "LLMPROXY_SMART_ROUTE", "--project"], {
+    cwd: tempRoot,
+    stdout: getStdout,
+  });
+  assert.equal(exitCode, 0);
+  assert.match(getStdout.toString(), /project\.LLMPROXY_SMART_ROUTE=hybrid/);
+
+  const unsetStdout = createWritableBuffer();
+  exitCode = await runCli(["node", "llmproxy", "config:unset", "LLMPROXY_SMART_ROUTE", "--project"], {
+    cwd: tempRoot,
+    stdout: unsetStdout,
+  });
+  assert.equal(exitCode, 0);
+
+  const nextSettings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
+  assert.equal("LLMPROXY_SMART_ROUTE" in nextSettings.env, false);
+});
+
+test("config:set/get/unset manages service-scoped variables in the persistent service config", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-service-"));
+
+  let exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_MODE", "platform", "--service"], {
+    dataRoot: runtimeRoot,
+    stdout: createWritableBuffer(),
+  });
+  assert.equal(exitCode, 0);
+
+  const serviceConfig = JSON.parse(fs.readFileSync(path.join(runtimeRoot, "service", "config.json"), "utf8"));
+  assert.equal(serviceConfig.env.LLMPROXY_MODE, "platform");
+
+  const getStdout = createWritableBuffer();
+  exitCode = await runCli(["node", "llmproxy", "config:get", "LLMPROXY_MODE", "--service"], {
+    dataRoot: runtimeRoot,
+    stdout: getStdout,
+  });
+  assert.equal(exitCode, 0);
+  assert.match(getStdout.toString(), /service\.LLMPROXY_MODE=platform/);
+
+  exitCode = await runCli(["node", "llmproxy", "config:unset", "LLMPROXY_MODE", "--service"], {
+    dataRoot: runtimeRoot,
+    stdout: createWritableBuffer(),
+  });
+  assert.equal(exitCode, 0);
+
+  const nextServiceConfig = JSON.parse(fs.readFileSync(path.join(runtimeRoot, "service", "config.json"), "utf8"));
+  assert.equal("LLMPROXY_MODE" in nextServiceConfig.env, false);
+});
+
+test("config:set rejects scope mismatches", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-scope-mismatch-"));
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_MODE", "platform", "--project"], {
+    dataRoot: runtimeRoot,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /appartiene allo scope service/);
 });
 
 test("claude:setup resolves model indexes from the live Copilot catalog", async () => {
@@ -1586,7 +1826,7 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /llmproxy install:persistent-it\s+installa globalmente la CLI corrente/i);
   assert.match(stdout.toString(), /llmproxy install:persistent-en\s+installs the current CLI globally/i);
   assert.match(stdout.toString(), /llmproxy test\s+esegue un test rapido di inferenza contro il proxy locale/i);
-  assert.match(stdout.toString(), /llmproxy login\s+autentica GitHub Copilot/i);
+  assert.match(stdout.toString(), /llmproxy login\s+alias legacy di provider:add copilot/i);
   assert.match(stdout.toString(), /llmproxy stats\s+mostra statistiche aggregate di utilizzo per provider e modello/i);
   assert.match(stdout.toString(), /llmproxy provider:available\s+elenca i provider supportati dalla CLI/i);
   assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);

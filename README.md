@@ -41,7 +41,7 @@ Use these commands if you want the installation flow to keep showing messages an
 npm run install:persistent-it
 ```
 
-If the CLI is already available in your `PATH`, you can also use:
+If the CLI is already available in your `PATH` because you installed it globally before, you can also use:
 
 ```bash
 llmproxy install:persistent-it
@@ -83,11 +83,14 @@ Compatibility:
 The bootstrap flow:
 
 - automatically detects the supported OS (`macOS` or `Linux`)
+- verifies the required prerequisites before the global install starts
+- prints OS-specific remediation commands when `npm`, `systemd`, Docker, or Docker Compose are missing
 - installs the current CLI globally with `npm install -g`
 - removes any duplicate global wrappers
 - launches `llmproxy service:start` through the newly installed global binary
 
 This way the persistent service always points to the final global installation starting from the local repository checkout.
+For Docker-backed profiles, the installer accepts both `docker compose` and the legacy `docker-compose` binary.
 
 ### 1. Verify runtime setup
 
@@ -953,6 +956,7 @@ Follows logs in real time using the native service files.
 ### `llmproxy service:start`
 
 Installs and starts the native persistent service.
+When the installed profile is Docker-backed, it also validates the runtime container and supports both `docker compose` and legacy `docker-compose`.
 
 On macOS the service restarts after reboot when the user session is loaded.
 It is not a global system daemon: it runs in the user context.
@@ -975,7 +979,7 @@ The single-command card includes syntax, description, when to use it, and a prac
 
 ### `llmproxy service:restart`
 
-Restarts the persistent service and also validates the Docker runtime when the installed profile is Docker-backed. If the managed `llmproxy` container is missing or stopped, the command also recreates it with `docker compose up -d` (or `--build` when required by the wrapper) before the final health check.
+Restarts the persistent service and also validates the Docker runtime when the installed profile is Docker-backed. If the managed `llmproxy` container is missing or stopped, the command also recreates it with `docker compose up -d` or legacy `docker-compose up -d` (and `--build` when required by the wrapper) before the final health check.
 
 ### `llmproxy claude:setup`
 
@@ -1116,6 +1120,7 @@ llmproxy install:persistent-it
 ```
 
 The command installs the current CLI globally and enables the native persistent service for the OS.
+Before changing anything, it validates prerequisites such as `npm`, the service manager, Docker, and Docker Compose, then prints OS-specific remediation commands if something is missing.
 When you use this command, the command output, dedicated help text, and error messages for this path are shown in Italian.
 
 ### `llmproxy install:persistent-en`
@@ -1141,6 +1146,7 @@ llmproxy install:persistent-en
 ```
 
 The command installs the current CLI globally and enables the native persistent service for the OS.
+Before changing anything, it validates prerequisites such as `npm`, the service manager, Docker, and Docker Compose, then prints OS-specific remediation commands if something is missing.
 When you use this command, the command output, dedicated help text, and error messages for this path are shown in English.
 
 ### `llmproxy install`

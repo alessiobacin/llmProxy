@@ -861,6 +861,119 @@ test("service:start returns an error when the service manager install fails", as
   assert.match(stderr.toString(), /bootstrap failed/);
 });
 
+test("service:start verifies Docker runtime and proxy health on production installs", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-start-docker-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-start-docker-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "service:start"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+    },
+    stdout,
+    stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
+    commandRunner(command, args) {
+      commandCalls.push([command, ...args]);
+      const joined = args.join(" ");
+      if (joined.includes("ps --status running --services llmproxy")) {
+        const wasStarted = commandCalls.some((call) => call.join(" ").includes("up -d --build llmproxy"));
+        return { status: 0, stdout: wasStarted ? "llmproxy\n" : "", stderr: "" };
+      }
+      if (joined.includes("up -d --build llmproxy")) {
+        return { status: 0, stdout: "started", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    serviceManager: {
+      kind: "launchd",
+      install() {
+        return {
+          ok: true,
+          stdout: "",
+          stderr: "",
+          stdoutPath: "/tmp/service.out.log",
+          stderrPath: "/tmp/service.err.log",
+        };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Servizio installato con launchd/);
+  assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
+  assert.match(stdout.toString(), /Health check OK/);
+  assert.equal(stderr.toString(), "");
+});
+
+test("service:start falls back to legacy docker-compose when the plugin is unavailable", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-start-legacy-compose-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-start-legacy-compose-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "service:start"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+    },
+    stdout,
+    stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
+    commandRunner(command, args) {
+      commandCalls.push([command, ...args]);
+      if (command === "docker" && args[0] === "compose" && args[1] === "version") {
+        return { status: 1, stdout: "", stderr: "unknown command\n" };
+      }
+      if (command === "docker-compose" && args[0] === "version") {
+        return { status: 0, stdout: "Docker Compose version v2.29.0\n", stderr: "" };
+      }
+      const joined = args.join(" ");
+      if (command === "docker-compose" && joined.includes("ps --status running --services llmproxy")) {
+        const wasStarted = commandCalls.some((call) => call.join(" ").includes("up -d --build llmproxy"));
+        return { status: 0, stdout: wasStarted ? "llmproxy\n" : "", stderr: "" };
+      }
+      if (command === "docker-compose" && joined.includes("up -d --build llmproxy")) {
+        return { status: 0, stdout: "started", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    serviceManager: {
+      kind: "launchd",
+      install() {
+        return {
+          ok: true,
+          stdout: "",
+          stderr: "",
+          stdoutPath: "/tmp/service.out.log",
+          stderrPath: "/tmp/service.err.log",
+        };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
+  assert.equal(commandCalls.some((call) => call[0] === "docker-compose" && call[1] === "version"), true);
+});
+
 test("service:restart on launchd reinstalls the agent directly", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-fallback-"));
   const stdout = createWritableBuffer();
@@ -1534,18 +1647,25 @@ test("claude:setup resolves model indexes from the live Copilot catalog", async 
 
 test("install:persistent-it installs the current package globally and starts the persistent macOS service in Italian", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-macos-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-macos-pkg-"));
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const commandCalls = [];
 
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "darwin",
     stdout,
     stderr,
     commandRunner(command, args, spawnOptions) {
       commandCalls.push({ command, args, spawnOptions });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr/local\n", stderr: "" };
+      }
       return {
         status: 0,
         stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/local/bin/llmproxy\n",
@@ -1556,29 +1676,36 @@ test("install:persistent-it installs the current package globally and starts the
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
-  assert.equal(commandCalls.length, 1);
-  assert.equal(commandCalls[0].command, "sh");
-  assert.equal(commandCalls[0].spawnOptions.encoding, "utf8");
-  assert.match(commandCalls[0].args[1], /case "\$platform" in/);
-  assert.match(commandCalls[0].args[1], /darwin\|linux\)/);
-  assert.match(commandCalls[0].args[1], /npm install -g '\/tmp\/llmproxy-package'/);
-  assert.match(commandCalls[0].args[1], /"\$global_bin" service:start/);
+  const installCall = commandCalls.find((entry) => entry.command === "sh");
+  assert.ok(installCall);
+  assert.equal(installCall.spawnOptions.encoding, "utf8");
+  assert.match(installCall.args[1], /case "\$platform" in/);
+  assert.match(installCall.args[1], /darwin\|linux\)/);
+  assert.match(installCall.args[1], /npm install -g /);
+  assert.match(installCall.args[1], /"\$global_bin" service:start/);
   assert.match(stdout.toString(), /Installazione persistente completata/);
   assert.match(stdout.toString(), /\/usr\/local\/bin\/llmproxy/);
 });
 
 test("install:persistent-en installs the current package globally and starts the persistent macOS service in English", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-macos-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-macos-pkg-"));
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
 
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "darwin",
     stdout,
     stderr,
-    commandRunner() {
+    commandRunner(command, args) {
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr/local\n", stderr: "" };
+      }
       return {
         status: 0,
         stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/local/bin/llmproxy\n",
@@ -1596,14 +1723,31 @@ test("install:persistent-en installs the current package globally and starts the
 
 test("install:persistent-it prints linger guidance on Linux", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linux-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linux-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
   const stdout = createWritableBuffer();
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
 
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "linux",
     stdout,
-    commandRunner() {
+    commandRunner(command, args) {
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr\n", stderr: "" };
+      }
+      if (command === "systemctl" && args[0] === "--version") {
+        return { status: 0, stdout: "systemd 255\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "compose" && args[1] === "version") {
+        return { status: 0, stdout: "Docker Compose version v2.29.0\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "info") {
+        return { status: 0, stdout: "Server:\n Containers: 0\n", stderr: "" };
+      }
       return {
         status: 0,
         stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n",
@@ -1619,14 +1763,31 @@ test("install:persistent-it prints linger guidance on Linux", async () => {
 
 test("install:persistent-en prints linger guidance on Linux in English", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-linux-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-linux-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
   const stdout = createWritableBuffer();
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
 
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "linux",
     stdout,
-    commandRunner() {
+    commandRunner(command, args) {
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr\n", stderr: "" };
+      }
+      if (command === "systemctl" && args[0] === "--version") {
+        return { status: 0, stdout: "systemd 255\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "compose" && args[1] === "version") {
+        return { status: 0, stdout: "Docker Compose version v2.29.0\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "info") {
+        return { status: 0, stdout: "Server:\n Containers: 0\n", stderr: "" };
+      }
       return {
         status: 0,
         stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n",
@@ -1642,16 +1803,33 @@ test("install:persistent-en prints linger guidance on Linux in English", async (
 
 test("install:persistent-en best-effort enables linger during Linux bootstrap", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linger-linux-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-linger-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
   const stdout = createWritableBuffer();
   const commandCalls = [];
 
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "linux",
     stdout,
     commandRunner(command, args, spawnOptions) {
       commandCalls.push({ command, args, spawnOptions });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr\n", stderr: "" };
+      }
+      if (command === "systemctl" && args[0] === "--version") {
+        return { status: 0, stdout: "systemd 255\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "compose" && args[1] === "version") {
+        return { status: 0, stdout: "Docker Compose version v2.29.0\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "info") {
+        return { status: 0, stdout: "Server:\n Containers: 0\n", stderr: "" };
+      }
       return {
         status: 0,
         stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n",
@@ -1661,8 +1839,10 @@ test("install:persistent-en best-effort enables linger during Linux bootstrap", 
   });
 
   assert.equal(exitCode, 0);
-  assert.match(commandCalls[0].args[1], /linger_user=\$\{SUDO_USER:-\$USER\}/);
-  assert.match(commandCalls[0].args[1], /sudo -n loginctl enable-linger "\$linger_user"/);
+  const installCall = commandCalls.find((entry) => entry.command === "sh");
+  assert.ok(installCall);
+  assert.match(installCall.args[1], /linger_user=\$\{SUDO_USER:-\$USER\}/);
+  assert.match(installCall.args[1], /sudo -n loginctl enable-linger "\$linger_user"/);
 });
 
 test("service:start returns an error when the service manager install fails", async () => {
@@ -1729,20 +1909,121 @@ test("install:persistent-en fails fast on unsupported platforms in English", asy
   assert.match(stderr.toString(), /Unsupported platform for persistent installation: win32/);
 });
 
-test("install remains an alias for install:persistent-en", async () => {
-  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-alias-"));
+test("install:persistent-it fails with prerequisite guidance when Docker is missing on Ubuntu", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-preflight-fail-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-preflight-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const commandCalls = [];
 
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    platform: "linux",
+    stdout,
+    stderr,
+    osReleaseContent: 'ID=ubuntu\nID_LIKE=debian\n',
+    commandRunner(command, args, spawnOptions) {
+      commandCalls.push({ command, args, spawnOptions });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr\n", stderr: "" };
+      }
+      if (command === "systemctl" && args[0] === "--version") {
+        return { status: 0, stdout: "systemd 255\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "compose" && args[1] === "version") {
+        return { status: 1, stdout: "", stderr: "unknown command\n" };
+      }
+      if (command === "docker-compose" && args[0] === "version") {
+        return { status: 1, stdout: "", stderr: "not found\n" };
+      }
+      if (command === "docker" && args[0] === "--version") {
+        return { status: 1, stdout: "", stderr: "not found\n" };
+      }
+      throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /I prerequisiti per l'installazione persistente non sono soddisfatti/);
+  assert.match(stderr.toString(), /Docker non trovato nel PATH/);
+  assert.match(stderr.toString(), /sudo apt update && sudo apt install -y docker\.io docker-compose-v2/);
+  assert.equal(commandCalls.some((entry) => entry.command === "sh"), false);
+});
+
+test("install:persistent-it accepts legacy docker-compose during preflight", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-legacy-compose-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-legacy-compose-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    platform: "linux",
+    stdout,
+    stderr,
+    commandRunner(command, args, spawnOptions) {
+      commandCalls.push({ command, args, spawnOptions });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr\n", stderr: "" };
+      }
+      if (command === "systemctl" && args[0] === "--version") {
+        return { status: 0, stdout: "systemd 255\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "compose" && args[1] === "version") {
+        return { status: 1, stdout: "", stderr: "unknown command\n" };
+      }
+      if (command === "docker-compose" && args[0] === "version") {
+        return { status: 0, stdout: "Docker Compose version v2.29.0\n", stderr: "" };
+      }
+      if (command === "docker" && args[0] === "info") {
+        return { status: 0, stdout: "Server:\n Containers: 0\n", stderr: "" };
+      }
+      if (command === "sh") {
+        return { status: 0, stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/bin/llmproxy\n", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.match(stdout.toString(), /Installazione persistente completata/);
+  assert.equal(commandCalls.some((entry) => entry.command === "docker-compose" && entry.args[0] === "version"), true);
+});
+
+test("install remains an alias for install:persistent-en", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-alias-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-alias-pkg-"));
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
   const exitCode = await runCli(["node", "llmproxy", "install"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "darwin",
     stdout,
     stderr,
     commandRunner(command, args, spawnOptions) {
       commandCalls.push({ command, args, spawnOptions });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: "/usr/local\n", stderr: "" };
+      }
       return {
         status: 0,
         stdout: "__LLMPROXY_GLOBAL_BIN__=/usr/local/bin/llmproxy\n",
@@ -1753,8 +2034,8 @@ test("install remains an alias for install:persistent-en", async () => {
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.toString(), "");
-  assert.equal(commandCalls.length, 1);
-  assert.equal(commandCalls[0].command, "sh");
+  const installCall = commandCalls.find((entry) => entry.command === "sh");
+  assert.ok(installCall);
   assert.match(stdout.toString(), /Persistent installation completed/);
   assert.match(stdout.toString(), /Global binary: \/usr\/local\/bin\/llmproxy/);
   assert.match(stdout.toString(), /Persistent service enabled with launchd/);

@@ -197,7 +197,6 @@ llmproxy claude:setup --model 2
 The command creates or updates `.claude/settings.json` in the current folder by merging the `env` section with values compatible with `llmProxy`.
 The `--model` option accepts the numeric index from `llmproxy models:list`.
 When you are authenticated, `llmproxy models:list` reads the live catalog from GitHub Copilot and stores it in the local cache, so the index reflects the models actually available for your account.
-When `LLMPROXY_SHARED_PROVIDER_REGISTRY=1` is enabled, `llmproxy claude:setup` also writes `env.ANTHROPIC_AUTH_TOKEN` for the current user and aligns `~/.claude/settings.json` so Claude Code uses the same local auth token even outside the current project.
 
 If you prefer manual configuration, set both the top-level `model` field and the `env` section consistently:
 
@@ -212,40 +211,6 @@ If you prefer manual configuration, set both the top-level `model` field and the
   }
 }
 ```
-
-If you are using the shared provider registry mode, include the local auth token as well:
-
-```json
-{
-  "model": "llmProxy",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
-    "ANTHROPIC_AUTH_TOKEN": "llmproxy-local-user:aqdas",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
-  }
-}
-```
-
-### Rule for `ANTHROPIC_AUTH_TOKEN`
-
-`ANTHROPIC_AUTH_TOKEN` is required only when the proxy runs in shared provider registry mode and Claude must identify which user-scoped provider set to use. This cross-user selection is intentional: it is how a project can explicitly reuse another user's provider registry.
-
-Valid formats:
-
-- unsigned local token: `llmproxy-local-user:<user>`
-- signed local token: `llmproxy-local-user:<user>:<hmac>`
-
-Rules:
-
-- `<user>` must be the same logical user that owns the provider configuration in the shared registry
-- `<hmac>` is optional and is `HMAC-SHA256(user, LLMPROXY_SECRET)` encoded as lowercase hex
-- if `LLMPROXY_SECRET` is not configured, the unsigned form is accepted
-- if `LLMPROXY_SECRET` is configured, the signed form is accepted and should be preferred
-- if `ANTHROPIC_AUTH_TOKEN` is missing, llmProxy falls back to `LLMPROXY_SCOPE_USER` and then to the current OS user
-- the legacy value `proxy-local` is obsolete and should not be used
-
-In normal standalone mode, do not set `ANTHROPIC_AUTH_TOKEN`; the local proxy uses the local token store directly.
 
 ### Optional concise answers with `shortAnswer`
 
@@ -985,8 +950,6 @@ Restarts the persistent service and also validates the Docker runtime when the i
 
 Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
 
-In shared provider registry mode it also writes `ANTHROPIC_AUTH_TOKEN` and synchronizes `~/.claude/settings.json` so stale global Claude settings do not override the project token.
-
 Supports `--model <index>` to show the selected default model in CLI output while keeping `.claude/settings.json` minimal (`model: llmProxy` plus proxy base URL).
 
 ### `llmproxy config:list|get|set|unset`
@@ -994,7 +957,7 @@ Supports `--model <index>` to show the selected default model in CLI output whil
 These commands expose the full supported configuration surface both from CLI and REST.
 
 - `--project` writes only variables that belong in `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_SMART_ROUTE`, and `LLMPROXY_SHORT_ANSWER`.
-- `--service` writes only variables that govern the runtime service, such as `PORT`, `LLMPROXY_MODE`, `LLMPROXY_SHARED_PROVIDER_REGISTRY`, and `LLMPROXY_SECRET`.
+- `--service` writes only variables that govern the runtime service, such as `PORT`, `LLMPROXY_MODE`, and `LLMPROXY_SECRET`.
 - Scope mismatches are rejected both by CLI and REST. For example, `PORT` cannot be written with `--project`.
 
 ### Smart Router
@@ -1192,65 +1155,6 @@ You can also use the aliases `llmproxy --version` and `llmproxy -v`.
 Removes `llmproxy` from supported global installations and cleans up residual wrappers.
 Use it when you want to completely uninstall the CLI from the system.
 
-### `llmproxy status`
-
-Shows:
-
-- detected service manager
-- service status
-- whether a Copilot token is present
-- active provider
-- configured fallback order
-
-### `llmproxy provider:add <id> [--name <name>] [--api-key <key>]`
-
-Adds a provider. For Copilot OAuth providers, starts the device flow. For API-key providers (openrouter, groq, anthropic, openai, deepseek, mistral, xai, perplexity, together, fireworks, kimi, zai), stores the supplied `--api-key` directly.
-
-### `llmproxy provider:key <id> --api-key <key>`
-
-Sets or replaces the API-key credential for an existing API-key provider.
-
-### `llmproxy provider:list`
-
-Shows the current fallback order of configured providers.
-
-### `llmproxy provider:status`
-
-Shows the active provider and the ordered list of providers with the current fallback state.
-
-### `llmproxy provider:order <id> <position>`
-
-### `llmproxy provider:remove <id>`
-
-Removes the specified provider from the local registry.
-
-### `llmproxy logs`
-
-Shows the static tail of service stdout/stderr logs.
-
-### `llmproxy logs --follow`
-
-Follows logs in real time using the native service files.
-
-### `llmproxy service:start`
-
-Installs and starts the native persistent service.
-
-On macOS the service restarts after reboot when the user session is loaded.
-It is not a global system daemon: it runs in the user context.
-
-### `llmproxy service:stop`
-
-Stops the native persistent service.
-
-### `llmproxy service:restart`
-
-Restarts the native persistent service.
-
-### `llmproxy claude:setup`
-
-Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
-
 ## Runtime Paths
 
 You can override the data root with `LLMPROXY_HOME`.
@@ -1272,7 +1176,7 @@ Inside the data root, the following files are created:
 - `copilot-token.json`
 - `copilot-models.json`
 - `copilot-endpoints.json`
-- `provider-registry.json` (when `LLMPROXY_SHARED_PROVIDER_REGISTRY=1`)
+- `provider-registry.json`
 - `smart-router.json`
 - `logs/service.out.log`
 - `logs/service.err.log`
@@ -1280,7 +1184,7 @@ Inside the data root, the following files are created:
 
 `copilot-token.json` stores both the default provider and any additional Copilot providers together with their fallback order.
 `copilot-models.json` stores the latest model catalog fetched from the GitHub Copilot live endpoint.
-`provider-registry.json` stores the shared provider list and encrypted credentials for user-, project-, client-, tenant-, or agency-scoped provider routing.
+`provider-registry.json` stores the configured providers with their credentials and fallback order.
 
 ## Environment Variables
 
@@ -1292,9 +1196,7 @@ See also [.env.example](.env.example).
 | `HOST` | `127.0.0.1` | server bind host |
 | `LLMPROXY_HOME` | auto | runtime data directory |
 | `LLMPROXY_MODE` | `standalone` | runtime mode; `platform` is opt-in compatibility mode |
-| `LLMPROXY_SHARED_PROVIDER_REGISTRY` | disabled | enable the shared provider registry instead of per-user `copilot-token.json` only |
-| `LLMPROXY_SECRET` | unset | optional HMAC secret for signed `llmproxy-local-user:<user>:<hmac>` Claude auth tokens |
-| `LLMPROXY_SCOPE_USER` | current OS user | user name used when generating the local Claude auth token in shared mode |
+| `LLMPROXY_SECRET` | unset | optional HMAC secret for internal token signing |
 | `LLMPROXY_RUNTIME_PROFILE` | auto | `development`, `staging`, or `production`; production binds the shared service to `127.0.0.1:7045` |
 | `LLMPROXY_SERVICE_RUNTIME` | auto | native or Docker-backed persistent runtime selection |
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` | JSONL log retention |
@@ -1323,8 +1225,7 @@ Practical note:
 
 - in many environments the user service starts when the user logs in
 - if you need persistence even without a graphical or shell login, you may need to configure `linger`
-- in production/shared setups, use one global `llmproxy` service only, backed by the Docker runtime and bound to `127.0.0.1:7045`
-- in that setup, user-specific provider order and credentials belong in the shared `provider-registry.json`, not in separate per-user proxy processes
+- in production/shared setups, use one global `llmproxy` service backed by the Docker runtime, bound to `127.0.0.1:7045`
 
 With the one-shot bootstrap:
 

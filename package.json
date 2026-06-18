@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.62",
+  "version": "0.2.63",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -48,6 +48,12 @@
       "add provider:test command to verify vision capability of all configured providers",
       "add reasoning_content support for Kimi and other thinking models",
       "add qwen3.7-plus, deepseek-v4-pro, kimi-k2.6 to model-capabilities registry"
+    ],
+    "0.2.63": [
+      "release 0.2.63",
+      "support multiple instances of the same provider with different models via provider:add",
+      "fix update-service.sh: use docker-compose.production.yml and set LLMPROXY_HOME when missing",
+      "fix update-service.sh: graceful skip when Docker Compose is not installed"
     ]
   },
   "dependencies": {

@@ -2979,3 +2979,40 @@ test("smart:refresh forza invalidamento cache availability", async () => {
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /cache.*invalidata|refresh.*completato/i);
 });
+
+test("provider:add allows multiple entries of the same provider with different models", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-multi-model-"));
+  const stdout = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return { id: "ok" }; } });
+
+  // First: add deepseek-v4-flash
+  const exitCode1 = await runCli(["node", "llmproxy", "provider:add", "deepseek", "--api-key", "sk-ds-test", "--model", "deepseek-v4-flash", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  // Second: add deepseek-v4-pro — must NOT overwrite the first
+  const stdout2 = createWritableBuffer();
+  const exitCode2 = await runCli(["node", "llmproxy", "provider:add", "deepseek", "--api-key", "sk-ds-test", "--model", "deepseek-v4-pro", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    stdout: stdout2,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const allProviders = tokenStore.listProviders();
+
+  assert.equal(exitCode1, 0);
+  assert.equal(exitCode2, 0);
+  assert.equal(allProviders.length, 2);
+  assert.equal(allProviders[0].provider, "deepseek");
+  assert.equal(allProviders[1].provider, "deepseek");
+
+  const models = allProviders.map((p) => p.default_model).sort();
+  assert.deepEqual(models, ["deepseek-v4-flash", "deepseek-v4-pro"]);
+
+  // The second entry should have a model-derived ID
+  assert.match(stdout.toString(), /deepseek-v4-flash/);
+  assert.match(stdout2.toString(), /deepseek-v4-pro/);
+});

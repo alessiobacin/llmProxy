@@ -26,17 +26,29 @@ pnpm build:ts
 echo "✅ Build completato"
 echo ""
 
-# 4. Docker compose down
-echo " Stop container Docker..."
-docker-compose down || docker compose down
-echo "✅ Container fermati"
-echo ""
+# 4. Docker compose (optional — skipped if not installed)
+COMPOSE_FILE="docker-compose.production.yml"
+COMPOSE_CMD=""
+if command -v docker-compose &> /dev/null; then
+  COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null 2>&1; then
+  COMPOSE_CMD="docker compose"
+fi
 
-# 5. Docker compose up
-echo "🚀 Avvio container Docker..."
-docker-compose up -d --build || docker compose up -d --build
-echo "✅ Container avviati"
-echo ""
+if [ -n "$COMPOSE_CMD" ] && [ -f "$COMPOSE_FILE" ]; then
+  echo " Stop container Docker..."
+  $COMPOSE_CMD -f "$COMPOSE_FILE" down
+  echo "✅ Container fermati"
+  echo ""
+
+  echo "🚀 Avvio container Docker..."
+  $COMPOSE_CMD -f "$COMPOSE_FILE" up -d --build
+  echo "✅ Container avviati"
+  echo ""
+else
+  echo "⚠️  Docker Compose non disponibile o $COMPOSE_FILE non trovato, salto i container"
+  echo ""
+fi
 
 # 6. Restart servizio
 echo "🔄 Riavvio servizio llmproxy..."

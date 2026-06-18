@@ -868,6 +868,7 @@ test("service:start verifies Docker runtime and proxy health on production insta
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const commandCalls = [];
+  const composeSpawnOptions = [];
 
   fs.mkdirSync(packageRoot, { recursive: true });
   fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
@@ -882,8 +883,11 @@ test("service:start verifies Docker runtime and proxy health on production insta
     stdout,
     stderr,
     fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
-    commandRunner(command, args) {
+    commandRunner(command, args, spawnOptions) {
       commandCalls.push([command, ...args]);
+      if ((command === "docker" && args[0] === "compose") || command === "docker-compose") {
+        composeSpawnOptions.push(spawnOptions);
+      }
       const joined = args.join(" ");
       if (joined.includes("ps --status running --services llmproxy")) {
         const wasStarted = commandCalls.some((call) => call.join(" ").includes("up -d --build llmproxy"));
@@ -913,6 +917,7 @@ test("service:start verifies Docker runtime and proxy health on production insta
   assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
   assert.match(stdout.toString(), /Health check OK/);
   assert.equal(stderr.toString(), "");
+  assert.equal(composeSpawnOptions.some((entry) => entry?.env?.LLMPROXY_HOME === runtimeRoot), true);
 });
 
 test("service:start falls back to legacy docker-compose when the plugin is unavailable", async () => {
@@ -922,6 +927,7 @@ test("service:start falls back to legacy docker-compose when the plugin is unava
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const commandCalls = [];
+  const composeSpawnOptions = [];
 
   fs.mkdirSync(packageRoot, { recursive: true });
   fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
@@ -936,8 +942,11 @@ test("service:start falls back to legacy docker-compose when the plugin is unava
     stdout,
     stderr,
     fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
-    commandRunner(command, args) {
+    commandRunner(command, args, spawnOptions) {
       commandCalls.push([command, ...args]);
+      if ((command === "docker" && args[0] === "compose") || command === "docker-compose") {
+        composeSpawnOptions.push(spawnOptions);
+      }
       if (command === "docker" && args[0] === "compose" && args[1] === "version") {
         return { status: 1, stdout: "", stderr: "unknown command\n" };
       }
@@ -972,6 +981,7 @@ test("service:start falls back to legacy docker-compose when the plugin is unava
   assert.equal(stderr.toString(), "");
   assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
   assert.equal(commandCalls.some((call) => call[0] === "docker-compose" && call[1] === "version"), true);
+  assert.equal(composeSpawnOptions.some((entry) => entry?.env?.LLMPROXY_HOME === runtimeRoot), true);
 });
 
 test("service:restart on launchd reinstalls the agent directly", async () => {
@@ -2111,7 +2121,7 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /llmproxy stats\s+mostra statistiche aggregate di utilizzo per provider e modello/i);
   assert.match(stdout.toString(), /llmproxy provider:available\s+elenca i provider supportati dalla CLI/i);
   assert.match(stdout.toString(), /llmproxy update\s+scarica e installa l'ultima versione/i);
-  assert.match(stdout.toString(), /llmproxy uninstall\s+rimuove l'installazione globale/i);
+  assert.match(stdout.toString(), /llmproxy uninstall\s+disinstallazione completa/i);
   assert.match(stdout.toString(), /llmproxy version\s+mostra la versione corrente/i);
   assert.match(stdout.toString(), /Problemi comuni:/);
 });
@@ -2668,14 +2678,33 @@ test("update prints fallback changelog line when release notes are missing", asy
   assert.match(stdout.toString(), /Note di rilascio non disponibili/);
 });
 
-test("uninstall removes both npm and pnpm global installs", async () => {
+test("uninstall stops service, removes service file, data dir, and npm/pnpm global installs", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-pkg-")), "node_modules", "llmproxy");
+  fs.mkdirSync(packageRoot, { recursive: true });
+  const serviceFile = path.join(runtimeRoot, "com.llmproxy.service.plist");
+  fs.writeFileSync(serviceFile, "<plist></plist>");
+  const dataSubDir = path.join(runtimeRoot, "logs");
+  fs.mkdirSync(dataSubDir, { recursive: true });
+  fs.writeFileSync(path.join(runtimeRoot, "copilot-token.json"), "{}");
+  fs.writeFileSync(path.join(dataSubDir, "service.out.log"), "log");
   const stdout = createWritableBuffer();
   const executed = [];
+  let serviceStopped = false;
 
   const exitCode = await runCli(["node", "llmproxy", "uninstall"], {
     dataRoot: runtimeRoot,
+    packageRoot,
     stdout,
+    platform: "darwin",
+    serviceManager: {
+      kind: "launchd",
+      serviceFile,
+      stop() {
+        serviceStopped = true;
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
     commandRunner(command, args) {
       executed.push([command, args]);
       return { status: 0, stdout: "", stderr: "" };
@@ -2683,13 +2712,86 @@ test("uninstall removes both npm and pnpm global installs", async () => {
   });
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(executed, [[
-    "bash",
-    [
-      "-c",
-      "set -e\nnpm uninstall -g llmproxy >/dev/null 2>&1 || true\npnpm remove -g llmproxy >/dev/null 2>&1 || true\npnpm_root=$(pnpm root -g 2>/dev/null || true)\nif [ -n \"$pnpm_root\" ]; then\n  pnpm_home=$(dirname \"$(dirname \"$pnpm_root\")\")\n  rm -f \"$pnpm_home/bin/llmproxy\" >/dev/null 2>&1 || true\nfi",
-    ],
-  ]]);
+  assert.equal(serviceStopped, true);
+  assert.equal(fs.existsSync(serviceFile), false, "service plist should be removed");
+  assert.equal(fs.existsSync(runtimeRoot), false, "data root should be removed");
+  const bashCall = executed.find(([cmd]) => cmd === "bash");
+  assert.ok(bashCall, "bash uninstall script should run");
+  assert.match(bashCall[1][1], /npm uninstall -g llmproxy/);
+  assert.match(bashCall[1][1], /pnpm remove -g llmproxy/);
+  assert.match(stdout.toString(), /Disinstallazione completata/);
+});
+
+test("uninstall removes docker containers when docker managed runtime", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-docker-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-docker-pkg-")), "node_modules", "llmproxy");
+  fs.mkdirSync(packageRoot, { recursive: true });
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  fs.writeFileSync(composeFile, "version: '3'");
+  const serviceFile = path.join(runtimeRoot, "com.llmproxy.service.plist");
+  fs.writeFileSync(serviceFile, "<plist></plist>");
+  const stdout = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "uninstall"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    stdout,
+    platform: "darwin",
+    env: { LLMPROXY_ENV: "production" },
+    serviceManager: {
+      kind: "launchd",
+      serviceFile,
+      stop() {
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  const dockerComposeCall = executed.find(([_cmd, args]) =>
+    args && args.includes("down"),
+  );
+  assert.ok(dockerComposeCall, "docker compose down should be called");
+  assert.equal(fs.existsSync(runtimeRoot), false, "data root should be removed");
+  assert.match(stdout.toString(), /Disinstallazione completata/);
+});
+
+test("uninstall on linux stops systemd service and removes unit file", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-linux-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-linux-pkg-")), "node_modules", "llmproxy");
+  fs.mkdirSync(packageRoot, { recursive: true });
+  const serviceFile = path.join(runtimeRoot, "llmproxy.service");
+  fs.writeFileSync(serviceFile, "[Unit]\nDescription=test");
+  const stdout = createWritableBuffer();
+  let serviceStopped = false;
+
+  const exitCode = await runCli(["node", "llmproxy", "uninstall"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    stdout,
+    platform: "linux",
+    serviceManager: {
+      kind: "systemd",
+      serviceFile,
+      stop() {
+        serviceStopped = true;
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+    commandRunner() {
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(serviceStopped, true);
+  assert.equal(fs.existsSync(serviceFile), false, "systemd unit file should be removed");
+  assert.equal(fs.existsSync(runtimeRoot), false, "data root should be removed");
   assert.match(stdout.toString(), /Disinstallazione completata/);
 });
 

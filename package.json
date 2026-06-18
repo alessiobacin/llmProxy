@@ -24,7 +24,8 @@
     "install:persistent-it": "node bin/llmproxy.js install:persistent-it",
     "install:persistent-en": "node bin/llmproxy.js install:persistent-en",
     "build:ts": "tsc -p tsconfig.json",
-    "test": "npm run build:ts && node --test tests/*.test.js"
+    "test": "npm run build:ts && node --test tests/*.test.js",
+    "update:service": "./scripts/update-service.sh"
   },
   "llmproxyReleaseNotes": {
     "0.2.60": [

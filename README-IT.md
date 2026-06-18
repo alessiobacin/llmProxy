@@ -21,10 +21,10 @@ Poi installa le dipendenze del checkout locale:
 pnpm install
 ```
 
-Se non hai `pnpm`, puoi usare anche:
+Se non hai `pnpm`, installalo prima:
 
 ```bash
-npm install
+npm install -g pnpm
 ```
 
 ### Bootstrap persistente consigliato
@@ -38,7 +38,7 @@ Se vuoi installare la CLI in modo persistente con un solo comando, puoi sceglier
 Usa questi comandi se vuoi che il percorso di installazione continui a mostrare messaggi e spiegazioni in italiano:
 
 ```bash
-npm run install:persistent-it
+pppnpm run install:persistent-it
 ```
 
 Se la CLI e` gia` disponibile nel `PATH` perche` l'hai gia` installata globalmente in precedenza, puoi usare anche:
@@ -72,12 +72,12 @@ llmproxy help install
 
 In breve:
 
-- italiano: `npm run install:persistent-it` oppure `llmproxy install:persistent-it`
-- inglese: `npm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install` oppure `llmproxy install`
+- italiano: `pppnpm run install:persistent-it` oppure `llmproxy install:persistent-it`
+- inglese: `pppnpm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install` oppure `llmproxy install`
 
 Compatibilita`:
 
-- `npm run install:persistent` continua a puntare al percorso italiano
+- `ppnpm run install:persistent` continua a puntare al percorso italiano
 - `llmproxy install:persistent` continua a funzionare come alias legacy del percorso italiano
 
 Il bootstrap:
@@ -85,7 +85,7 @@ Il bootstrap:
 - rileva automaticamente l'OS supportato (`macOS` o `Linux`)
 - verifica i prerequisiti necessari prima di iniziare l'installazione globale
 - stampa i comandi consigliati per il tuo OS se mancano `npm`, `systemd`, Docker o Docker Compose
-- installa globalmente la CLI corrente con `npm install -g`
+- installa globalmente la CLI corrente con `pnpm install -g`
 - rimuove eventuali wrapper globali duplicati
 - lancia `llmproxy service:start` tramite il binario globale appena installato
 
@@ -151,13 +151,13 @@ llmproxy service:start
 Oppure, se vuoi fare installazione globale + attivazione del servizio in un solo passo:
 
 ```bash
-npm run install:persistent-it
+pppnpm run install:persistent-it
 ```
 
 Per lo stesso flusso in inglese:
 
 ```bash
-npm run install:persistent-en
+pppnpm run install:persistent-en
 ```
 
 Su macOS questo crea e carica un `LaunchAgent` utente.
@@ -943,7 +943,7 @@ Percorso esplicito in italiano per l'installazione persistente.
 Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
 
 ```bash
-npm run install:persistent-it
+ppnpm run install:persistent-it
 ```
 
 Se la CLI e` gia` installata globalmente, puoi usare:
@@ -963,7 +963,7 @@ Percorso esplicito in inglese per l'installazione persistente.
 Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
 
 ```bash
-npm run install:persistent-en
+ppnpm run install:persistent-en
 ```
 
 Oppure:
@@ -1145,7 +1145,7 @@ Questo significa:
 - non richiede PM2
 - non parte prima del login dell'utente
 
-Se usi `npm run install:persistent`, il comando installa prima la CLI globalmente e poi registra lo stesso `LaunchAgent`, quindi il riavvio continua a funzionare anche dopo reboot.
+Se usi `ppnpm run install:persistent`, il comando installa prima la CLI globalmente e poi registra lo stesso `LaunchAgent`, quindi il riavvio continua a funzionare anche dopo reboot.
 
 ### Linux
 
@@ -1161,7 +1161,7 @@ Nota pratica:
 Con il bootstrap one-shot:
 
 ```bash
-npm run install:persistent
+pnpm run install:persistent
 ```
 
 la CLI viene prima installata globalmente e poi il servizio `systemd --user` viene abilitato. Per garantire riavvio anche senza login utente, abilita anche:

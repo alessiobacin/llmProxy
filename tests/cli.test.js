@@ -1188,6 +1188,9 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const requests = [];
+  const { createTokenStore } = require("../lib/token-store");
+  const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("auto", { access_token: "token-auto", token_type: "bearer", scope: "read:user", provider: "copilot", default_model: "claude-sonnet-4.5" }, { name: "auto" });
 
   const fetchFn = async (url, options = {}) => {
     requests.push({ url, options });
@@ -1234,6 +1237,9 @@ test("test uses a deterministic per-user port when no explicit PORT is configure
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-package-no-env-"));
   const stdout = createWritableBuffer();
   const requests = [];
+  const { createTokenStore } = require("../lib/token-store");
+  const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("auto", { access_token: "token-auto", token_type: "bearer", scope: "read:user", provider: "copilot", default_model: "claude-sonnet-4.5" }, { name: "auto" });
 
   const fetchFn = async (url) => {
     requests.push(url);
@@ -1267,6 +1273,9 @@ test("test uses the production service port 7045 when the installed CLI profile 
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-production-port-"));
   const stdout = createWritableBuffer();
   const requests = [];
+  const { createTokenStore } = require("../lib/token-store");
+  const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("auto", { access_token: "token-auto", token_type: "bearer", scope: "read:user", provider: "copilot", default_model: "claude-sonnet-4.5" }, { name: "auto" });
 
   const fetchFn = async (url) => {
     requests.push(url);
@@ -1359,6 +1368,9 @@ test("test probes only the active provider by default", async () => {
 test("test hides llmproxy metadata lines from the printed assistant reply", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-hide-metadata-"));
   const stdout = createWritableBuffer();
+  const { createTokenStore } = require("../lib/token-store");
+  const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("qwen", { access_token: "token-qwen", token_type: "api_key", scope: "api_key", provider: "qwen", default_model: "qwen3.7-max" }, { name: "qwen" });
 
   const exitCode = await runCli(["node", "llmproxy", "test"], {
     dataRoot: runtimeRoot,
@@ -1380,7 +1392,7 @@ test("test hides llmproxy metadata lines from the printed assistant reply", asyn
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /auto: ok \([^)]+\) llmproxy-test-qwen/);
+  assert.match(stdout.toString(), /qwen: ok \([^)]+\) llmproxy-test-qwen/);
   assert.doesNotMatch(stdout.toString(), /\[llmproxy\] provider:/);
   assert.doesNotMatch(stdout.toString(), /\[llmproxy\] tokens:/);
 });

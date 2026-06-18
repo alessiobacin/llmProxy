@@ -21,10 +21,10 @@ Then install the local checkout dependencies:
 pnpm install
 ```
 
-If you do not have `pnpm`, you can also use:
+If you do not have `pnpm`, install it first:
 
 ```bash
-npm install
+npm install -g pnpm
 ```
 
 ### Recommended persistent bootstrap
@@ -38,7 +38,7 @@ If you want to install the CLI persistently with a single command, you can expli
 Use these commands if you want the installation flow to keep showing messages and explanations in Italian:
 
 ```bash
-npm run install:persistent-it
+pppnpm run install:persistent-it
 ```
 
 If the CLI is already available in your `PATH` because you installed it globally before, you can also use:
@@ -72,12 +72,12 @@ llmproxy help install
 
 In short:
 
-- Italian: `npm run install:persistent-it` or `llmproxy install:persistent-it`
-- English: `npm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install`, or `llmproxy install`
+- Italian: `pppnpm run install:persistent-it` or `llmproxy install:persistent-it`
+- English: `pppnpm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install`, or `llmproxy install`
 
 Compatibility:
 
-- `npm run install:persistent` still points to the Italian path
+- `ppnpm run install:persistent` still points to the Italian path
 - `llmproxy install:persistent` still works as a legacy alias for the Italian path
 
 The bootstrap flow:
@@ -85,7 +85,7 @@ The bootstrap flow:
 - automatically detects the supported OS (`macOS` or `Linux`)
 - verifies the required prerequisites before the global install starts
 - prints OS-specific remediation commands when `npm`, `systemd`, Docker, or Docker Compose are missing
-- installs the current CLI globally with `npm install -g`
+- installs the current CLI globally with `pnpm install -g`
 - removes any duplicate global wrappers
 - launches `llmproxy service:start` through the newly installed global binary
 
@@ -151,13 +151,13 @@ llmproxy service:start
 Or, if you want global installation plus service activation in one step:
 
 ```bash
-npm run install:persistent-it
+pppnpm run install:persistent-it
 ```
 
 For the same flow in English:
 
 ```bash
-npm run install:persistent-en
+pppnpm run install:persistent-en
 ```
 
 On macOS this creates and loads a user `LaunchAgent`.
@@ -1110,7 +1110,7 @@ Explicit Italian path for persistent installation.
 If you are working from the local checkout and do not yet have `llmproxy` in your `PATH`, run:
 
 ```bash
-npm run install:persistent-it
+ppnpm run install:persistent-it
 ```
 
 If the CLI is already installed globally, you can use:
@@ -1130,7 +1130,7 @@ Explicit English path for persistent installation.
 If you are working from the local checkout and do not yet have `llmproxy` in your `PATH`, run:
 
 ```bash
-npm run install:persistent-en
+ppnpm run install:persistent-en
 ```
 
 Or:
@@ -1313,7 +1313,7 @@ This means:
 - it does not require PM2
 - it does not start before the user logs in
 
-If you use `npm run install:persistent`, the command first installs the CLI globally and then registers the same `LaunchAgent`, so restart after reboot keeps working.
+If you use `ppnpm run install:persistent`, the command first installs the CLI globally and then registers the same `LaunchAgent`, so restart after reboot keeps working.
 
 ### Linux
 
@@ -1329,7 +1329,7 @@ Practical note:
 With the one-shot bootstrap:
 
 ```bash
-npm run install:persistent
+pnpm run install:persistent
 ```
 
 the CLI is first installed globally and then the `systemd --user` service is enabled. To guarantee restart even without user login, also enable:

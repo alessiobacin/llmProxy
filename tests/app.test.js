@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
+process.env.LLMPROXY_METERING_INLINE = "true";
+
 const { createApp } = require("../lib/app");
 const { API_KEY_PROVIDER_CONFIGS } = require("../lib/copilot-proxy");
 const { createTokenStore } = require("../lib/token-store");

@@ -36,6 +36,11 @@ elif docker compose version &> /dev/null 2>&1; then
 fi
 
 if [ -n "$COMPOSE_CMD" ] && [ -f "$COMPOSE_FILE" ]; then
+  # LLMPROXY_HOME is required by the compose file for volume mounts
+  if [ -z "$LLMPROXY_HOME" ]; then
+    export LLMPROXY_HOME="$HOME/.local/share/llmProxy"
+  fi
+
   echo " Stop container Docker..."
   $COMPOSE_CMD -f "$COMPOSE_FILE" down
   echo "✅ Container fermati"

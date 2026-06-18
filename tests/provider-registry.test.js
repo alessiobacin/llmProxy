@@ -128,20 +128,10 @@ test("remove deletes by composite id", () => {
   assert.equal(registry.remove(id), false);
 });
 
-test("shared provider registry writes group-writable files", () => {
+test("provider registry writes files with restrictive permissions", () => {
   const filePath = tempPath();
-  const previous = process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY;
-  process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY = "1";
-  try {
-    const registry = createProviderRegistry({ filePath, secret: "s" });
-    registry.upsert({ provider: "copilot", scope_type: "user", scope_id: "aqdas", credentials: { api_key: "c" } });
-    const mode = fs.statSync(filePath).mode & 0o777;
-    assert.equal(mode, 0o660);
-  } finally {
-    if (previous === undefined) {
-      delete process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY;
-    } else {
-      process.env.LLMPROXY_SHARED_PROVIDER_REGISTRY = previous;
-    }
-  }
+  const registry = createProviderRegistry({ filePath, secret: "s" });
+  registry.upsert({ provider: "copilot", scope_type: "project", scope_id: "p-1", credentials: { api_key: "c" } });
+  const mode = fs.statSync(filePath).mode & 0o777;
+  assert.equal(mode, 0o600);
 });

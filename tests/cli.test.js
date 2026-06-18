@@ -130,7 +130,7 @@ test("resolveCliServiceManagerOptions uses the Docker wrapper on Linux in produc
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
   assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
-  assert.equal(options.environment.LLMPROXY_SHARED_PROVIDER_REGISTRY, "1");
+  assert.equal("LLMPROXY_SHARED_PROVIDER_REGISTRY" in options.environment, false);
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -248,66 +248,6 @@ test("claude:setup uses the production service port 7045 when the installed CLI 
   assert.equal(settings.env.ANTHROPIC_BASE_URL, "http://127.0.0.1:7045");
   assert.equal("ANTHROPIC_DEFAULT_MODEL" in settings.env, false);
   assert.match(stdout.toString(), /http:\/\/127\.0\.0\.1:7045/);
-});
-
-test("claude:setup writes a local scope auth token when shared provider registry is enabled", async () => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-claude-"));
-  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-runtime-"));
-  const homeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-home-"));
-  const stdout = createWritableBuffer();
-
-  fs.mkdirSync(path.join(homeRoot, ".claude"), { recursive: true });
-  fs.writeFileSync(path.join(homeRoot, ".claude", "settings.json"), JSON.stringify({
-    enabledPlugins: {
-      "supabase@claude-plugins-official": true,
-    },
-    env: {
-      ANTHROPIC_AUTH_TOKEN: "proxy-local",
-      ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
-    },
-  }, null, 2));
-
-  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
-    cwd: tempRoot,
-    dataRoot: runtimeRoot,
-    env: {
-      HOME: homeRoot,
-      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
-      LLMPROXY_SCOPE_USER: "aqdas",
-    },
-    stdout,
-  });
-
-  const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
-  const homeSettings = JSON.parse(fs.readFileSync(path.join(homeRoot, ".claude", "settings.json"), "utf8"));
-  assert.equal(exitCode, 0);
-  assert.equal(settings.env.ANTHROPIC_AUTH_TOKEN, "llmproxy-local-user:aqdas");
-  assert.equal(homeSettings.env.ANTHROPIC_AUTH_TOKEN, "llmproxy-local-user:aqdas");
-  assert.equal("ANTHROPIC_DEFAULT_MODEL" in homeSettings.env, false);
-  assert.deepEqual(homeSettings.enabledPlugins, { "supabase@claude-plugins-official": true });
-  assert.match(stdout.toString(), /ANTHROPIC_BASE_URL/);
-  assert.match(stdout.toString(), /Configurazione Claude globale aggiornata/);
-});
-
-test("claude:setup writes a signed local scope auth token when LLMPROXY_SECRET is configured", async () => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-claude-signed-"));
-  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-runtime-signed-"));
-  const stdout = createWritableBuffer();
-
-  const exitCode = await runCli(["node", "llmproxy", "claude:setup"], {
-    cwd: tempRoot,
-    dataRoot: runtimeRoot,
-    env: {
-      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
-      LLMPROXY_SCOPE_USER: "aqdas",
-      LLMPROXY_SECRET: "super-secret",
-    },
-    stdout,
-  });
-
-  const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
-  assert.equal(exitCode, 0);
-  assert.match(settings.env.ANTHROPIC_AUTH_TOKEN, /^llmproxy-local-user:aqdas:[a-f0-9]{64}$/);
 });
 
 test("provider:add performs a dedicated Copilot login and provider:list shows fallback order", async () => {
@@ -445,29 +385,6 @@ test("provider:add supports api-key providers like openrouter", async () => {
   assert.equal(provider.auth_type, "api_key");
   assert.equal(provider.provider, "openrouter");
   assert.equal(provider.default_model, "openai/gpt-4o");
-  assert.match(stdout.toString(), /Provider configurato con API key/);
-});
-
-test("provider:add stores shared user-scoped providers in provider-registry when enabled", async () => {
-  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-shared-provider-"));
-  const stdout = createWritableBuffer();
-
-  const exitCode = await runCli(["node", "llmproxy", "provider:add", "openrouter", "--api-key", "sk-shared", "--model", "openai/gpt-4.1-mini", "--vision", "false"], {
-    dataRoot: runtimeRoot,
-    env: {
-      LLMPROXY_SHARED_PROVIDER_REGISTRY: "1",
-      LLMPROXY_SCOPE_USER: "aqdas",
-    },
-    stdout,
-    fetchFn: async () => ({ ok: true, status: 200, async json() { return { choices: [{ message: { content: "ok" } }] }; } }),
-  });
-
-  const registry = JSON.parse(fs.readFileSync(path.join(runtimeRoot, "provider-registry.json"), "utf8"));
-  assert.equal(exitCode, 0);
-  assert.equal(Array.isArray(registry.entries), true);
-  assert.equal(registry.entries[0].scope_type, "user");
-  assert.equal(registry.entries[0].scope_id, "aqdas");
-  assert.equal(registry.entries[0].provider, "openrouter");
   assert.match(stdout.toString(), /Provider configurato con API key/);
 });
 

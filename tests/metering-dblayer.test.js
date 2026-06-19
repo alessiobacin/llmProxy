@@ -301,3 +301,59 @@ test("computeStats: falls back to fallback computeStats when unavailable", async
   assert.equal(stats.success_count, 1);
   await sink.close();
 });
+
+// ─── notifier transitions ───────────────────────────────────────────────────
+
+function makeNotifier() {
+  const calls = [];
+  return {
+    calls,
+    async notifyUnreachable(service, url, error) {
+      calls.push({ type: "unreachable", service, url, error: error?.message });
+    },
+    async notifyRecovered(service, url) {
+      calls.push({ type: "recovered", service, url });
+    },
+    reconfigure() {},
+  };
+}
+
+test("notifier called on available→unavailable transition", async () => {
+  // First probe succeeds, then fails
+  let healthAttempts = 0;
+  async function flakyFetch() {
+    healthAttempts++;
+    if (healthAttempts <= 1) return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    throw new Error("ECONNREFUSED");
+  }
+  const notifier = makeNotifier();
+  const sink = createDbLayerSink({ url: "http://localhost:5046", fetchFn: flakyFetch, notifier, healthCheckIntervalMs: 30 });
+  await waitForProbe(); // First probe: success
+  await new Promise((r) => setTimeout(r, 60)); // Second probe: fails (interval 30ms)
+  assert.ok(notifier.calls.some((c) => c.type === "unreachable" && c.service === "db-layer"));
+  await sink.close();
+});
+
+test("notifier called on unavailable→available transition", async () => {
+  let healthAttempts = 0;
+  async function flakyFetch() {
+    healthAttempts++;
+    if (healthAttempts <= 1) throw new Error("ECONNREFUSED");
+    return { ok: true, status: 200, json: async () => ({ ok: true }) };
+  }
+  const notifier = makeNotifier();
+  const sink = createDbLayerSink({ url: "http://localhost:5046", fetchFn: flakyFetch, notifier, healthCheckIntervalMs: 30 });
+  await waitForProbe(); // First probe: fail
+  await new Promise((r) => setTimeout(r, 60)); // Second probe: success (interval 30ms)
+  assert.ok(notifier.calls.some((c) => c.type === "recovered" && c.service === "db-layer"));
+  await sink.close();
+});
+
+test("notifier handles probe error gracefully", async () => {
+  async function failFetch() { throw new Error("ECONNREFUSED"); }
+  const notifier = makeNotifier();
+  const sink = createDbLayerSink({ url: "http://localhost:5046", fetchFn: failFetch, notifier });
+  await waitForProbe();
+  // Should not throw; notifier was called with the error
+  await sink.close();
+});

@@ -36,9 +36,33 @@ elif docker compose version &> /dev/null 2>&1; then
 fi
 
 if [ -n "$COMPOSE_CMD" ] && [ -f "$COMPOSE_FILE" ]; then
-  # LLMPROXY_HOME is required by the compose file for volume mounts
+  # Compose bind mounts need platform-aware defaults.
   if [ -z "$LLMPROXY_HOME" ]; then
-    export LLMPROXY_HOME="$HOME/.local/share/llmProxy"
+    case "$(uname -s)" in
+      Darwin)
+        export LLMPROXY_HOME="$HOME/Library/Application Support/llmProxy"
+        ;;
+      Linux)
+        export LLMPROXY_HOME="$HOME/.local/share/llmProxy"
+        ;;
+      *)
+        export LLMPROXY_HOME="$HOME/.llmProxy"
+        ;;
+    esac
+  fi
+
+  if [ -z "$LLMPROXY_HOST_PROJECTS_ROOT" ]; then
+    case "$(uname -s)" in
+      Darwin)
+        export LLMPROXY_HOST_PROJECTS_ROOT="/Users"
+        ;;
+      Linux)
+        export LLMPROXY_HOST_PROJECTS_ROOT="/home"
+        ;;
+      *)
+        export LLMPROXY_HOST_PROJECTS_ROOT="$HOME"
+        ;;
+    esac
   fi
 
   echo " Stop container Docker..."

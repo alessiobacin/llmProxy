@@ -41,7 +41,8 @@ services:
       # Reuse host token store/logs so container has the same authenticated providers
       - "${LLMPROXY_HOME}:/root/.local/share/llmProxy"
       # Allow the proxy to read per-project Claude settings on the host.
-      - "/home:/home:ro"
+      # The host root differs by platform: /home on Linux, /Users on macOS.
+      - "${LLMPROXY_HOST_PROJECTS_ROOT}:${LLMPROXY_HOST_PROJECTS_ROOT}:ro"
     networks:
       - llmproxy-production
 

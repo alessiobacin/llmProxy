@@ -1188,20 +1188,86 @@ Inside the data root, the following files are created:
 
 ## Environment Variables
 
-See also [.env.example](.env.example).
+### Due modi di configurare
 
-| Variable | Default | Usage |
-| --- | --- | --- |
-| `PORT` | `5045` | local development proxy port (`6045` staging, `7045` production) |
-| `HOST` | `127.0.0.1` | server bind host |
-| `LLMPROXY_HOME` | auto | runtime data directory |
-| `LLMPROXY_MODE` | `standalone` | runtime mode; `platform` is opt-in compatibility mode |
-| `LLMPROXY_SECRET` | unset | optional HMAC secret for internal token signing |
-| `LLMPROXY_RUNTIME_PROFILE` | auto | `development`, `staging`, or `production`; production binds the shared service to `127.0.0.1:7045` |
-| `LLMPROXY_SERVICE_RUNTIME` | auto | native or Docker-backed persistent runtime selection |
-| `LLMPROXY_LOG_RETENTION_DAYS` | `7` | JSONL log retention |
-| `LLMPROXY_LOG_MAX_BYTES` | `5242880` | maximum size of a JSONL log file before rotation |
-| `LLMPROXY_LOG_MAX_FILES` | `5` | maximum number of archived JSONL log files per day |
+| Metodo | Cosa configuri | Effetto | File |
+|--------|---------------|--------|------|
+| **CLI** `llmproxy config:set` | variabili **project-scope** | **immediato** (senza restart) | `.claude/settings.json` → `env` |
+| **.env** | variabili **service-scope** | dopo **restart** del servizio | `.env` |
+
+Tutte le variabili, indipendentemente dallo scope, possono essere sovrascritte tramite il campo `env` di `.claude/settings.json` (impostabile anche con Claude Code `/statusline` o manualmente). Questo è il metodo raccomandato per configurare Claude Code.
+
+### Project-Scope (CLI — effetto immediato)
+
+Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, senza restart del proxy. Vengono lette da `.claude/settings.json` a ogni richiesta.
+
+```bash
+llmproxy config:list                        # elenca le variabili disponibili
+llmproxy config:get ANTHROPIC_BASE_URL      # legge una variabile
+llmproxy config:set LLMPROXY_SMART_ROUTE hybrid   # imposta una variabile
+llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
+```
+
+| Variable | Default | Available Values | Description |
+| --- | --- | --- | --- |
+| `ANTHROPIC_BASE_URL` | auto | URL (e.g. `http://127.0.0.1:7045`) | Anthropic-compatible endpoint base URL (the proxy itself) |
+| `ANTHROPIC_DEFAULT_MODEL` | unset | any model ID or fallback chain | default model for Anthropic requests; supports chains like `copilot:claude-sonnet-4-6,openai:gpt-5` |
+| `ANTHROPIC_AUTH_TOKEN` | unset | string | authentication token for the Anthropic endpoint |
+| `API_TIMEOUT_MS` | auto | milliseconds | API request timeout |
+| `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | unset | `0`, `1` | if `1`, disables Claude Code experimental betas |
+| `LLMPROXY_SHORT_ANSWER` | unset | `0`, `1` | if `1`, enables short answer mode |
+| `LLMPROXY_SMART_ROUTE` | unset | `hybrid`, `economy`, `standard`, `premium` | automatic routing strategy based on request complexity |
+| `LLMPROXY_SMART_PREFERENCE` | unset | `balanced`, `economy`, `quality` | cost/quality balance preference for smart routing |
+| `LLMPROXY_SMART_CACHE_TTL` | unset | seconds | smart router cache TTL |
+
+### Service-Scope (.env — richiede restart)
+
+Queste variabili sono lette solo all'avvio del server. Per applicare una modifica:
+
+```bash
+# 1. modifica .env o lancia
+llmproxy service:restart
+# 2. oppure kill + llmproxy run
+```
+
+Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.json` (per i progetti Claude Code).
+
+| Variable | Default | Available Values | Description |
+| --- | --- | --- | --- |
+| `HOST` | `127.0.0.1` | any valid IP/hostname | server bind address |
+| `PORT` | auto (from profile) | any valid port | proxy port; auto-derived: `5045` dev, `6045` staging, `7045` production |
+| `NODE_ENV` | auto (from profile) | `development`, `staging`, `production` | standard Node.js environment |
+| `LLMPROXY_ENV` | auto (from profile) | `development`, `staging`, `production` | llmProxy environment |
+| `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (or `dev`), `staging`, `production` (or `prod`) | runtime profile; determines defaults for NODE_ENV, LLMPROXY_ENV, ports, metering sink |
+| `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` for local dev; `platform` for V11 integration with `X-Hierarchy-Context` header |
+| `LLMPROXY_METERING_SINK` | `dblayer` | `dblayer`, `jsonl`, `inline`, `noop`, or `+`-separated combos | LLM call metering sink |
+| `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | if `1`, enables inline metering (`x-inference-metric` header) |
+| `DBLAYER_URL` | unset | full URL (e.g. `http://localhost:5046`) | db-layer service URL; if **unset**, db-layer is **not active** (no POST attempts). Set to `localhost:5046` (dev), `localhost:6046` (staging), or `localhost:7046` (production) |
+| `EVENTBUS_URL` | unset | full URL (e.g. `http://localhost:5048`) | event-bus service URL; if **unset**, event-bus is **no-op**. Set to `localhost:5048` (dev), `localhost:6048` (staging), or `localhost:7048` (production) |
+| `LLMPROXY_SECRET` | unset | arbitrary string | optional HMAC secret for internal token signing |
+| `LLMPROXY_SERVICE_RUNTIME` | auto | `native`, `docker` | persistent service runtime: `native` (LaunchAgent/systemd) or `docker` (Docker Compose) |
+| `LLMPROXY_DOCKER_COMPOSE_FILE` | auto | file path | Docker Compose file for docker runtime |
+| `LLMPROXY_DOCKER_SERVICE` | auto | service name | Docker service name in compose file |
+| `LLMPROXY_DOCKER_POLL_MS` | auto | milliseconds | poll interval for Docker container health check |
+| `LLMPROXY_GLOBAL_SERVICE` | unset | `0`, `1` | if `1`, enables global service on reserved ports 6045/7045 |
+| `LLMPROXY_HOME` | auto (OS-specific) | directory path | runtime data directory; default: `~/Library/Application Support/llmProxy` (macOS), `~/.local/share/llmProxy` (Linux) |
+| `LLMPROXY_LOG_RETENTION_DAYS` | `7` (dev/staging), `30` (production) | integer | JSONL log retention in days |
+| `LLMPROXY_LOG_MAX_BYTES` | `5242880` | integer | max JSONL file size before rotation |
+| `LLMPROXY_LOG_MAX_FILES` | `5` | integer | max archived JSONL files per day |
+| `LLM_STATS_API_KEY` | unset | string | API key for stats service |
+| `SENDGRID_API_KEY` | unset | string | SendGrid API key for email notifications |
+| `SENDGRID_FROM_EMAIL` | unset | email | sender address for email notifications |
+| `SENDGRID_TO_EMAIL` | unset | email | recipient address for email notifications |
+
+### Port Mapping by Environment
+
+Service ports follow the V11 convention: `<prefix><module_number>`, where prefix is `5` (dev), `6` (staging), `7` (production).
+
+| Service | Module | Dev | Staging | Production |
+|----------|--------|-----|---------|------------|
+| `llm-proxy` | 45 | `5045` | `6045` | `7045` |
+| `db-layer` | 46 | `5046` | `6046` | `7046` |
+| `event-bus` | 48 | `5048` | `6048` | `7048` |
 
 ## Persistence After Reboot
 

@@ -151,3 +151,77 @@ describe("createEventBusSink — publish", () => {
     assert.match(result.error, /HIERARCHY_CONTEXT_MISSING_TENANT/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// createEventBusSink — health probe + notifier
+// ---------------------------------------------------------------------------
+
+describe("createEventBusSink — health probe", () => {
+  it("has isAvailable() method", () => {
+    const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: async () => ({ ok: true }) });
+    assert.equal(typeof sink.isAvailable, "function");
+    sink.close();
+  });
+
+  it("noop sink has no health probe (no isAvailable)", () => {
+    const sink = createEventBusSink();
+    assert.equal(typeof sink.isAvailable, "undefined");
+  });
+
+  it("has close() method that cleans up timer", async () => {
+    const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: async () => ({ ok: true }) });
+    assert.equal(typeof sink.close, "function");
+    await sink.close();
+  });
+});
+
+describe("createEventBusSink — notifier transitions", () => {
+  it("calls notifier on available→unavailable transition", async () => {
+    let healthAttempts = 0;
+    async function flakyFetch(url) {
+      if (url.endsWith("/health")) {
+        healthAttempts++;
+        if (healthAttempts <= 1) return { ok: true, status: 200 };
+        throw new Error("ECONNREFUSED");
+      }
+      return { ok: true, status: 200 };
+    }
+    const calls = [];
+    const notifier = {
+      async notifyUnreachable(service, url, error) { calls.push({ type: "unreachable", service }); },
+      async notifyRecovered(service, url) { calls.push({ type: "recovered", service }); },
+      reconfigure() {},
+    };
+    const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: flakyFetch, notifier, healthCheckIntervalMs: 30 });
+    await new Promise((r) => setTimeout(r, 80)); // wait for first probe + interval (30ms)
+    assert.ok(calls.some((c) => c.type === "unreachable" && c.service === "event-bus"));
+    await sink.close();
+  });
+
+  it("calls notifier on unavailable→available transition", async () => {
+    let healthAttempts = 0;
+    async function flakyFetch(url) {
+      if (url.endsWith("/health")) {
+        healthAttempts++;
+        if (healthAttempts <= 1) throw new Error("ECONNREFUSED");
+        return { ok: true, status: 200 };
+      }
+      return { ok: true, status: 200 };
+    }
+    const calls = [];
+    const notifier = {
+      async notifyUnreachable(service, url, error) { calls.push({ type: "unreachable", service }); },
+      async notifyRecovered(service, url) { calls.push({ type: "recovered", service }); },
+      reconfigure() {},
+    };
+    const sink = createEventBusSink({ url: "http://localhost:5048", fetchFn: flakyFetch, notifier, healthCheckIntervalMs: 30 });
+    await new Promise((r) => setTimeout(r, 80)); // wait for first probe + interval (30ms)
+    assert.ok(calls.some((c) => c.type === "recovered" && c.service === "event-bus"));
+    await sink.close();
+  });
+
+  it("noop sink close() does not throw", async () => {
+    const sink = createEventBusSink();
+    await sink.close();
+  });
+});

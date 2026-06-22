@@ -6,6 +6,7 @@ const {
   translateResponse,
   mapModel,
   DEFAULT_COPILOT_MODEL,
+  parseMinimaxToolCallContent,
 } = require("../lib/openai-translate");
 
 test("translateRequest keeps assistant tool-call messages compatible with Copilot responses input", () => {
@@ -198,4 +199,59 @@ test("translateResponse extracts text from structured message content arrays", (
   assert.equal(response.content.length, 1);
   assert.equal(response.content[0].type, "text");
   assert.equal(response.content[0].text, "llmproxy-test-opencode\nignored metadata text\nsecond-line");
+});
+
+test("parseMinimaxToolCallContent converts minimax tool markup into tool_use blocks", () => {
+  const parsed = parseMinimaxToolCallContent([
+    "<tool_call>",
+    "]<|minimax|>[<invoke name=\"TodoWrite\">",
+    "]<|minimax|>[<todos><item><content>Sostituire inference</content><status>in_progress</status><activeForm>Sostituendo inference</activeForm></item></todos>",
+    "]<|minimax|>[</invoke>",
+    "]<|minimax|>[</tool_call>",
+  ].join(""));
+
+  assert.ok(parsed);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].type, "tool_use");
+  assert.equal(parsed[0].name, "TodoWrite");
+  assert.deepEqual(parsed[0].input, {
+    todos: [
+      {
+        content: "Sostituire inference",
+        status: "in_progress",
+        activeForm: "Sostituendo inference",
+      },
+    ],
+  });
+});
+
+test("translateResponse maps minimax tool markup in plain text to tool_use", () => {
+  const response = translateResponse({
+    model: "minimax/minimax-m3-20260531",
+    choices: [
+      {
+        message: {
+          content: [
+            "<tool_call>",
+            "]<|minimax|>[<invoke name=\"Bash\">",
+            "]<|minimax|>[<command>ls /tmp 2>&1 | grep -E \"deepgram|openai|cartesia\"</command>",
+            "]<|minimax|>[<description>Verify plugin modules installed</description>",
+            "]<|minimax|>[</invoke>",
+            "]<|minimax|>[</tool_call>",
+          ].join(""),
+        },
+        finish_reason: "stop",
+      },
+    ],
+    usage: { prompt_tokens: 4, completion_tokens: 2 },
+  }, "minimax/minimax-m3");
+
+  assert.equal(response.stop_reason, "tool_use");
+  assert.equal(response.content.length, 1);
+  assert.equal(response.content[0].type, "tool_use");
+  assert.equal(response.content[0].name, "Bash");
+  assert.deepEqual(response.content[0].input, {
+    command: "ls /tmp 2>&1 | grep -E \"deepgram|openai|cartesia\"",
+    description: "Verify plugin modules installed",
+  });
 });

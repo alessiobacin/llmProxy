@@ -15,6 +15,8 @@ const {
   API_KEY_PROVIDER_CONFIGS,
   getApiKeyProviderRequestUrls,
   probeApiKeyProviderModel,
+  handleStreaming,
+  consumeMinimaxToolCallBuffer,
 } = require("../lib/copilot-proxy");
 const {
   normalizeCopilotTooling,
@@ -316,6 +318,90 @@ test("hasImageInOpenAiMessages detects image_url blocks", () => {
   assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "text", text: "hello" }] }]), false);
   assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] }]), true);
   assert.equal(hasImageInOpenAiMessages(null), false);
+});
+
+test("consumeMinimaxToolCallBuffer extracts tool calls from minimax markup", () => {
+  const result = consumeMinimaxToolCallBuffer([
+    "<tool_call>",
+    "]<|minimax|>[<invoke name=\"Bash\">",
+    "]<|minimax|>[<command>pwd</command>",
+    "]<|minimax|>[<description>Show cwd</description>",
+    "]<|minimax|>[</invoke>",
+    "]<|minimax|>[</tool_call>",
+  ].join(""), { flush: true });
+
+  assert.equal(result.remainder, "");
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].type, "tool_use");
+  assert.equal(result.events[0].toolUse.name, "Bash");
+  assert.deepEqual(result.events[0].toolUse.input, {
+    command: "pwd",
+    description: "Show cwd",
+  });
+});
+
+test("handleStreaming converts minimax text tool markup into Anthropic tool_use SSE", async () => {
+  const sseChunks = [
+    "data: " + JSON.stringify({
+      id: "chatcmpl_1",
+      model: "minimax/minimax-m3-20260531",
+      choices: [{ delta: { content: "<tool_call>]<|minimax|>[<invoke name=\"Bash\">]<|minimax|>[<command>pwd</command>]<|minimax|>[<description>Show cwd</description>]<|minimax|>[</invoke>]<|minimax|>[</tool_call>" }, finish_reason: null }],
+    }) + "\n",
+    "data: " + JSON.stringify({
+      id: "chatcmpl_1",
+      model: "minimax/minimax-m3-20260531",
+      choices: [{ delta: {}, finish_reason: "stop" }],
+      usage: { prompt_tokens: 7, completion_tokens: 3 },
+    }) + "\n",
+    "data: [DONE]\n",
+  ].join("");
+
+  const res = {
+    writes: [],
+    write(chunk) {
+      this.writes.push(String(chunk));
+    },
+    end() {
+      this.ended = true;
+    },
+  };
+
+  const fetchResponse = {
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(sseChunks));
+        controller.close();
+      },
+    }),
+  };
+
+  await handleStreaming(fetchResponse, res, "minimax/minimax-m3", {});
+
+  const events = res.writes
+    .join("")
+    .trim()
+    .split("\n\n")
+    .filter(Boolean)
+    .map((block) => {
+      const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
+      return dataLine ? JSON.parse(dataLine.slice(6)) : null;
+    })
+    .filter(Boolean);
+
+  const toolStart = events.find((event) => event.type === "content_block_start" && event.content_block?.type === "tool_use");
+  const toolDelta = events.find((event) => event.type === "content_block_delta" && event.delta?.type === "input_json_delta");
+  const messageDelta = events.find((event) => event.type === "message_delta");
+  const rawMarkupLeak = events.find((event) => event.delta?.type === "text_delta" && /<tool_call>|<invoke name=|<command>/.test(event.delta.text));
+
+  assert.ok(toolStart);
+  assert.equal(toolStart.content_block.name, "Bash");
+  assert.ok(toolDelta);
+  assert.deepEqual(JSON.parse(toolDelta.delta.partial_json), {
+    command: "pwd",
+    description: "Show cwd",
+  });
+  assert.equal(messageDelta.delta.stop_reason, "tool_use");
+  assert.equal(rawMarkupLeak, undefined);
 });
 
 test("translateOpenAiChatBodyToResponsesRequest caps tools to 128 for Copilot responses", () => {

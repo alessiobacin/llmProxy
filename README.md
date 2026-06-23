@@ -82,7 +82,7 @@ Compatibility:
 
 The bootstrap flow:
 
-- automatically detects the supported OS (`macOS` or `Linux`)
+- automatically detects the supported OS (`macOS`, `Linux`, or `Windows`)
 - verifies the required prerequisites before the global install starts
 - prints OS-specific remediation commands when `npm`, `systemd`, Docker, or Docker Compose are missing
 - installs the current CLI globally with `pnpm install -g`
@@ -91,6 +91,18 @@ The bootstrap flow:
 
 This way the persistent service always points to the final global installation starting from the local repository checkout.
 For Docker-backed profiles, the installer accepts both `docker compose` and the legacy `docker-compose` binary.
+
+### Windows support
+
+On Windows, the persistent installation works the same way but uses **Windows Service Control Manager (`sc.exe`)** instead of systemd or launchd:
+
+- **Prerequisites**: Node.js 22+ LTS (via [nodejs.org](https://nodejs.org)), npm, PowerShell 5.1+
+- The CLI is installed globally via `npm install -g` (no `sudo` needed)
+- The service is registered as a native **Windows Service** with automatic start and auto-restart on crash
+- Logs are written to `%APPDATA%\llmProxy\logs\`
+- The service runs under the `SYSTEM` account (via the wrapper batch file) and persists across reboots
+
+> **Note**: Run PowerShell as **Administrator** if you encounter permission issues during `npm install -g`. On modern Windows (10+), standard user installs often work without elevation.
 
 ### 1. Verify runtime setup
 
@@ -1250,7 +1262,7 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_DOCKER_SERVICE` | auto | service name | Docker service name in compose file |
 | `LLMPROXY_DOCKER_POLL_MS` | auto | milliseconds | poll interval for Docker container health check |
 | `LLMPROXY_GLOBAL_SERVICE` | unset | `0`, `1` | if `1`, enables global service on reserved ports 6045/7045 |
-| `LLMPROXY_HOME` | auto (OS-specific) | directory path | runtime data directory; default: `~/Library/Application Support/llmProxy` (macOS), `~/.local/share/llmProxy` (Linux) |
+| `LLMPROXY_HOME` | auto (OS-specific) | directory path | runtime data directory; default: `~/Library/Application Support/llmProxy` (macOS), `~/.local/share/llmProxy` (Linux), `%APPDATA%\llmProxy` (Windows) |
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` (dev/staging), `30` (production) | integer | JSONL log retention in days |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | integer | max JSONL file size before rotation |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | integer | max archived JSONL files per day |

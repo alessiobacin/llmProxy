@@ -1860,46 +1860,66 @@ test("service:start returns an error when the service manager install fails", as
   assert.match(stderr.toString(), /Failed to connect to bus: No medium found/);
 });
 
-test("install:persistent-it fails fast on unsupported platforms", async () => {
+test("install:persistent-it succeeds on Windows", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-win-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-win-pkg-"));
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
+  const commandCalls = [];
 
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-it"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "win32",
     stdout,
     stderr,
-    commandRunner() {
-      throw new Error("commandRunner should not be called");
+    commandRunner(command, args) {
+      commandCalls.push({ command, args });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: `${packageRoot}`, stderr: "" };
+      }
+      if (command === "powershell.exe") {
+        return { status: 0, stdout: "__LLMPROXY_GLOBAL_BIN__=C:\\Users\\test\\AppData\\Roaming\\npm\\llmproxy\n__LLMPROXY_BIN_SCOPE__=user\n", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
     },
   });
 
-  assert.equal(exitCode, 1);
-  assert.equal(stdout.toString(), "");
-  assert.match(stderr.toString(), /Piattaforma non supportata/);
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.match(stdout.toString(), /Installazione persistente completata/);
+  assert.match(stdout.toString(), /Servizio persistente attivato/);
 });
 
-test("install:persistent-en fails fast on unsupported platforms in English", async () => {
+test("install:persistent-en succeeds on Windows in English", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-win-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-en-win-pkg-"));
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
+  const commandCalls = [];
 
   const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "win32",
     stdout,
     stderr,
-    commandRunner() {
-      throw new Error("commandRunner should not be called");
+    commandRunner(command, args) {
+      commandCalls.push({ command, args });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: `${packageRoot}`, stderr: "" };
+      }
+      if (command === "powershell.exe") {
+        return { status: 0, stdout: "__LLMPROXY_GLOBAL_BIN__=C:\\Users\\test\\AppData\\Roaming\\npm\\llmproxy\n__LLMPROXY_BIN_SCOPE__=user\n", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
     },
   });
 
-  assert.equal(exitCode, 1);
-  assert.equal(stdout.toString(), "");
-  assert.match(stderr.toString(), /Unsupported platform for persistent installation: win32/);
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.match(stdout.toString(), /Persistent installation completed/);
+  assert.match(stdout.toString(), /Persistent service enabled/);
 });
 
 test("install:persistent-it fails with prerequisite guidance when Docker is missing on Ubuntu", async () => {
@@ -2034,25 +2054,35 @@ test("install remains an alias for install:persistent-en", async () => {
   assert.match(stdout.toString(), /Persistent service enabled with launchd/);
 });
 
-test("install reports unsupported platform errors in English", async () => {
+test("install alias succeeds on Windows in English", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-english-win-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-english-win-pkg-"));
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
+  const commandCalls = [];
 
   const exitCode = await runCli(["node", "llmproxy", "install"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/tmp/llmproxy-package",
+    packageRoot,
     platform: "win32",
     stdout,
     stderr,
-    commandRunner() {
-      throw new Error("commandRunner should not be called");
+    commandRunner(command, args) {
+      commandCalls.push({ command, args });
+      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+        return { status: 0, stdout: `${packageRoot}`, stderr: "" };
+      }
+      if (command === "powershell.exe") {
+        return { status: 0, stdout: "__LLMPROXY_GLOBAL_BIN__=C:\\Users\\test\\AppData\\Roaming\\npm\\llmproxy\n__LLMPROXY_BIN_SCOPE__=user\n", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
     },
   });
 
-  assert.equal(exitCode, 1);
-  assert.equal(stdout.toString(), "");
-  assert.match(stderr.toString(), /Unsupported platform for persistent installation: win32/);
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.match(stdout.toString(), /Persistent installation completed/);
+  assert.match(stdout.toString(), /Persistent service enabled/);
 });
 
 test("claude:setup rejects model names and requires a numeric index", async () => {

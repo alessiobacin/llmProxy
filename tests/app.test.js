@@ -1690,6 +1690,151 @@ test("messages endpoint ignores llmProxy UI labels when project settings are una
   });
 });
 
+test("messages endpoint ignores llm-proxy UI labels when project settings are unavailable", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-ignore-ui-kebab-label-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("copilot", {
+    access_token: "token-copilot",
+    token_type: "bearer",
+    scope: "read:user",
+    provider: "copilot",
+    auth_type: "oauth",
+    default_model: "gpt-5.4",
+  }, { name: "Copilot" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.5",
+  }, { name: "Kimi" });
+
+  const calls = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    const auth = String(options.headers?.Authorization || "");
+    calls.push({ auth, model: body.model });
+    if (auth === "Bearer token-copilot") {
+      return { ok: false, status: 429, async text() { return "quota exceeded"; } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: "served by kimi default" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 2, completion_tokens: 3 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "llm-proxy",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "kimi-k2.5");
+    assert.deepEqual(calls, [
+      { auth: "Bearer token-copilot", model: "gpt-5.4" },
+      { auth: "Bearer token-kimi", model: "kimi-k2.5" },
+    ]);
+  });
+});
+
+test("messages endpoint ignores sticky Claude models when project settings delegate model routing to llm-proxy", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-proxy-controlled-kebab-model-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3",
+  }, { name: "OpenRouter" });
+  tokenStore.setProviderOrder(["deepseek", "openrouter"]);
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llm-proxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+  }, null, 2));
+
+  const requestBodies = [];
+  const authHeaders = [];
+  const fetchFn = async (_url, options = {}) => {
+    requestBodies.push(JSON.parse(String(options.body || "{}")));
+    authHeaders.push(String(options.headers?.Authorization || ""));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "deepseek-v4-pro",
+          choices: [
+            {
+              message: { content: "proxy order respected" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 4, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "minimax/minimax-m3",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "deepseek-v4-pro");
+    assert.equal(requestBodies.length, 1);
+    assert.equal(requestBodies[0].model, "deepseek-v4-pro");
+    assert.deepEqual(authHeaders, ["Bearer token-deepseek"]);
+  });
+});
+
 test("messages endpoint prefers the Claude project-configured model over the incoming requested model", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-project-model-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

@@ -112,6 +112,27 @@ test("resolveClaudeProjectSettings gives precedence to ANTHROPIC_DEFAULT_MODEL e
   assert.equal(result.proxyControlsModel, false);
 });
 
+test("resolveClaudeProjectSettings treats llm-proxy as a proxy-controlled model label", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-proxy-kebab-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llm-proxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.configuredModel, null);
+  assert.equal(result.configuredModelSource, "settings.json:model");
+  assert.equal(result.proxyControlsModel, true);
+});
+
 test("resolveClaudeProjectSettings reads shortAnswer from Claude env when using local proxy", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-short-answer-"));
   const projectRoot = path.join(root, "workspace");

@@ -69,6 +69,7 @@ interface GatewayRequestParams {
   provider: string;
   projectName: string | null;
   configuredModel: string | null;
+  inlineMetering?: boolean | null;
   tokenStore: unknown;
   logger: unknown;
   fetchFn: typeof fetch;
@@ -199,6 +200,7 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
     provider: params.provider,
     projectName: params.projectName,
     configuredModel: params.configuredModel,
+    inlineMetering: params.inlineMetering,
     tokenStore: params.tokenStore,
     logger: params.logger,
     fetchFn: params.fetchFn,

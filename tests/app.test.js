@@ -111,6 +111,77 @@ test("messages endpoint proxies a non-stream Copilot response into Anthropic for
   });
 });
 
+test("messages endpoint honors LLMPROXY_METERING_INLINE from Claude project settings", async () => {
+  const previousInlineEnv = process.env.LLMPROXY_METERING_INLINE;
+  process.env.LLMPROXY_METERING_INLINE = "0";
+
+  try {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-project-inline-metering-"));
+    const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+    tokenStore.save({ access_token: "token-project-inline" });
+
+    const workspaceRoot = path.join(tempRoot, "workspace");
+    const claudeDir = path.join(workspaceRoot, ".claude");
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+      model: "llm-proxy",
+      env: {
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+        LLMPROXY_METERING_INLINE: "1",
+      },
+    }, null, 2));
+
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "claude-sonnet-4.5",
+          choices: [
+            {
+              message: { content: "pong from project inline" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 9, completion_tokens: 4 },
+        };
+      },
+    });
+
+    const app = createApp({
+      dataRoot: tempRoot,
+      tokenStore,
+      fetchFn,
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-project-path": workspaceRoot,
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+        }),
+      });
+
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.content[0].text, withInferenceFooter("pong from project inline", "default", "claude-sonnet-4.5", 9, 4));
+    });
+  } finally {
+    if (previousInlineEnv === undefined) {
+      delete process.env.LLMPROXY_METERING_INLINE;
+    } else {
+      process.env.LLMPROXY_METERING_INLINE = previousInlineEnv;
+    }
+  }
+});
+
 test("messages endpoint appends provider and model footer to streaming responses", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-stream-footer-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
@@ -165,6 +236,245 @@ test("messages endpoint appends provider and model footer to streaming responses
     assert.match(payload, /event: content_block_delta/);
     assert.match(payload, /pong stream/);
     assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
+  });
+});
+
+test("messages endpoint preserves inline provider and metering metadata for non-stream tool_use replies", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-tool-use-inline-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-tool-use" });
+  const meteringSink = {
+    records: [],
+    async record(record) {
+      this.records.push(record);
+    },
+  };
+
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        model: "claude-sonnet-4.5",
+        choices: [
+          {
+            message: {
+              content: "",
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: {
+                    name: "Bash",
+                    arguments: "{\"command\":\"pwd\"}",
+                  },
+                },
+              ],
+            },
+            finish_reason: "tool_calls",
+          },
+        ],
+        usage: { prompt_tokens: 11, completion_tokens: 5 },
+      };
+    },
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+    meteringSink,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.stop_reason, "tool_use");
+    assert.equal(payload.content[0].type, "text");
+    assert.match(payload.content[0].text, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
+    assert.equal(payload.content[1].type, "tool_use");
+    assert.equal(payload.content.at(-1).type, "text");
+    assert.match(payload.content.at(-1).text, /\[llmproxy\] tokens: req 16 \(in 11, out 5\)/);
+    assert.equal(meteringSink.records.length, 1);
+    assert.equal(meteringSink.records[0].provider, "default");
+  });
+});
+
+test("messages endpoint preserves inline provider and metering metadata for streaming tool_use replies", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-stream-tool-use-inline-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-stream-tool-use" });
+  const meteringSink = {
+    records: [],
+    async record(record) {
+      this.records.push(record);
+    },
+  };
+
+  const encoder = new TextEncoder();
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "claude-sonnet-4.5",
+          choices: [{
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "call_1",
+                  type: "function",
+                  function: { name: "Bash", arguments: "{\"command\":\"pwd\"}" },
+                },
+              ],
+            },
+            finish_reason: null,
+          }],
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          model: "claude-sonnet-4.5",
+          choices: [{ finish_reason: "tool_calls", delta: {} }],
+          usage: { prompt_tokens: 7, completion_tokens: 3 },
+        })}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    }),
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+    meteringSink,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: true,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
+    assert.match(payload, /\[llmproxy\] tokens: req 10 \(in 7, out 3\)/);
+    assert.match(payload, /"type":"tool_use"/);
+    assert.match(payload, /"stop_reason":"tool_use"/);
+    assert.equal(meteringSink.records.length, 1);
+    assert.equal(meteringSink.records[0].provider, "default");
+  });
+});
+
+test("messages endpoint preserves inline provider and metering metadata for anthropic tool_use streams", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-anthropic-tool-use-inline-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("opencode-go", {
+    access_token: "token-opencode-go",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode-go",
+    auth_type: "api_key",
+    default_model: "minimax-m3",
+  }, { name: "OpenCode Go" });
+  const meteringSink = {
+    records: [],
+    async record(record) {
+      this.records.push(record);
+    },
+  };
+
+  const encoder = new TextEncoder();
+  const fetchFn = async () => ({
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`event: message_start\ndata: ${JSON.stringify({
+          type: "message_start",
+          message: {
+            id: "msg_1",
+            type: "message",
+            role: "assistant",
+            content: [],
+            model: "minimax-m3",
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 0, output_tokens: 0 },
+          },
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: content_block_start\ndata: ${JSON.stringify({
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "tool_use", id: "toolu_1", name: "Bash", input: {} },
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: content_block_delta\ndata: ${JSON.stringify({
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "input_json_delta", partial_json: "{\"command\":\"pwd\"}" },
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: content_block_stop\ndata: ${JSON.stringify({
+          type: "content_block_stop",
+          index: 0,
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: message_delta\ndata: ${JSON.stringify({
+          type: "message_delta",
+          delta: { stop_reason: "tool_use", stop_sequence: null },
+          usage: { input_tokens: 4, output_tokens: 2 },
+        })}\n\n`));
+        controller.enqueue(encoder.encode(`event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`));
+        controller.close();
+      },
+    }),
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+    meteringSink,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "opencode-go",
+        model: "minimax-m3",
+        stream: true,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(payload, /\[llmproxy\] provider: opencode-go \| model: minimax-m3/);
+    assert.match(payload, /\[llmproxy\] tokens: req 6 \(in 4, out 2\)/);
+    assert.match(payload, /"type":"tool_use"/);
+    assert.match(payload, /"stop_reason":"tool_use"/);
+    assert.equal(meteringSink.records.length, 1);
+    assert.equal(meteringSink.records[0].provider, "opencode-go");
   });
 });
 

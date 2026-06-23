@@ -347,6 +347,60 @@ test("provider:list shows the effective project fallback chain when Claude setti
   assert.match(stdout.toString(), /3\. qwen \(Qwen\) model=qwen3\.7-max/);
 });
 
+test("provider:list keeps provider default models when the project sets a global override model", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-global-model-"));
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-global-model-workspace-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3",
+  }, { name: "OpenRouter" });
+  tokenStore.saveProvider("commandcode", {
+    access_token: "token-commandcode",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "commandcode",
+    auth_type: "api_key",
+    default_model: "Qwen/Qwen3.7-Max",
+  }, { name: "Command Code" });
+
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\) model=deepseek-v4-pro/);
+  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\) model=minimax\/minimax-m3/);
+  assert.match(stdout.toString(), /3\. commandcode \(Command Code\) model=Qwen\/Qwen3\.7-Max/);
+  assert.doesNotMatch(stdout.toString(), /model=gpt-5\.4/);
+});
+
 test("provider:available shows supported providers with aliases and auth type", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-available-"));
   const stdout = createWritableBuffer();

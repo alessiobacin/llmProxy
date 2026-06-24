@@ -281,6 +281,83 @@ test("messages endpoint honors LLMPROXY_INFERENCE_INFO_INLINE from Claude projec
   }
 });
 
+test("messages endpoint does not inherit inline flags from process env when Claude settings omit them", async () => {
+  const previousInlineEnv = process.env.LLMPROXY_METERING_INLINE;
+  const previousInferenceEnv = process.env.LLMPROXY_INFERENCE_INFO_INLINE;
+  process.env.LLMPROXY_METERING_INLINE = "1";
+  process.env.LLMPROXY_INFERENCE_INFO_INLINE = "1";
+
+  try {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-project-inline-defaults-off-"));
+    const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+    tokenStore.save({ access_token: "token-project-inline-defaults-off" });
+
+    const workspaceRoot = path.join(tempRoot, "workspace");
+    const claudeDir = path.join(workspaceRoot, ".claude");
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+      model: "llm-proxy",
+      env: {
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      },
+    }, null, 2));
+
+    const fetchFn = async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "claude-sonnet-4.5",
+          choices: [
+            {
+              message: { content: "pong without inherited inline flags" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 9, completion_tokens: 4 },
+        };
+      },
+    });
+
+    const app = createApp({
+      dataRoot: tempRoot,
+      tokenStore,
+      fetchFn,
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-project-path": workspaceRoot,
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+        }),
+      });
+
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.content[0].text, "pong without inherited inline flags");
+    });
+  } finally {
+    if (previousInlineEnv === undefined) {
+      delete process.env.LLMPROXY_METERING_INLINE;
+    } else {
+      process.env.LLMPROXY_METERING_INLINE = previousInlineEnv;
+    }
+    if (previousInferenceEnv === undefined) {
+      delete process.env.LLMPROXY_INFERENCE_INFO_INLINE;
+    } else {
+      process.env.LLMPROXY_INFERENCE_INFO_INLINE = previousInferenceEnv;
+    }
+  }
+});
+
 test("messages endpoint appends provider and model footer to streaming responses", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-stream-footer-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
@@ -1950,7 +2027,7 @@ test("messages endpoint uses default models for providers not listed in Claude s
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "kimi-k2.5");
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by kimi default", "kimi", "kimi-k2.5", 1, 2));
+    assert.equal(payload.content[0].text, "served by kimi default");
     assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
   });
 });

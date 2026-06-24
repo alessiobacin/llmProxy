@@ -1213,6 +1213,14 @@ Tutte le variabili, indipendentemente dallo scope, possono essere sovrascritte t
 
 ### Project-Scope (CLI — effetto immediato)
 
+[.env.example](/Users/alessiobacin/Development/llmProxy/.env.example) is the canonical catalog of all supported variables. Start there if you need a complete list while setting up a fresh clone of the repo.
+
+Important rule for booleans in `.claude/settings.json`:
+
+- if a boolean variable is missing from `.claude/settings.json`, its effective project value is `0` / `false`
+- it does not automatically inherit the global container or process value
+- this applies in particular to `LLMPROXY_SHORT_ANSWER`, `LLMPROXY_METERING_INLINE`, and `LLMPROXY_INFERENCE_INFO_INLINE`
+
 Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, senza restart del proxy. Vengono lette da `.claude/settings.json` a ogni richiesta.
 
 ```bash
@@ -1236,6 +1244,8 @@ llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
 
 ### Service-Scope (.env — richiede restart)
 
+For a complete ready-to-copy variable list, see `[.env.example](/Users/alessiobacin/Development/llmProxy/.env.example)`.
+
 Queste variabili sono lette solo all'avvio del server. Per applicare una modifica:
 
 ```bash
@@ -1255,8 +1265,8 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (or `dev`), `staging`, `production` (or `prod`) | runtime profile; determines defaults for NODE_ENV, LLMPROXY_ENV, ports, metering sink |
 | `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` for local dev; `platform` for V11 integration with `X-Hierarchy-Context` header |
 | `LLMPROXY_METERING_SINK` | `dblayer` | `dblayer`, `jsonl`, `inline`, `noop`, or `+`-separated combos | LLM call metering sink |
-| `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | if `1`, appends inline token/metering stats at the end of the inference |
-| `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | if `1`, prepends inline provider/model info at the start of the inference |
+| `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | if `1`, appends inline token/metering stats at the end of the inference; if absent in `.claude/settings.json`, the project value is `0` |
+| `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | if `1`, prepends inline provider/model info at the start of the inference; if absent in `.claude/settings.json`, the project value is `0` |
 | `DBLAYER_URL` | unset | full URL (e.g. `http://localhost:5046`) | db-layer service URL; if **unset**, db-layer is **not active** (no POST attempts). Set to `localhost:5046` (dev), `localhost:6046` (staging), or `localhost:7046` (production) |
 | `EVENTBUS_URL` | unset | full URL (e.g. `http://localhost:5048`) | event-bus service URL; if **unset**, event-bus is **no-op**. Set to `localhost:5048` (dev), `localhost:6048` (staging), or `localhost:7048` (production) |
 | `LLMPROXY_SECRET` | unset | arbitrary string | optional HMAC secret for internal token signing |

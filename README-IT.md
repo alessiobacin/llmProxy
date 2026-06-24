@@ -248,8 +248,10 @@ Override per singola request su `/v1/messages`:
 Note:
 
 - `LLMPROXY_SHORT_ANSWER=1` rende concise le risposte per default nel progetto quando Claude usa il proxy locale.
+- Se `LLMPROXY_SHORT_ANSWER` non e` impostata, il default e` disattivato.
 - `shortAnswer: true` la attiva solo per una request.
 - `shortAnswer: false` la disattiva per una request anche se il default di progetto e` attivo.
+- llmProxy inietta sempre una istruzione breve di stato esecutivo, cosi` ogni risposta inizia con un piccolo avanzamento e termina dicendo esplicitamente se il task e` completato oppure no.
 
 ### Preferenze modello per provider e catena di fallback
 
@@ -313,7 +315,7 @@ llmproxy provider:list
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`
   Utile per mantenere un comportamento piu` prevedibile lato Claude Code.
 - `LLMPROXY_SHORT_ANSWER`
-  Opzionale. Impostalo a `1`, `true`, `yes` o `on` per chiedere a llmProxy di iniettare una istruzione di risposta concisa su ogni inferenza proxata di quel progetto.
+  Opzionale. Default: disattivato se non impostato. Impostalo a `1`, `true`, `yes` o `on` per chiedere a llmProxy di iniettare una istruzione di risposta concisa su ogni inferenza proxata di quel progetto.
 
 ### Differenze rispetto ad altre configurazioni locali
 
@@ -1049,7 +1051,7 @@ llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
 | `ANTHROPIC_AUTH_TOKEN` | unset | stringa | token di autenticazione per l'endpoint Anthropic |
 | `API_TIMEOUT_MS` | auto | millisecondi | timeout per le richieste API |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | unset | `0`, `1` | se `1`, disabilita le beta sperimentali di Claude Code |
-| `LLMPROXY_SHORT_ANSWER` | unset | `0`, `1` | se `1`, attiva la modalità risposta breve |
+| `LLMPROXY_SHORT_ANSWER` | unset (`off`) | `0`, `1` | se `1`, attiva la modalità risposta breve |
 | `LLMPROXY_SMART_ROUTE` | unset | `hybrid`, `economy`, `standard`, `premium` | strategia di routing automatico in base alla complessità della richiesta |
 | `LLMPROXY_SMART_PREFERENCE` | unset | `balanced`, `economy`, `quality` | preferenza per il bilanciamento costo/qualità nello smart routing |
 | `LLMPROXY_SMART_CACHE_TTL` | unset | secondi | TTL della cache dello smart router |
@@ -1075,7 +1077,8 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (o `dev`), `staging`, `production` (o `prod`) | profilo runtime; determina i default di NODE_ENV, LLMPROXY_ENV, porte, metering sink |
 | `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` per uso locale sviluppatore; `platform` per integrazione V11 con header `X-Hierarchy-Context` |
 | `LLMPROXY_METERING_SINK` | `dblayer` | `dblayer`, `jsonl`, `inline`, `noop`, o combinazioni con `+` | sink per il metering delle chiamate LLM |
-| `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | se `1`, attiva il metering inline (header `x-inference-metric`) |
+| `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | se `1`, aggiunge in fondo all'inferenza le statistiche token/metering inline |
+| `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | se `1`, aggiunge all'inizio dell'inferenza provider e modello usati |
 | `DBLAYER_URL` | unset | URL completo (es. `http://localhost:5046`) | URL del servizio db-layer; se **non impostato**, db-layer **non è attivo** (nessun tentativo di POST). Imposta a `localhost:5046` (dev), `localhost:6046` (staging) o `localhost:7046` (production) |
 | `EVENTBUS_URL` | unset | URL completo (es. `http://localhost:5048`) | URL del servizio event-bus; se **non impostato**, event-bus è **no-op**. Imposta a `localhost:5048` (dev), `localhost:6048` (staging) o `localhost:7048` (production) |
 | `LLMPROXY_SECRET` | unset | stringa arbitraria | secret HMAC opzionale per la firma di token interni |

@@ -33,6 +33,7 @@ services:
       LLMPROXY_MODE: "platform"
       LLMPROXY_METERING_SINK: "dblayer"
       LLMPROXY_METERING_INLINE: "1"
+      LLMPROXY_INFERENCE_INFO_INLINE: "1"
       # db-layer is a Docker sibling service; use the service name as hostname
       DBLAYER_URL: "http://dblayer:7046"
       LLMPROXY_LOG_RETENTION_DAYS: "30"

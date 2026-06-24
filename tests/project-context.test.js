@@ -173,6 +173,26 @@ test("resolveClaudeProjectSettings reads LLMPROXY_METERING_INLINE from Claude en
   assert.equal(result.inlineMetering, true);
 });
 
+test("resolveClaudeProjectSettings reads LLMPROXY_INFERENCE_INFO_INLINE from Claude env", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-inline-inference-info-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_INFERENCE_INFO_INLINE: "1",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.inlineInferenceInfo, true);
+});
+
 test("resolveClaudeProjectSettings reads LLMPROXY_SMART_ROUTE from env", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-smart-route-"));
   const projectRoot = path.join(root, "workspace");

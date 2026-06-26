@@ -225,6 +225,28 @@ test("parseMinimaxToolCallContent converts minimax tool markup into tool_use blo
   });
 });
 
+test("parseMinimaxToolCallContent converts malformed minimax marker variant into tool_use blocks", () => {
+  const parsed = parseMinimaxToolCallContent([
+    "<tool_call>",
+    "]<]minimax[>[<invoke name=\"Read\">",
+    "]<]minimax[>[<file_path>/Users/alessiobacin/Development/testCode/voice-agent/index.html</file_path>",
+    "]<]minimax[>[<offset>35</offset>",
+    "]<]minimax[>[<limit>10</limit>",
+    "]<]minimax[>[</invoke>",
+    "]<]minimax[>[</tool_call>",
+  ].join(""));
+
+  assert.ok(parsed);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].type, "tool_use");
+  assert.equal(parsed[0].name, "Read");
+  assert.deepEqual(parsed[0].input, {
+    file_path: "/Users/alessiobacin/Development/testCode/voice-agent/index.html",
+    offset: "35",
+    limit: "10",
+  });
+});
+
 test("translateResponse maps minimax tool markup in plain text to tool_use", () => {
   const response = translateResponse({
     model: "minimax/minimax-m3-20260531",
@@ -253,5 +275,38 @@ test("translateResponse maps minimax tool markup in plain text to tool_use", () 
   assert.deepEqual(response.content[0].input, {
     command: "ls /tmp 2>&1 | grep -E \"deepgram|openai|cartesia\"",
     description: "Verify plugin modules installed",
+  });
+});
+
+test("translateResponse maps malformed minimax marker variant in plain text to tool_use", () => {
+  const response = translateResponse({
+    model: "minimax/minimax-m3-20260531",
+    choices: [
+      {
+        message: {
+          content: [
+            "<tool_call>",
+            "]<]minimax[>[<invoke name=\"Read\">",
+            "]<]minimax[>[<file_path>/Users/alessiobacin/Development/testCode/voice-agent/index.html</file_path>",
+            "]<]minimax[>[<offset>35</offset>",
+            "]<]minimax[>[<limit>10</limit>",
+            "]<]minimax[>[</invoke>",
+            "]<]minimax[>[</tool_call>",
+          ].join(""),
+        },
+        finish_reason: "stop",
+      },
+    ],
+    usage: { prompt_tokens: 4, completion_tokens: 2 },
+  }, "minimax/minimax-m3");
+
+  assert.equal(response.stop_reason, "tool_use");
+  assert.equal(response.content.length, 1);
+  assert.equal(response.content[0].type, "tool_use");
+  assert.equal(response.content[0].name, "Read");
+  assert.deepEqual(response.content[0].input, {
+    file_path: "/Users/alessiobacin/Development/testCode/voice-agent/index.html",
+    offset: "35",
+    limit: "10",
   });
 });

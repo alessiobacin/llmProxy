@@ -1200,7 +1200,8 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   assert.equal(body.model, "claude-sonnet-4.5");
   assert.equal(body.messages[0].role, "user");
   assert.equal(body.messages[0].content[0].text, "Rispondi solo: llmproxy-test-auto");
-  assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\) ciao creatore/);
+  assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\)/);
+  assert.doesNotMatch(stdout.toString(), /ciao creatore/);
 });
 
 test("test uses a deterministic per-user port when no explicit PORT is configured", async () => {
@@ -1363,7 +1364,8 @@ test("test hides llmproxy metadata lines from the printed assistant reply", asyn
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /qwen: ok \([^)]+\) llmproxy-test-qwen/);
+  assert.match(stdout.toString(), /qwen: ok \([^)]+\)/);
+  assert.doesNotMatch(stdout.toString(), /llmproxy-test-qwen/);
   assert.doesNotMatch(stdout.toString(), /\[llmproxy\] provider:/);
   assert.doesNotMatch(stdout.toString(), /\[llmproxy\] tokens:/);
 });
@@ -1419,7 +1421,8 @@ test("test retries once after a transient local fetch failure", async () => {
   assert.equal(exitCode, 0);
   assert.equal(messageAttempts, 2);
   assert.deepEqual(sleepCalls, [250]);
-  assert.match(stdout.toString(), /default: ok \(gpt-5\.4\) llmproxy-test-default/);
+  assert.match(stdout.toString(), /default: ok \(gpt-5\.4\)/);
+  assert.doesNotMatch(stdout.toString(), /llmproxy-test-default/);
 });
 
 test("claude:setup accepts a model index from the numbered model list", async () => {
@@ -2186,6 +2189,162 @@ test("test probes every configured provider with --all-providers", async () => {
   assert.deepEqual(requestBodies.filter((body) => body.model).map((body) => [body.provider, body.model]), [["copilot", "gpt-5.4"], ["kimi", "kimi-k2.5"]]);
   assert.match(stdout.toString(), /copilot: ok \(gpt-5\.4\)/);
   assert.match(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
+  assert.doesNotMatch(stdout.toString(), /ok copilot|ok kimi/);
+});
+
+test("test -i runs a real inference through fallback order and prints final provider plus response", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3-20260531",
+  }, { name: "OpenRouter" });
+
+  const requests = [];
+  const fetchFn = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (String(url).endsWith("/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v11" };
+        },
+      };
+    }
+    const logsDir = path.join(runtimeRoot, "logs");
+    fs.mkdirSync(logsDir, { recursive: true });
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    fs.appendFileSync(logFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "request_summary",
+      requestId: "req-inference",
+      success: true,
+      finalProvider: "openrouter",
+      finalModel: "minimax/minimax-m3-20260531",
+      providerSequence: [
+        { provider: "deepseek", status: 402, success: false, effective_model: "deepseek-v4-pro", actual_model: null },
+        { provider: "openrouter", status: 200, success: true, effective_model: "minimax/minimax-m3-20260531", actual_model: "minimax/minimax-m3-20260531" },
+      ],
+    }) + "\n", "utf8");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "minimax/minimax-m3-20260531",
+          content: [{ type: "text", text: "llmproxy-test-openrouter" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "-i"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(requests.length, 2);
+  const body = JSON.parse(String(requests[1].options.body || "{}"));
+  assert.equal(body.provider, undefined);
+  assert.equal(body.model, undefined);
+  assert.equal(body.messages[0].content[0].text, "Rispondi solo: llmproxy-test-inference");
+  assert.match(stdout.toString(), /inference: ok \(openrouter \| minimax\/minimax-m3-20260531\)/);
+  assert.match(stdout.toString(), /response: llmproxy-test-openrouter/);
+  assert.doesNotMatch(stdout.toString(), /^fallback:/m);
+});
+
+test("test -i --all-providers prints the real observed fallback sequence", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-all-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("deepseek-v4-flash", {
+    access_token: "token-deepseek-flash",
+    token_type: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+  }, { name: "DeepSeek Flash" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3-20260531",
+  }, { name: "OpenRouter" });
+
+  const fetchFn = async (url) => {
+    if (String(url).endsWith("/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v11" };
+        },
+      };
+    }
+    const logsDir = path.join(runtimeRoot, "logs");
+    fs.mkdirSync(logsDir, { recursive: true });
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    fs.appendFileSync(logFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "request_summary",
+      requestId: "req-inference-all",
+      success: true,
+      finalProvider: "openrouter",
+      finalModel: "minimax/minimax-m3-20260531",
+      providerSequence: [
+        { provider: "deepseek", status: 402, success: false, effective_model: "deepseek-v4-pro", actual_model: null },
+        { provider: "deepseek-v4-flash", status: 402, success: false, effective_model: "deepseek-v4-flash", actual_model: null },
+        { provider: "openrouter", status: 200, success: true, effective_model: "minimax/minimax-m3-20260531", actual_model: "minimax/minimax-m3-20260531" },
+      ],
+    }) + "\n", "utf8");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "minimax/minimax-m3-20260531",
+          content: [{ type: "text", text: "llmproxy-test-openrouter" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "-i", "--all-providers"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /inference: ok \(openrouter \| minimax\/minimax-m3-20260531\)/);
+  assert.match(stdout.toString(), /fallback: deepseek\[HTTP 402 deepseek-v4-pro\] -> deepseek-v4-flash\[HTTP 402 deepseek-v4-flash\] -> openrouter\[ok minimax\/minimax-m3-20260531\]/);
+  assert.match(stdout.toString(), /response: llmproxy-test-openrouter/);
 });
 
 test("stats prints provider and model token breakdown from local metering data", async () => {

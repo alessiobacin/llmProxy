@@ -485,7 +485,7 @@ function translateStopReason(reason: string | null | undefined): string {
   }
 }
 
-const MINIMAX_STREAM_MARKER_REGEX = /\]<\|minimax\|>\[/g;
+const MINIMAX_STREAM_MARKER_REGEX = /\]<(?:\|minimax\|>|\]minimax\[>)\[/g;
 const MINIMAX_TOOL_BLOCK_START_REGEX = /<tool_call>|<invoke\b[^>]*name=/i;
 
 function parseXmlishAttributes(rawAttrs: string): Record<string, string> {

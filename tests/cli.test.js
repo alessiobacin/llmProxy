@@ -2269,6 +2269,77 @@ test("test -i runs a real inference through fallback order and prints final prov
   assert.doesNotMatch(stdout.toString(), /^fallback:/m);
 });
 
+test("test -i treats metadata-only inline output as a successful inference when the request summary is valid", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-metadata-only-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.7-code",
+  }, { name: "Kimi" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3-20260531",
+  }, { name: "OpenRouter" });
+
+  const fetchFn = async (url) => {
+    if (String(url).endsWith("/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v11" };
+        },
+      };
+    }
+    const logsDir = path.join(runtimeRoot, "logs");
+    fs.mkdirSync(logsDir, { recursive: true });
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    fs.appendFileSync(logFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "request_summary",
+      requestId: "req-inference-metadata-only",
+      success: true,
+      finalProvider: "kimi",
+      finalModel: "kimi-k2.7-code",
+      providerSequence: [
+        { provider: "kimi", status: 200, success: true, effective_model: "kimi-k2.7-code", actual_model: "kimi-k2.7-code" },
+      ],
+    }) + "\n", "utf8");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "kimi-k2.7-code",
+          content: [{
+            type: "text",
+            text: "[llmproxy] provider: kimi | model: kimi-k2.7-code\n\n[llmproxy] tokens: req 357 (in 101, out 256) | provider today 2196 week 3422 | model today 2196 week 3422",
+          }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "-i"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /inference: ok \(kimi \| kimi-k2\.7-code\)/);
+  assert.doesNotMatch(stdout.toString(), /^response:/m);
+});
+
 test("test -i --all-providers prints the real observed fallback sequence", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-all-"));
   const stdout = createWritableBuffer();
@@ -2294,6 +2365,20 @@ test("test -i --all-providers prints the real observed fallback sequence", async
     auth_type: "api_key",
     default_model: "minimax/minimax-m3-20260531",
   }, { name: "OpenRouter" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "token-qwen",
+    token_type: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-plus",
+  }, { name: "Qwen" });
+  tokenStore.saveProvider("opencode", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+  }, { name: "OpenCode" });
 
   const fetchFn = async (url) => {
     if (String(url).endsWith("/health")) {
@@ -2343,7 +2428,10 @@ test("test -i --all-providers prints the real observed fallback sequence", async
 
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /inference: ok \(openrouter \| minimax\/minimax-m3-20260531\)/);
-  assert.match(stdout.toString(), /fallback: deepseek\[HTTP 402 deepseek-v4-pro\] -> deepseek-v4-flash\[HTTP 402 deepseek-v4-flash\] -> openrouter\[ok minimax\/minimax-m3-20260531\]/);
+  assert.match(stdout.toString(), /1st fallback: qwen \| qwen3\.7-plus/);
+  assert.match(stdout.toString(), /2nd fallback: opencode \| deepseek-v4-flash-free/);
+  assert.doesNotMatch(stdout.toString(), /^fallback:/m);
+  assert.doesNotMatch(stdout.toString(), /deepseek\[HTTP 402/);
   assert.match(stdout.toString(), /response: llmproxy-test-openrouter/);
 });
 

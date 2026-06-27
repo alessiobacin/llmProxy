@@ -23,7 +23,8 @@ wget -qO- https://raw.githubusercontent.com/alessiobacin/llmProxy/main/scripts/i
 The script automatically:
 
 - detects the OS (macOS, Linux, Windows via Git Bash/WSL)
-- verifies Node.js 22+ and npm
+- verifies Node.js 22+, npm, Docker, and Docker Compose
+- attempts to auto-install missing dependencies before installing `llmProxy`
 - installs the latest `llmProxy` package directly from the GitHub repository tarball
 - registers the native persistent service (launchd / systemd / Windows Service)
 - forces a final `llmproxy service:restart` so the Docker-backed runtime is created/recreated and health-checked before the installer exits

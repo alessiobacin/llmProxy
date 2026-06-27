@@ -356,13 +356,26 @@ ensure_compose_ready
 INSTALL_SOURCE="${LLMPROXY_INSTALL_SOURCE:-https://github.com/alessiobacin/llmProxy/archive/refs/heads/main.tar.gz}"
 info "$MSG_INSTALLING"
 printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
-npm install -g "$INSTALL_SOURCE" 2>&1 || error "$MSG_INSTALL_FAIL"
+USED_SUDO_INSTALL=0
+if ! npm install -g "$INSTALL_SOURCE" 2>&1; then
+  if [ "$PLATFORM" != "windows" ] && has sudo; then
+    warn "npm install -g failed, retrying with sudo"
+    run_root npm install -g "$INSTALL_SOURCE" 2>&1 || error "$MSG_INSTALL_FAIL"
+    USED_SUDO_INSTALL=1
+  else
+    error "$MSG_INSTALL_FAIL"
+  fi
+fi
 
 LLMPROXY_BIN=""
 if has llmproxy; then
   LLMPROXY_BIN="$(command -v llmproxy)"
 else
-  NPM_GLOBAL_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+  if [ "$USED_SUDO_INSTALL" -eq 1 ] && [ "$PLATFORM" != "windows" ] && has sudo; then
+    NPM_GLOBAL_PREFIX="$(sudo npm prefix -g 2>/dev/null || true)"
+  else
+    NPM_GLOBAL_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+  fi
   if [ -n "$NPM_GLOBAL_PREFIX" ] && [ -x "$NPM_GLOBAL_PREFIX/bin/llmproxy" ]; then
     LLMPROXY_BIN="$NPM_GLOBAL_PREFIX/bin/llmproxy"
   fi

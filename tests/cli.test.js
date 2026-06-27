@@ -594,10 +594,10 @@ test("provider:list shows residual credit plus current and best provider pricing
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\).*\[USD 12\.34\].*model=deepseek-v4-pro.*price=in=USD 0\.43\/1M out=USD 0\.87\/1M best=openrouter/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\).*\[49\.59\].*model=kimi-k2\.7-code.*price=n\/a best=openrouter/);
-  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\).*\[74\.75 credits\].*model=minimax\/minimax-m3.*price=in=USD 0\.30\/1M out=USD 1\.20\/1M best=fireworks/);
-  assert.match(stdout.toString(), /4\. qwen \(Qwen\).*\[n\/a\].*model=qwen3\.7-plus.*price=in=USD 0\.40\/1M out=USD 1\.60\/1M best=openrouter/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\).*model=deepseek-v4-pro.*credit=USD 12\.34.*price=in=USD 0\.43\/1M out=USD 0\.87\/1M best=openrouter/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\).*model=kimi-k2\.7-code.*credit=49\.59.*price=n\/a best=openrouter/);
+  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\).*model=minimax\/minimax-m3.*credit=74\.75 credits.*price=in=USD 0\.30\/1M out=USD 1\.20\/1M best=fireworks/);
+  assert.match(stdout.toString(), /4\. qwen \(Qwen\).*model=qwen3\.7-plus.*credit=n\/a.*price=in=USD 0\.40\/1M out=USD 1\.60\/1M best=openrouter/);
 });
 
 test("provider:available shows supported providers with aliases and auth type", async () => {
@@ -3206,6 +3206,7 @@ test("update runs the package manager command for the latest llmproxy release", 
     dataRoot: runtimeRoot,
     stdout,
     env: { ...process.env, LLMPROXY_ENV: "development" },
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner(command, args) {
       executed.push([command, args]);
       if (["gh", "git", "pnpm"].includes(command)) {
@@ -3236,10 +3237,10 @@ test("update runs the package manager command for the latest llmproxy release", 
   const scriptText = executed.at(-1)[1][1];
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /npm install -g --force "\$package_file"/);
-  assert.match(scriptText, /if \[ -n "\$installed_bin" \] && \[ "\$installed_bin" != "\$new_bin" \] && \[ "\$installed_bin" != "\$current_bin" \]; then/);
-  assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \]; then/);
-  assert.match(scriptText, /cat > "\$current_bin" <<EOF/);
-  assert.match(scriptText, /exec "\$new_bin" "\$@"/);
+  assert.match(scriptText, /if \[ -n "\$installed_bin" \] && \[ "\$installed_bin" != "\$new_bin" \] && \[ "\$installed_bin" != "\$current_bin" \] && \[ "\$installed_bin" != "\$global_bin_path" \]; then/);
+  assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \] && \[ "\$current_bin" != "\$global_bin_path" \]; then/);
+  assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" > "\$current_bin"/);
+  assert.match(scriptText, /exec \\"\$new_bin\\" \\"\\\$@\\"" \)/);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
 });
@@ -3256,6 +3257,7 @@ test("update stops early and reports missing base prerequisites", async () => {
     stdout,
     stderr,
     env: { ...process.env, LLMPROXY_ENV: "development" },
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner(command, args) {
       executed.push([command, args]);
       if (command === "gh") return { status: 1, stdout: "", stderr: "gh missing" };
@@ -3289,6 +3291,7 @@ test("update reports Docker prerequisites when the service runtime uses Docker",
     stdout,
     stderr,
     env: { ...process.env, LLMPROXY_ENV: "production" },
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner(command, args) {
       executed.push([command, args]);
       if (["gh", "git", "pnpm"].includes(command)) return { status: 0, stdout: "ok\n", stderr: "" };
@@ -3321,17 +3324,20 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /if \[ "\$used_sudo" -eq 1 \]; then\n\s+npm_prefix=\$\(sudo npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nelse\n\s+npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nfi/);
   assert.match(scriptText, /install_dir="\$npm_prefix\/lib\/node_modules\/llmproxy"/);
   assert.match(scriptText, /package_cli="\$install_dir\/bin\/llmproxy\.js"/);
+  assert.match(scriptText, /global_bin_path="\$npm_prefix\/bin\/llmproxy"/);
   assert.match(scriptText, /run_new_llmproxy\(\) \{/);
+  assert.match(scriptText, /elif \[ -f "\$package_cli" \]; then\n\s+node "\$package_cli" "\$@"/);
+  assert.match(scriptText, /ensure_global_bin\(\) \{/);
   assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -f "\$package_cli" \]; then/);
   assert.match(scriptText, /package_cli_version=\$\(node "\$package_cli" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /new_bin_mode="node"/);
   assert.match(scriptText, /sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR=.*DBUS_SESSION_BUS_ADDRESS=.*node "\$new_bin" service:restart/);
   assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /if \[ -x "\$global_bin_path" \]; then/);
+  assert.match(scriptText, /global_bin_version=\$\(\"\$global_bin_path\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
-  assert.match(scriptText, /if \[ \"\$candidate_version\" = \"\$target_version\" \]; then\n      new_bin=\"\$candidate_bin\"/);
-  assert.match(scriptText, /if \[ -z "\$new_bin" \] && \[ -x "\$npm_prefix\/bin\/llmproxy" \]; then/);
-  assert.match(scriptText, /version_output=\$\(\"\$new_bin\" version 2>\/dev\/null \|\| true\)/);
-  assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \]; then/);
+  assert.match(scriptText, /ensure_global_bin >\/dev\/null 2>&1 \|\| true/);
+  assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \] && \[ "\$current_bin" != "\$global_bin_path" \]; then/);
   assert.match(scriptText, /current_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec node \\"\$new_bin\\" \\"\\\$@\\"" \)/);
   assert.match(scriptText, /current_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec \\"\$new_bin\\" \\"\\\$@\\"" \)/);
   assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" > "\$current_bin"/);
@@ -3439,6 +3445,7 @@ test("update prints changelog notes for release 0.2.57", async () => {
 test("update exits early when the installed version already matches the online version", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-up-to-date-"));
   const stdout = createWritableBuffer();
+  const currentVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")).version;
   let commandRunnerCalled = false;
 
   const exitCode = await runCli(["node", "llmproxy", "update"], {
@@ -3451,7 +3458,7 @@ test("update exits early when the installed version already matches the online v
         ok: true,
         status: 200,
         async json() {
-          return { version: "0.2.66" };
+          return { version: currentVersion };
         },
       };
     },
@@ -3463,7 +3470,7 @@ test("update exits early when the installed version already matches the online v
 
   assert.equal(exitCode, 0);
   assert.equal(commandRunnerCalled, false);
-  assert.match(stdout.toString(), /Gia' aggiornato\. Versione corrente: 0\.2\.66/);
+  assert.equal(stdout.toString(), `Gia' aggiornato. Versione corrente: ${currentVersion}\n`);
 });
 
 test("release-notes prints changelog notes for release 0.2.58", async () => {
@@ -3521,6 +3528,7 @@ test("update prefers release notes emitted by the newly installed binary", async
   const exitCode = await runCli(["node", "llmproxy", "update"], {
     dataRoot: runtimeRoot,
     stdout,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner() {
       return {
         status: 0,
@@ -3552,6 +3560,7 @@ test("update prints changelog in English when LLMPROXY_LOCALE=en", async () => {
     dataRoot: runtimeRoot,
     stdout,
     env: { ...process.env, LLMPROXY_LOCALE: "en" },
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner() {
       return { status: 0, stdout: "changed 82 packages in 2s\n__LLMPROXY_VERSION__=0.2.54\n", stderr: "" };
     },
@@ -3570,6 +3579,7 @@ test("update prints fallback changelog line when release notes are missing", asy
     dataRoot: runtimeRoot,
     stdout,
     env: { ...process.env, LLMPROXY_LOCALE: "it" },
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner() {
       return { status: 0, stdout: "changed 82 packages in 2s\n__LLMPROXY_VERSION__=9.9.9\n", stderr: "" };
     },

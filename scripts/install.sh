@@ -43,8 +43,8 @@ if [ "$LOCALE" = "it" ]; then
   MSG_INSTALLING="Installazione di llmProxy..."
   MSG_INSTALL_FAIL="Installazione npm fallita."
   MSG_INSTALL_SOURCE="Sorgente installazione"
-  MSG_SERVICE="Registrazione del servizio persistente in corso..."
-  MSG_SERVICE_WARN="Il servizio persistente ha riportato degli avvisi (controlla sopra)."
+  MSG_SERVICE="Avvio del servizio persistente in corso..."
+  MSG_SERVICE_FAIL="Il servizio persistente o il runtime Docker non sono partiti correttamente."
   MSG_DONE="Installazione completata!"
   MSG_POST="Ora configura un provider: llmproxy provider:add copilot"
   MSG_HELP="    llmproxy help"
@@ -56,8 +56,8 @@ else
   MSG_INSTALLING="Installing llmProxy..."
   MSG_INSTALL_FAIL="npm install failed."
   MSG_INSTALL_SOURCE="Install source"
-  MSG_SERVICE="Registering persistent service..."
-  MSG_SERVICE_WARN="The persistent service reported warnings (check above)."
+  MSG_SERVICE="Starting persistent service..."
+  MSG_SERVICE_FAIL="The persistent service or Docker runtime did not start correctly."
   MSG_DONE="Installation complete!"
   MSG_POST="Next step: add a provider — llmproxy provider:add copilot"
   MSG_HELP="    llmproxy help"
@@ -106,8 +106,9 @@ if [ "$PLATFORM" = "windows" ]; then
   printf "%s\n" "$MSG_WINDOWS_NOTE"
 fi
 
-if ! "$LLMPROXY_BIN" install:persistent-en 2>&1; then
-  warn "$MSG_SERVICE_WARN"
+# --- Start persistent service and verify Docker runtime ---
+if ! "$LLMPROXY_BIN" service:start 2>&1; then
+  error "$MSG_SERVICE_FAIL"
 fi
 
 # --- Done ---

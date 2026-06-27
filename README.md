@@ -26,6 +26,7 @@ The script automatically:
 - verifies Node.js 22+ and npm
 - installs the latest `llmProxy` package directly from the GitHub repository tarball
 - registers the native persistent service (launchd / systemd / Windows Service)
+- forces a final `llmproxy service:restart` so the Docker-backed runtime is created/recreated and health-checked before the installer exits
 - auto-selects English or Italian output based on your locale
 
 > **Next step after install**: `llmproxy provider:add copilot`

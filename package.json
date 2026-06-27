@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.65",
+  "version": "0.2.66",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -55,6 +55,17 @@
       "support multiple instances of the same provider with different models via provider:add",
       "fix update-service.sh: use docker-compose.production.yml and set LLMPROXY_HOME when missing",
       "fix update-service.sh: graceful skip when Docker Compose is not installed"
+    ],
+    "0.2.65": [
+      "release 0.2.65",
+      "fix llmproxy test: accept metadata-only provider responses when request_summary confirms success",
+      "stabilize provider test fallback handling for delayed request_summary writes"
+    ],
+    "0.2.66": [
+      "release 0.2.66",
+      "fix self-update: resolve the installed CLI even when the global wrapper path is stale or missing",
+      "recreate the global llmproxy entrypoint after update so the shell command remains available immediately",
+      "ensure self-update preserves the currently hashed llmproxy path by rewriting it with sudo when necessary"
     ]
   },
   "dependencies": {

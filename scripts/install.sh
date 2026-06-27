@@ -117,7 +117,51 @@ refresh_path() {
   export PATH
 }
 
+binary_node_major() {
+  candidate="$1"
+  [ -n "$candidate" ] || { printf "0\n"; return 0; }
+  [ -x "$candidate" ] || { printf "0\n"; return 0; }
+  "$candidate" -e 'console.log(process.version.slice(1).split(".")[0])' 2>/dev/null || printf "0\n"
+}
+
+find_node22_bin() {
+  refresh_path
+  candidates=""
+  if has node; then
+    candidates="$candidates $(command -v node)"
+  fi
+  if has nodejs; then
+    candidates="$candidates $(command -v nodejs)"
+  fi
+  for fixed in /usr/bin/node /usr/local/bin/node /bin/node /usr/bin/nodejs /usr/local/bin/nodejs; do
+    [ -x "$fixed" ] && candidates="$candidates $fixed"
+  done
+
+  for candidate in $candidates; do
+    major="$(binary_node_major "$candidate")"
+    if [ "$major" -ge 22 ] 2>/dev/null; then
+      printf "%s\n" "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+activate_node22() {
+  node22_bin="$(find_node22_bin || true)"
+  [ -n "$node22_bin" ] || return 1
+  node22_dir="$(dirname "$node22_bin")"
+  case ":$PATH:" in
+    *":$node22_dir:"*) ;;
+    *) PATH="$node22_dir:$PATH" ;;
+  esac
+  export PATH
+  hash -r 2>/dev/null || true
+  return 0
+}
+
 node_major() {
+  activate_node22 >/dev/null 2>&1 || true
   if ! has node; then
     printf "0\n"
     return 0
@@ -180,6 +224,7 @@ install_node() {
       fi
       ;;
   esac
+  activate_node22 >/dev/null 2>&1 || true
   has node && [ "$(node_major)" -ge 22 ] && has npm
 }
 
@@ -261,11 +306,13 @@ install_docker_compose() {
 
 ensure_node_ready() {
   refresh_path
+  activate_node22 >/dev/null 2>&1 || true
   if has node && [ "$(node_major)" -ge 22 ] && has npm; then
     return 0
   fi
   install_node || error "$MSG_NODE_FAIL"
   refresh_path
+  activate_node22 >/dev/null 2>&1 || true
   has node && [ "$(node_major)" -ge 22 ] && has npm || error "$MSG_NODE_FAIL"
 }
 

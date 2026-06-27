@@ -28,6 +28,7 @@ The script automatically:
 - if multiple Node versions are installed, it prefers a detected `node >= 22` binary even when an older `nvm` version is first in `PATH`
 - on Linux distributions that expose `nodejs` instead of `node`, it creates a temporary shim so the installer can keep using a consistent `node` command
 - if the global npm prefix is system-owned, it automatically retries the package install with `sudo`
+- if a writable global install is still not possible, it falls back to a user-local install under `~/.local`
 - installs the latest `llmProxy` package directly from the GitHub repository tarball
 - registers the native persistent service (launchd / systemd / Windows Service)
 - forces a final `llmproxy service:restart` so the Docker-backed runtime is created/recreated and health-checked before the installer exits

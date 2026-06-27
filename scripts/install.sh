@@ -43,6 +43,8 @@ if [ "$LOCALE" = "it" ]; then
   MSG_INSTALLING="Installazione di llmProxy..."
   MSG_INSTALL_FAIL="Installazione npm fallita."
   MSG_INSTALL_SOURCE="Sorgente installazione"
+  MSG_INSTALL_RETRY_SUDO="npm install -g fallito, ritento con sudo"
+  MSG_INSTALL_RETRY_LOCAL="Installazione globale non disponibile, passo a installazione user-local"
   MSG_SERVICE="Avvio del servizio persistente in corso..."
   MSG_SERVICE_FAIL="Il servizio persistente o il runtime Docker non sono partiti correttamente."
   MSG_SERVICE_RETRY="service:start fallito, ritento con service:restart"
@@ -63,6 +65,8 @@ else
   MSG_INSTALLING="Installing llmProxy..."
   MSG_INSTALL_FAIL="npm install failed."
   MSG_INSTALL_SOURCE="Install source"
+  MSG_INSTALL_RETRY_SUDO="npm install -g failed, retrying with sudo"
+  MSG_INSTALL_RETRY_LOCAL="Global install unavailable, falling back to user-local install"
   MSG_SERVICE="Starting persistent service..."
   MSG_SERVICE_FAIL="The persistent service or Docker runtime did not start correctly."
   MSG_SERVICE_RETRY="service:start failed, retrying with service:restart"
@@ -347,6 +351,21 @@ ensure_compose_ready() {
   docker compose version >/dev/null 2>&1 || has docker-compose || error "$MSG_COMPOSE_FAIL"
 }
 
+install_llmproxy_user_local() {
+  local_prefix="$HOME/.local/share/llmproxy/npm-global"
+  local_bin_dir="$HOME/.local/bin"
+  mkdir -p "$local_prefix" "$local_bin_dir"
+  npm install -g --prefix "$local_prefix" "$INSTALL_SOURCE" 2>&1 || return 1
+  if [ -x "$local_prefix/bin/llmproxy" ]; then
+    ln -sf "$local_prefix/bin/llmproxy" "$local_bin_dir/llmproxy"
+    PATH="$local_bin_dir:$local_prefix/bin:$PATH"
+    export PATH
+    hash -r 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
 info "$MSG_DEPS"
 refresh_path
 ensure_node_ready
@@ -357,13 +376,21 @@ INSTALL_SOURCE="${LLMPROXY_INSTALL_SOURCE:-https://github.com/alessiobacin/llmPr
 info "$MSG_INSTALLING"
 printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
 USED_SUDO_INSTALL=0
+USED_LOCAL_INSTALL=0
 if ! npm install -g "$INSTALL_SOURCE" 2>&1; then
   if [ "$PLATFORM" != "windows" ] && has sudo; then
-    warn "npm install -g failed, retrying with sudo"
-    run_root npm install -g "$INSTALL_SOURCE" 2>&1 || error "$MSG_INSTALL_FAIL"
-    USED_SUDO_INSTALL=1
+    warn "$MSG_INSTALL_RETRY_SUDO"
+    if run_root npm install -g "$INSTALL_SOURCE" 2>&1; then
+      USED_SUDO_INSTALL=1
+    else
+      warn "$MSG_INSTALL_RETRY_LOCAL"
+      install_llmproxy_user_local || error "$MSG_INSTALL_FAIL"
+      USED_LOCAL_INSTALL=1
+    fi
   else
-    error "$MSG_INSTALL_FAIL"
+    warn "$MSG_INSTALL_RETRY_LOCAL"
+    install_llmproxy_user_local || error "$MSG_INSTALL_FAIL"
+    USED_LOCAL_INSTALL=1
   fi
 fi
 
@@ -371,12 +398,14 @@ LLMPROXY_BIN=""
 if has llmproxy; then
   LLMPROXY_BIN="$(command -v llmproxy)"
 else
-  if [ "$USED_SUDO_INSTALL" -eq 1 ] && [ "$PLATFORM" != "windows" ] && has sudo; then
+  if [ "$USED_LOCAL_INSTALL" -eq 1 ] && [ -x "$HOME/.local/bin/llmproxy" ]; then
+    LLMPROXY_BIN="$HOME/.local/bin/llmproxy"
+  elif [ "$USED_SUDO_INSTALL" -eq 1 ] && [ "$PLATFORM" != "windows" ] && has sudo; then
     NPM_GLOBAL_PREFIX="$(sudo npm prefix -g 2>/dev/null || true)"
   else
     NPM_GLOBAL_PREFIX="$(npm prefix -g 2>/dev/null || true)"
   fi
-  if [ -n "$NPM_GLOBAL_PREFIX" ] && [ -x "$NPM_GLOBAL_PREFIX/bin/llmproxy" ]; then
+  if [ -z "$LLMPROXY_BIN" ] && [ -n "${NPM_GLOBAL_PREFIX:-}" ] && [ -x "$NPM_GLOBAL_PREFIX/bin/llmproxy" ]; then
     LLMPROXY_BIN="$NPM_GLOBAL_PREFIX/bin/llmproxy"
   fi
 fi

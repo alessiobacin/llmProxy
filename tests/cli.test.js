@@ -3105,14 +3105,23 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
   assert.match(scriptText, /if sudo npm install -g --force "\$package_file" 2>\/dev\/null; then\n\s+used_sudo=1/);
   assert.match(scriptText, /if \[ "\$used_sudo" -eq 1 \]; then\n\s+npm_prefix=\$\(sudo npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nelse\n\s+npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nfi/);
-  assert.match(scriptText, /sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR.*DBUS_SESSION_BUS_ADDRESS.*service:restart/);
+  assert.match(scriptText, /install_dir="\$npm_prefix\/lib\/node_modules\/llmproxy"/);
+  assert.match(scriptText, /package_cli="\$install_dir\/bin\/llmproxy\.js"/);
+  assert.match(scriptText, /run_new_llmproxy\(\) \{/);
+  assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -f "\$package_cli" \]; then/);
+  assert.match(scriptText, /package_cli_version=\$\(node "\$package_cli" version 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /new_bin_mode="node"/);
+  assert.match(scriptText, /sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR=.*DBUS_SESSION_BUS_ADDRESS=.*node "\$new_bin" service:restart/);
   assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ \"\$candidate_version\" = \"\$target_version\" \]; then\n      new_bin=\"\$candidate_bin\"/);
-  assert.match(scriptText, /version_output=\$\(\"\$new_bin\" version\)\n\[ \"\$version_output\" = \"\$target_version\" \]/);
+  assert.match(scriptText, /if \[ -z "\$new_bin" \] && \[ -x "\$npm_prefix\/bin\/llmproxy" \]; then/);
+  assert.match(scriptText, /version_output=\$\(\"\$new_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \]; then/);
-  assert.match(scriptText, /cat > "\$current_bin" <<EOF/);
+  assert.match(scriptText, /printf '%s\\n' '#!\/bin\/sh' "exec node \\"\$new_bin\\" \\"\\\$@\\"" > "\$current_bin"/);
+  assert.match(scriptText, /printf '%s\\n' '#!\/bin\/sh' "exec \\"\$new_bin\\" \\"\\\$@\\"" > "\$current_bin"/);
   assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
+  assert.match(scriptText, /release_notes_output=\$\(run_new_llmproxy release-notes --version "\$version_output"/);
 });
 
 test("buildPersistentInstallScript includes sudo-to-user D-Bus delegation on Linux", () => {

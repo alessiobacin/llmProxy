@@ -351,11 +351,33 @@ ensure_compose_ready() {
   docker compose version >/dev/null 2>&1 || has docker-compose || error "$MSG_COMPOSE_FAIL"
 }
 
+LAST_CMD_LOG=""
+
+run_quiet_capture() {
+  LAST_CMD_LOG="${TMPDIR:-/tmp}/llmproxy-install-$$.log"
+  : > "$LAST_CMD_LOG"
+  if "$@" >"$LAST_CMD_LOG" 2>&1; then
+    rm -f "$LAST_CMD_LOG"
+    LAST_CMD_LOG=""
+    return 0
+  fi
+  return 1
+}
+
+fail_with_last_cmd_log() {
+  if [ -n "${LAST_CMD_LOG:-}" ] && [ -f "$LAST_CMD_LOG" ]; then
+    cat "$LAST_CMD_LOG" >&2
+    rm -f "$LAST_CMD_LOG"
+    LAST_CMD_LOG=""
+  fi
+  error "$1"
+}
+
 install_llmproxy_user_local() {
   local_prefix="$HOME/.local/share/llmproxy/npm-global"
   local_bin_dir="$HOME/.local/bin"
   mkdir -p "$local_prefix" "$local_bin_dir"
-  npm install -g --prefix "$local_prefix" "$INSTALL_SOURCE" 2>&1 || return 1
+  run_quiet_capture npm install -g --prefix "$local_prefix" "$INSTALL_SOURCE" || return 1
   if [ -x "$local_prefix/bin/llmproxy" ]; then
     ln -sf "$local_prefix/bin/llmproxy" "$local_bin_dir/llmproxy"
     PATH="$local_bin_dir:$local_prefix/bin:$PATH"
@@ -377,19 +399,19 @@ info "$MSG_INSTALLING"
 printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
 USED_SUDO_INSTALL=0
 USED_LOCAL_INSTALL=0
-if ! npm install -g "$INSTALL_SOURCE" 2>&1; then
+if ! run_quiet_capture npm install -g "$INSTALL_SOURCE"; then
   if [ "$PLATFORM" != "windows" ] && has sudo; then
     warn "$MSG_INSTALL_RETRY_SUDO"
-    if run_root npm install -g "$INSTALL_SOURCE" 2>&1; then
+    if run_quiet_capture run_root npm install -g "$INSTALL_SOURCE"; then
       USED_SUDO_INSTALL=1
     else
       warn "$MSG_INSTALL_RETRY_LOCAL"
-      install_llmproxy_user_local || error "$MSG_INSTALL_FAIL"
+      install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
       USED_LOCAL_INSTALL=1
     fi
   else
     warn "$MSG_INSTALL_RETRY_LOCAL"
-    install_llmproxy_user_local || error "$MSG_INSTALL_FAIL"
+    install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
     USED_LOCAL_INSTALL=1
   fi
 fi

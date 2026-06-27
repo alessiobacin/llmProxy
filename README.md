@@ -26,6 +26,7 @@ The script automatically:
 - verifies Node.js 22+, npm, Docker, and Docker Compose
 - attempts to auto-install missing dependencies before installing `llmProxy`
 - if multiple Node versions are installed, it prefers a detected `node >= 22` binary even when an older `nvm` version is first in `PATH`
+- on Linux distributions that expose `nodejs` instead of `node`, it creates a temporary shim so the installer can keep using a consistent `node` command
 - installs the latest `llmProxy` package directly from the GitHub repository tarball
 - registers the native persistent service (launchd / systemd / Windows Service)
 - forces a final `llmproxy service:restart` so the Docker-backed runtime is created/recreated and health-checked before the installer exits

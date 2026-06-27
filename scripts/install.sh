@@ -151,6 +151,20 @@ activate_node22() {
   node22_bin="$(find_node22_bin || true)"
   [ -n "$node22_bin" ] || return 1
   node22_dir="$(dirname "$node22_bin")"
+  node22_base="$(basename "$node22_bin")"
+  shim_dir=""
+  if [ "$node22_base" = "nodejs" ]; then
+    shim_dir="${TMPDIR:-/tmp}/llmproxy-node22-shim"
+    mkdir -p "$shim_dir"
+    ln -sf "$node22_bin" "$shim_dir/node"
+    if [ -x "$node22_dir/npm" ]; then
+      ln -sf "$node22_dir/npm" "$shim_dir/npm"
+    fi
+    case ":$PATH:" in
+      *":$shim_dir:"*) ;;
+      *) PATH="$shim_dir:$PATH" ;;
+    esac
+  fi
   case ":$PATH:" in
     *":$node22_dir:"*) ;;
     *) PATH="$node22_dir:$PATH" ;;

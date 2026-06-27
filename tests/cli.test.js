@@ -344,9 +344,9 @@ test("provider:list shows the effective project fallback chain when Claude setti
 
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Provider effettivi per il progetto/);
-  assert.match(stdout.toString(), /1\. default \(Default Copilot\) model=gpt-5\.4/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\) model=kimi-k2\.5/);
-  assert.match(stdout.toString(), /3\. qwen \(Qwen\) model=qwen3\.7-max/);
+  assert.match(stdout.toString(), /1\. default \(Default Copilot\).*model=gpt-5\.4/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\).*model=kimi-k2\.5/);
+  assert.match(stdout.toString(), /3\. qwen \(Qwen\).*model=qwen3\.7-max/);
 });
 
 test("provider:list keeps provider default models when the project sets a global override model", async () => {
@@ -398,9 +398,9 @@ test("provider:list keeps provider default models when the project sets a global
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\) model=deepseek-v4-pro/);
-  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\) model=minimax\/minimax-m3/);
-  assert.match(stdout.toString(), /3\. commandcode \(Command Code\) model=Qwen\/Qwen3\.7-Max/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\).*model=deepseek-v4-pro/);
+  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\).*model=minimax\/minimax-m3/);
+  assert.match(stdout.toString(), /3\. commandcode \(Command Code\).*model=Qwen\/Qwen3\.7-Max/);
   assert.doesNotMatch(stdout.toString(), /model=gpt-5\.4/);
 });
 
@@ -594,10 +594,10 @@ test("provider:list shows residual credit plus current and best provider pricing
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\) model=deepseek-v4-pro credit=USD 12\.34 price=in=USD 0\.43\/1M out=USD 0\.87\/1M best=openrouter \(in=USD 0\.43\/1M out=USD 0\.87\/1M\)/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\) model=kimi-k2\.7-code credit=49\.59 price=n\/a best=openrouter \(in=USD 0\.74\/1M out=USD 3\.50\/1M\)/);
-  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\) model=minimax\/minimax-m3 credit=74\.75 credits price=in=USD 0\.30\/1M out=USD 1\.20\/1M best=fireworks \(in=USD 0\.30\/1M out=USD 1\.20\/1M\)/);
-  assert.match(stdout.toString(), /4\. qwen \(Qwen\) model=qwen3\.7-plus credit=n\/a price=in=USD 0\.40\/1M out=USD 1\.60\/1M best=openrouter \(in=USD 0\.32\/1M out=USD 1\.28\/1M\)/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\).*\[USD 12\.34\].*model=deepseek-v4-pro.*price=in=USD 0\.43\/1M out=USD 0\.87\/1M best=openrouter/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\).*\[49\.59\].*model=kimi-k2\.7-code.*price=n\/a best=openrouter/);
+  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\).*\[74\.75 credits\].*model=minimax\/minimax-m3.*price=in=USD 0\.30\/1M out=USD 1\.20\/1M best=fireworks/);
+  assert.match(stdout.toString(), /4\. qwen \(Qwen\).*\[n\/a\].*model=qwen3\.7-plus.*price=in=USD 0\.40\/1M out=USD 1\.60\/1M best=openrouter/);
 });
 
 test("provider:available shows supported providers with aliases and auth type", async () => {

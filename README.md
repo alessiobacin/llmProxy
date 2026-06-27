@@ -6,7 +6,31 @@
 
 ## Quick Start
 
-### 0. Clone the repository
+### 0. One-liner install (no clone needed)
+
+The fastest way to install `llmProxy` globally with a persistent native service:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/alessiobacin/llmProxy/main/scripts/install.sh | sh
+```
+
+Or with `wget`:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/alessiobacin/llmProxy/main/scripts/install.sh | sh
+```
+
+The script automatically:
+
+- detects the OS (macOS, Linux, Windows via Git Bash/WSL)
+- verifies Node.js 22+ and npm
+- installs the latest `llmproxy` package from the npm registry
+- registers the native persistent service (launchd / systemd / Windows Service)
+- auto-selects English or Italian output based on your locale
+
+> **Next step after install**: `llmproxy provider:add copilot`
+
+### 1. Clone the repository (alternative)
 
 If you are starting from scratch, clone the repository locally and enter the project directory:
 
@@ -104,7 +128,7 @@ On Windows, the persistent installation works the same way but uses **Windows Se
 
 > **Note**: Run PowerShell as **Administrator** if you encounter permission issues during `npm install -g`. On modern Windows (10+), standard user installs often work without elevation.
 
-### 1. Verify runtime setup
+### 2. Verify runtime setup
 
 ```bash
 llmproxy setup
@@ -115,7 +139,7 @@ Shows:
 - the package data root
 - the native service manager selected for the OS
 
-### 2. Add the Copilot provider
+### 3. Add the Copilot provider
 
 ```bash
 llmproxy provider:add copilot
@@ -130,7 +154,7 @@ The CLI:
 
 `llmproxy login` still exists as a deprecated compatibility alias of `llmproxy provider:add copilot`.
 
-### 3. Start in foreground
+### 4. Start in foreground
 
 ```bash
 llmproxy run
@@ -142,7 +166,7 @@ By default the server starts on:
 http://127.0.0.1:5045
 ```
 
-### 4. Add additional providers and fallback order
+### 5. Add additional providers and fallback order
 
 ```bash
 llmproxy provider:available
@@ -154,7 +178,7 @@ llmproxy provider:order kimi 2
 llmproxy provider:rename kimi "Kimi Fallback"
 ```
 
-### 5. Install as a persistent service
+### 6. Install as a persistent service
 
 ```bash
 llmproxy service:start
@@ -175,14 +199,14 @@ pppnpm run install:persistent-en
 On macOS this creates and loads a user `LaunchAgent`.
 On Linux this creates and enables a `systemd --user` service.
 
-### 6. Configure Claude Code with the desired model
+### 7. Configure Claude Code with the desired model
 
 ```bash
 llmproxy models:list
 llmproxy claude:setup --model 2
 ```
 
-### 7. Service status and logs
+### 8. Service status and logs
 
 ```bash
 llmproxy status

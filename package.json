@@ -10,6 +10,7 @@
     "api/",
     "assets/",
     "bin/",
+    "scripts/install.sh",
     "lib/",
     "Dockerfile",
     "docker-compose.production.yml",

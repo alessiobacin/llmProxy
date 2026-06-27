@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate, buildPersistentInstallScript } = require("../lib/cli");
 const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
@@ -2946,6 +2946,7 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
   assert.match(scriptText, /if sudo npm install -g --force "\$package_file" 2>\/dev\/null; then\n\s+used_sudo=1/);
   assert.match(scriptText, /if \[ "\$used_sudo" -eq 1 \]; then\n\s+npm_prefix=\$\(sudo npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nelse\n\s+npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nfi/);
+  assert.match(scriptText, /sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR.*DBUS_SESSION_BUS_ADDRESS.*service:restart/);
   assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ \"\$candidate_version\" = \"\$target_version\" \]; then\n      new_bin=\"\$candidate_bin\"/);
@@ -2953,6 +2954,31 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \]; then/);
   assert.match(scriptText, /cat > "\$current_bin" <<EOF/);
   assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
+});
+
+test("buildPersistentInstallScript includes sudo-to-user D-Bus delegation on Linux", () => {
+  const installScript = buildPersistentInstallScript({
+    packageRoot: "/tmp/pkg",
+    locale: "it",
+    platform: "linux",
+  });
+  assert.match(installScript, /used_sudo=0/);
+  assert.match(installScript, /if sudo npm install -g/);
+  assert.match(installScript, /used_sudo=1/);
+  assert.match(installScript, /if \[ "\$used_sudo" -eq 1 \] && \[ "\$platform" = "linux" \] && \[ -n "\$\{SUDO_USER:-\}" \] && command -v sudo >\/dev\/null 2>&1; then\n\s+sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR="\/run\/user\/\$\(id -u "\$SUDO_USER"\)" DBUS_SESSION_BUS_ADDRESS="unix:path=\/run\/user\/\$\(id -u "\$SUDO_USER"\)\/bus" "\$global_bin" service:start/);
+  assert.match(installScript, /else\n\s+"\$global_bin" service:start\nfi/);
+});
+
+test("buildPersistentInstallScript includes used_sudo path for update service:restart after sudo install", () => {
+  const script = buildPersistentInstallScript({
+    packageRoot: "/tmp/pkg",
+    locale: "en",
+    platform: "linux",
+  });
+  assert.match(script, /used_sudo=0/);
+  assert.match(script, /if sudo npm install -g/);
+  assert.match(script, /used_sudo=1/);
+  assert.match(script, /sudo -u "\$SUDO_USER"/);
 });
 
 test("update keeps success when package install succeeds but service restart fails", async () => {

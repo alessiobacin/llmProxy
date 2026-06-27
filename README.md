@@ -187,7 +187,9 @@ llmproxy claude:setup --model 2
 ```bash
 llmproxy status
 llmproxy test
+llmproxy test -i
 llmproxy test --all-providers
+llmproxy test -i --all-providers
 llmproxy stats
 llmproxy logs
 llmproxy logs --follow
@@ -791,17 +793,46 @@ If the live catalog is unavailable, it uses the local cache or the static fallba
 
 ### `llmproxy test`
 
-Runs a quick inference test against the local proxy by sending this fixed prompt:
+Supports two different modes.
+
+Default mode: provider probe
+
+- `llmproxy test` probes only the active provider and prints one compact line: `ok` or `fail`
+- `llmproxy test --all-providers` probes every configured provider in order and prints one line per provider
+- this mode is meant for operator checks and never prints the assistant body
+
+Inference mode: real fallback execution
+
+- `llmproxy test -i` runs one real inference through the normal fallback chain and prints the provider/model that actually answered
+- `llmproxy test -i --all-providers` still runs one real inference, then prints the remaining fallback chain after the winning provider
+
+The inference test sends this fixed prompt:
 
 ```text
-Ciao! rispondimi solo: ciao creatore
+Rispondi solo: llmproxy-test-inference
 ```
 
-If the proxy responds correctly, the command prints only the text returned by the assistant.
-It is useful for quickly checking that the local service is running and that the `/v1/messages` path is working.
+Examples:
 
-Use `llmproxy test --all-providers` if you want to probe every configured provider instead of only the active one.
-The command strips llmProxy metadata lines from the printed assistant text, so the terminal shows only the visible answer.
+```text
+inference: ok (kimi | kimi-k2.7-code)
+response: llmproxy-test-inference
+```
+
+```text
+inference: ok (kimi | kimi-k2.7-code)
+1st fallback: openrouter | minimax-m3
+2nd fallback: qwen | qwen3.7-plus
+3rd fallback: opencode | deepseek-v4-flash-free
+response: llmproxy-test-inference
+```
+
+Notes:
+
+- failed providers before the real winner are not shown as fallback entries in `-i --all-providers`
+- llmProxy inline metadata lines are stripped from the printed `response:`
+- if the provider returns only llmProxy metadata and the request succeeded, the test still reports `inference: ok` and omits the `response:` line
+- use this command to verify the real runtime fallback order seen by an actual inference, not just individual provider reachability
 
 ### `llmproxy stats`
 
@@ -881,7 +912,23 @@ llmproxy provider:key qwen --api-key sk-sp-... --vision true --plan subscription
 
 ### `llmproxy provider:list`
 
-Shows the current fallback order of configured providers. For each provider, the vision capability is shown as `vision=true` or `vision=false`. For `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`.
+Shows the current fallback order of configured providers. For each provider:
+
+- the selected model is shown as `model=...`
+- the vision capability is shown as `vision=true` or `vision=false`
+- for `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`
+- the residual credit is shown as `credit=...` when the provider exposes a balance endpoint
+- if the provider does not expose a readable balance endpoint, or the current key cannot read it, the suffix is `credit=n/a` or `credit=unavailable`
+- the current provider price is shown as `price=...`
+- the cheapest alternative discovered through the CloudPrice pricing API is shown as `best=... (...)`
+
+Pricing notes:
+
+- the price comparison uses the public CloudPrice model pricing API: `GET /models/{id}/pricing/calculate`
+- the comparison is normalized on `tier=standard`, `input_tokens=1000000`, `output_tokens=1000000`
+- this makes the numbers directly comparable across providers for the same model
+- the rendered label shows both token dimensions explicitly: `in=...` and `out=...`
+- if CloudPrice cannot resolve the current provider/model pair, the command prints `price=n/a` or `price=unavailable`
 
 ### `llmproxy provider:test`
 

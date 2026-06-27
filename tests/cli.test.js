@@ -285,6 +285,7 @@ test("provider:add performs a dedicated Copilot login and provider:list shows fa
   const listExitCode = await runCli(["node", "llmproxy", "provider:list"], {
     dataRoot: runtimeRoot,
     stdout: listStdout,
+    fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; } }),
   });
 
   assert.equal(addExitCode, 0);
@@ -338,6 +339,7 @@ test("provider:list shows the effective project fallback chain when Claude setti
     dataRoot: runtimeRoot,
     stdout,
     tokenStore,
+    fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; } }),
   });
 
   assert.equal(exitCode, 0);
@@ -392,6 +394,7 @@ test("provider:list keeps provider default models when the project sets a global
     dataRoot: runtimeRoot,
     stdout,
     tokenStore,
+    fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; } }),
   });
 
   assert.equal(exitCode, 0);
@@ -399,6 +402,202 @@ test("provider:list keeps provider default models when the project sets a global
   assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\) model=minimax\/minimax-m3/);
   assert.match(stdout.toString(), /3\. commandcode \(Command Code\) model=Qwen\/Qwen3\.7-Max/);
   assert.doesNotMatch(stdout.toString(), /model=gpt-5\.4/);
+});
+
+test("provider:list shows residual credit plus current and best provider pricing", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-credit-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.7-code",
+  }, { name: "Kimi" });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "minimax/minimax-m3",
+  }, { name: "OpenRouter" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "token-qwen",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-plus",
+  }, { name: "Qwen" });
+
+  const fetchFn = async (url) => {
+    const target = String(url);
+    if (target === "https://api.deepseek.com/user/balance") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            is_available: true,
+            balance_infos: [{ currency: "USD", total_balance: "12.34" }],
+          };
+        },
+      };
+    }
+    if (target === "https://api.moonshot.ai/v1/users/me/balance") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            status: true,
+            data: { available_balance: 49.58894 },
+          };
+        },
+      };
+    }
+    if (target === "https://openrouter.ai/api/v1/credits") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            data: { total_credits: 100.5, total_usage: 25.75 },
+          };
+        },
+      };
+    }
+    if (target === "https://ai.cloudprice.net/api/v1/models/deepseek-v4-pro/pricing/calculate?tier=standard&input_tokens=1000000&output_tokens=1000000") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            data: {
+              result: {
+                total_cost: 1.305,
+                breakdown: [
+                  { dimension: "input", unit_price: 0.435 },
+                  { dimension: "output", unit_price: 0.87 },
+                ],
+                providers: [
+                  { provider_id: "deepseek" },
+                  { provider_id: "openrouter" },
+                  { provider_id: "vercel_ai_gateway" },
+                ],
+              },
+              options: [
+                { provider_id: "deepseek", tier: "standard", total_cost: 1.305, breakdown: [{ dimension: "input", unit_price: 0.435 }, { dimension: "output", unit_price: 0.87 }] },
+                { provider_id: "openrouter", tier: "standard", total_cost: 1.305, breakdown: [{ dimension: "input", unit_price: 0.435 }, { dimension: "output", unit_price: 0.87 }] },
+              ],
+            },
+          };
+        },
+      };
+    }
+    if (target === "https://ai.cloudprice.net/api/v1/models/kimi-k2.7-code/pricing/calculate?tier=standard&input_tokens=1000000&output_tokens=1000000") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            data: {
+              result: {
+                total_cost: 4.24,
+                breakdown: [
+                  { dimension: "input", unit_price: 0.74 },
+                  { dimension: "output", unit_price: 3.5 },
+                ],
+                providers: [{ provider_id: "openrouter" }],
+              },
+              options: [
+                { provider_id: "openrouter", tier: "standard", total_cost: 4.24, breakdown: [{ dimension: "input", unit_price: 0.74 }, { dimension: "output", unit_price: 3.5 }] },
+              ],
+            },
+          };
+        },
+      };
+    }
+    if (target === "https://ai.cloudprice.net/api/v1/models/minimax%2Fminimax-m3/pricing/calculate?tier=standard&input_tokens=1000000&output_tokens=1000000"
+      || target === "https://ai.cloudprice.net/api/v1/models/minimax-m3/pricing/calculate?tier=standard&input_tokens=1000000&output_tokens=1000000") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            data: {
+              result: {
+                total_cost: 1.5,
+                breakdown: [
+                  { dimension: "input", unit_price: 0.3 },
+                  { dimension: "output", unit_price: 1.2 },
+                ],
+                providers: [
+                  { provider_id: "fireworks_ai" },
+                  { provider_id: "huggingface" },
+                  { provider_id: "minimax" },
+                  { provider_id: "openrouter" },
+                ],
+              },
+              options: [
+                { provider_id: "openrouter", tier: "standard", total_cost: 1.5, breakdown: [{ dimension: "input", unit_price: 0.3 }, { dimension: "output", unit_price: 1.2 }] },
+              ],
+            },
+          };
+        },
+      };
+    }
+    if (target === "https://ai.cloudprice.net/api/v1/models/qwen3.7-plus/pricing/calculate?tier=standard&input_tokens=1000000&output_tokens=1000000") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            data: {
+              result: {
+                total_cost: 1.6,
+                breakdown: [
+                  { dimension: "input", unit_price: 0.32 },
+                  { dimension: "output", unit_price: 1.28 },
+                ],
+                providers: [{ provider_id: "openrouter" }],
+              },
+              options: [
+                { provider_id: "alibaba_qwen", tier: "standard", total_cost: 2.0, breakdown: [{ dimension: "input", unit_price: 0.4 }, { dimension: "output", unit_price: 1.6 }] },
+                { provider_id: "openrouter", tier: "standard", total_cost: 1.6, breakdown: [{ dimension: "input", unit_price: 0.32 }, { dimension: "output", unit_price: 1.28 }] },
+              ],
+            },
+          };
+        },
+      };
+    }
+    return { ok: false, status: 404, async json() { return {}; } };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\) model=deepseek-v4-pro credit=USD 12\.34 price=in=USD 0\.43\/1M out=USD 0\.87\/1M best=openrouter \(in=USD 0\.43\/1M out=USD 0\.87\/1M\)/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\) model=kimi-k2\.7-code credit=49\.59 price=n\/a best=openrouter \(in=USD 0\.74\/1M out=USD 3\.50\/1M\)/);
+  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\) model=minimax\/minimax-m3 credit=74\.75 credits price=in=USD 0\.30\/1M out=USD 1\.20\/1M best=fireworks \(in=USD 0\.30\/1M out=USD 1\.20\/1M\)/);
+  assert.match(stdout.toString(), /4\. qwen \(Qwen\) model=qwen3\.7-plus credit=n\/a price=in=USD 0\.40\/1M out=USD 1\.60\/1M best=openrouter \(in=USD 0\.32\/1M out=USD 1\.28\/1M\)/);
 });
 
 test("provider:available shows supported providers with aliases and auth type", async () => {

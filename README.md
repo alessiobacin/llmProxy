@@ -24,7 +24,7 @@ The script automatically:
 
 - detects the OS (macOS, Linux, Windows via Git Bash/WSL)
 - verifies Node.js 22+ and npm
-- installs the latest `llmproxy` package from the npm registry
+- installs the latest `llmProxy` package directly from the GitHub repository tarball
 - registers the native persistent service (launchd / systemd / Windows Service)
 - auto-selects English or Italian output based on your locale
 
@@ -109,7 +109,7 @@ The bootstrap flow:
 - automatically detects the supported OS (`macOS`, `Linux`, or `Windows`)
 - verifies the required prerequisites before the global install starts
 - prints OS-specific remediation commands when `npm`, `systemd`, Docker, or Docker Compose are missing
-- installs the current CLI globally with `pnpm install -g`
+- installs the current CLI globally from the repository package
 - removes any duplicate global wrappers
 - launches `llmproxy service:start` through the newly installed global binary
 
@@ -121,12 +121,12 @@ For Docker-backed profiles, the installer accepts both `docker compose` and the 
 On Windows, the persistent installation works the same way but uses **Windows Service Control Manager (`sc.exe`)** instead of systemd or launchd:
 
 - **Prerequisites**: Node.js 22+ LTS (via [nodejs.org](https://nodejs.org)), npm, PowerShell 5.1+
-- The CLI is installed globally via `npm install -g` (no `sudo` needed)
+- The CLI is installed globally via `npm install -g <github-tarball>` (no `sudo` needed)
 - The service is registered as a native **Windows Service** with automatic start and auto-restart on crash
 - Logs are written to `%APPDATA%\llmProxy\logs\`
 - The service runs under the `SYSTEM` account (via the wrapper batch file) and persists across reboots
 
-> **Note**: Run PowerShell as **Administrator** if you encounter permission issues during `npm install -g`. On modern Windows (10+), standard user installs often work without elevation.
+> **Note**: Run PowerShell as **Administrator** if you encounter permission issues during `npm install -g <github-tarball>`. On modern Windows (10+), standard user installs often work without elevation.
 
 ### 2. Verify runtime setup
 

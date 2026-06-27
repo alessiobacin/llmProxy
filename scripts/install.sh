@@ -42,6 +42,7 @@ if [ "$LOCALE" = "it" ]; then
   MSG_NODE_VERSION="Richiesta Node.js 22+. Versione attuale:"
   MSG_INSTALLING="Installazione di llmProxy..."
   MSG_INSTALL_FAIL="Installazione npm fallita."
+  MSG_INSTALL_SOURCE="Sorgente installazione"
   MSG_SERVICE="Registrazione del servizio persistente in corso..."
   MSG_SERVICE_WARN="Il servizio persistente ha riportato degli avvisi (controlla sopra)."
   MSG_DONE="Installazione completata!"
@@ -54,6 +55,7 @@ else
   MSG_NODE_VERSION="Node.js 22+ is required. Current version:"
   MSG_INSTALLING="Installing llmProxy..."
   MSG_INSTALL_FAIL="npm install failed."
+  MSG_INSTALL_SOURCE="Install source"
   MSG_SERVICE="Registering persistent service..."
   MSG_SERVICE_WARN="The persistent service reported warnings (check above)."
   MSG_DONE="Installation complete!"
@@ -77,13 +79,25 @@ if ! command -v npm >/dev/null 2>&1; then
   error "$MSG_NODE_MISSING (npm not found)"
 fi
 
-# --- Install from npm ---
+# --- Install from GitHub tarball ---
+INSTALL_SOURCE="${LLMPROXY_INSTALL_SOURCE:-https://github.com/alessiobacin/llmProxy/archive/refs/heads/main.tar.gz}"
 info "$MSG_INSTALLING"
-npm install -g llmproxy 2>&1 || error "$MSG_INSTALL_FAIL"
+printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
+npm install -g "$INSTALL_SOURCE" 2>&1 || error "$MSG_INSTALL_FAIL"
 
-# --- Verify global binary ---
-if ! command -v llmproxy >/dev/null 2>&1; then
-  error "llmproxy not found in PATH after npm install. Try checking your npm global prefix."
+# --- Resolve global binary ---
+LLMPROXY_BIN=""
+if command -v llmproxy >/dev/null 2>&1; then
+  LLMPROXY_BIN="$(command -v llmproxy)"
+else
+  NPM_GLOBAL_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+  if [ -n "$NPM_GLOBAL_PREFIX" ] && [ -x "$NPM_GLOBAL_PREFIX/bin/llmproxy" ]; then
+    LLMPROXY_BIN="$NPM_GLOBAL_PREFIX/bin/llmproxy"
+  fi
+fi
+
+if [ -z "$LLMPROXY_BIN" ]; then
+  error "llmproxy not found after npm install. Check your npm global prefix and PATH."
 fi
 
 # --- Register persistent service ---
@@ -92,7 +106,7 @@ if [ "$PLATFORM" = "windows" ]; then
   printf "%s\n" "$MSG_WINDOWS_NOTE"
 fi
 
-if ! llmproxy install:persistent-en 2>&1; then
+if ! "$LLMPROXY_BIN" install:persistent-en 2>&1; then
   warn "$MSG_SERVICE_WARN"
 fi
 

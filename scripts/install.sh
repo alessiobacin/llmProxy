@@ -417,12 +417,22 @@ info "$MSG_INSTALLING"
 printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
 USED_SUDO_INSTALL=0
 USED_LOCAL_INSTALL=0
-npm_prefix_writable_flag=0
-if npm_prefix_writable; then
-  npm_prefix_writable_flag=1
-fi
-
-if [ "$npm_prefix_writable_flag" -eq 1 ]; then
+if [ "$PLATFORM" != "windows" ] && [ "$(id -u)" -ne 0 ]; then
+  if has sudo; then
+    info "$MSG_INSTALL_USE_SUDO"
+    if run_quiet_capture run_root npm install -g --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE"; then
+      USED_SUDO_INSTALL=1
+    else
+      warn "$MSG_INSTALL_RETRY_LOCAL"
+      install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+      USED_LOCAL_INSTALL=1
+    fi
+  else
+    info "$MSG_INSTALL_USE_LOCAL"
+    install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+    USED_LOCAL_INSTALL=1
+  fi
+else
   if ! npm_install_global_quiet "$INSTALL_SOURCE"; then
     if [ "$PLATFORM" != "windows" ] && has sudo; then
       warn "$MSG_INSTALL_RETRY_SUDO"
@@ -439,23 +449,7 @@ if [ "$npm_prefix_writable_flag" -eq 1 ]; then
       USED_LOCAL_INSTALL=1
     fi
   fi
-else
-  if [ "$PLATFORM" != "windows" ] && has sudo; then
-    info "$MSG_INSTALL_USE_SUDO"
-    if run_quiet_capture run_root npm install -g --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE"; then
-      USED_SUDO_INSTALL=1
-    else
-      warn "$MSG_INSTALL_RETRY_LOCAL"
-      install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
-      USED_LOCAL_INSTALL=1
-    fi
-  else
-    info "$MSG_INSTALL_USE_LOCAL"
-    install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
-    USED_LOCAL_INSTALL=1
-  fi
 fi
-
 LLMPROXY_BIN=""
 if has llmproxy; then
   LLMPROXY_BIN="$(command -v llmproxy)"

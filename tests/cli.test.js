@@ -3160,6 +3160,7 @@ test("update keeps success when package install succeeds but service restart fai
     dataRoot: runtimeRoot,
     stdout,
     stderr,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner() {
       return {
         status: 0,
@@ -3192,6 +3193,7 @@ test("update prints changelog notes for known versions", async () => {
   const exitCode = await runCli(["node", "llmproxy", "update"], {
     dataRoot: runtimeRoot,
     stdout,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner() {
       return { status: 0, stdout: "changed 82 packages in 2s\n__LLMPROXY_VERSION__=0.2.53\n", stderr: "" };
     },
@@ -3209,6 +3211,7 @@ test("update prints changelog notes for release 0.2.57", async () => {
   const exitCode = await runCli(["node", "llmproxy", "update"], {
     dataRoot: runtimeRoot,
     stdout,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner() {
       return { status: 0, stdout: "changed 10 packages in 1s\n__LLMPROXY_VERSION__=0.2.57\n", stderr: "" };
     },
@@ -3217,6 +3220,36 @@ test("update prints changelog notes for release 0.2.57", async () => {
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Changelog 0\.2\.57:/);
   assert.match(stdout.toString(), /profilo runtime esplicito/i);
+});
+
+test("update exits early when the installed version already matches the online version", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-up-to-date-"));
+  const stdout = createWritableBuffer();
+  let commandRunnerCalled = false;
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/Users/alessiobacin/Development/llmProxy",
+    stdout,
+    fetchFn: async (url) => {
+      assert.match(String(url), /raw\.githubusercontent\.com\/alessiobacin\/llmProxy\/main\/package\.json/);
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { version: "0.2.66" };
+        },
+      };
+    },
+    commandRunner() {
+      commandRunnerCalled = true;
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(commandRunnerCalled, false);
+  assert.match(stdout.toString(), /Gia' aggiornato\. Versione corrente: 0\.2\.66/);
 });
 
 test("release-notes prints changelog notes for release 0.2.58", async () => {

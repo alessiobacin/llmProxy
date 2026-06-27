@@ -834,7 +834,7 @@ Default mode: provider probe
 Inference mode: real fallback execution
 
 - `llmproxy test -i` runs one real inference through the normal fallback chain and prints the provider/model that actually answered
-- `llmproxy test -i --all-providers` still runs one real inference, then prints the remaining fallback chain after the winning provider
+- `llmproxy test -i --all-providers` still runs one real inference, then validates every remaining configured fallback after the winner
 
 The inference test sends this fixed prompt:
 
@@ -860,6 +860,8 @@ response: llmproxy-test-inference
 Notes:
 
 - failed providers before the real winner are not shown as fallback entries in `-i --all-providers`
+- remaining configured providers after the winner are re-tested one by one; only working providers are numbered as `1st fallback`, `2nd fallback`, ...
+- broken remaining providers are printed as `invalid fallback: ...` and make the command exit with failure
 - llmProxy inline metadata lines are stripped from the printed `response:`
 - if the provider returns only llmProxy metadata and the request succeeded, the test still reports `inference: ok` and omits the `response:` line
 - use this command to verify the real runtime fallback order seen by an actual inference, not just individual provider reachability

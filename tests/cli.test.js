@@ -2698,7 +2698,7 @@ test("test -i treats metadata-only inline output as a successful inference when 
   assert.doesNotMatch(stdout.toString(), /^response:/m);
 });
 
-test("test -i --all-providers prints the real observed fallback sequence", async () => {
+test("test -i --all-providers prints only validated working fallbacks after the winner", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-all-"));
   const stdout = createWritableBuffer();
   const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
@@ -2738,7 +2738,8 @@ test("test -i --all-providers prints the real observed fallback sequence", async
     default_model: "deepseek-v4-flash-free",
   }, { name: "OpenCode" });
 
-  const fetchFn = async (url) => {
+  let probeIndex = 0;
+  const fetchFn = async (url, options = {}) => {
     if (String(url).endsWith("/health")) {
       return {
         ok: true,
@@ -2748,32 +2749,97 @@ test("test -i --all-providers prints the real observed fallback sequence", async
         },
       };
     }
+    const body = JSON.parse(String(options.body || "{}"));
     const logsDir = path.join(runtimeRoot, "logs");
     fs.mkdirSync(logsDir, { recursive: true });
     const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
-    fs.appendFileSync(logFile, JSON.stringify({
-      ts: new Date().toISOString(),
-      event: "request_summary",
-      requestId: "req-inference-all",
-      success: true,
-      finalProvider: "openrouter",
-      finalModel: "minimax/minimax-m3-20260531",
-      providerSequence: [
-        { provider: "deepseek", status: 402, success: false, effective_model: "deepseek-v4-pro", actual_model: null },
-        { provider: "deepseek-v4-flash", status: 402, success: false, effective_model: "deepseek-v4-flash", actual_model: null },
-        { provider: "openrouter", status: 200, success: true, effective_model: "minimax/minimax-m3-20260531", actual_model: "minimax/minimax-m3-20260531" },
-      ],
-    }) + "\n", "utf8");
+    probeIndex += 1;
+
+    if (probeIndex === 1) {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-inference-all",
+        success: true,
+        finalProvider: "openrouter",
+        finalModel: "minimax/minimax-m3-20260531",
+        providerSequence: [
+          { provider: "deepseek", status: 402, success: false, effective_model: "deepseek-v4-pro", actual_model: null },
+          { provider: "deepseek-v4-flash", status: 402, success: false, effective_model: "deepseek-v4-flash", actual_model: null },
+          { provider: "openrouter", status: 200, success: true, effective_model: "minimax/minimax-m3-20260531", actual_model: "minimax/minimax-m3-20260531" },
+        ],
+      }) + "\n", "utf8");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "minimax/minimax-m3-20260531",
+            content: [{ type: "text", text: "llmproxy-test-openrouter" }],
+          };
+        },
+      };
+    }
+
+    if (body.provider === "qwen") {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-qwen-fallback",
+        success: true,
+        finalProvider: "qwen",
+        finalModel: "qwen3.7-plus",
+        providerSequence: [
+          { provider: "qwen", status: 200, success: true, effective_model: "qwen3.7-plus", actual_model: "qwen3.7-plus" },
+        ],
+      }) + "\n", "utf8");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "qwen3.7-plus",
+            content: [{ type: "text", text: "llmproxy-test-qwen" }],
+          };
+        },
+      };
+    }
+
+    if (body.provider === "opencode") {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-opencode-fallback",
+        success: true,
+        finalProvider: "opencode",
+        finalModel: "deepseek-v4-flash-free",
+        providerSequence: [
+          { provider: "opencode", status: 200, success: true, effective_model: "deepseek-v4-flash-free", actual_model: "deepseek-v4-flash-free" },
+        ],
+      }) + "\n", "utf8");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "deepseek-v4-flash-free",
+            content: [{ type: "text", text: "llmproxy-test-opencode" }],
+          };
+        },
+      };
+    }
+
     return {
-      ok: true,
-      status: 200,
+      ok: false,
+      status: 400,
       async json() {
-        return {
-          type: "message",
-          role: "assistant",
-          model: "minimax/minimax-m3-20260531",
-          content: [{ type: "text", text: "llmproxy-test-openrouter" }],
-        };
+        return {};
       },
     };
   };
@@ -2788,9 +2854,157 @@ test("test -i --all-providers prints the real observed fallback sequence", async
   assert.match(stdout.toString(), /inference: ok \(openrouter \| minimax\/minimax-m3-20260531\)/);
   assert.match(stdout.toString(), /1st fallback: qwen \| qwen3\.7-plus/);
   assert.match(stdout.toString(), /2nd fallback: opencode \| deepseek-v4-flash-free/);
-  assert.doesNotMatch(stdout.toString(), /^fallback:/m);
-  assert.doesNotMatch(stdout.toString(), /deepseek\[HTTP 402/);
+  assert.doesNotMatch(stdout.toString(), /^invalid fallback:/m);
   assert.match(stdout.toString(), /response: llmproxy-test-openrouter/);
+});
+
+test("test -i --all-providers skips broken remaining fallbacks and fails the command", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-broken-remaining-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("commandcode", {
+    access_token: "token-commandcode",
+    token_type: "api_key",
+    provider: "commandcode",
+    auth_type: "api_key",
+    default_model: "Qwen/Qwen3.7-Max",
+  }, { name: "CommandCode" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "token-qwen",
+    token_type: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-plus",
+  }, { name: "Qwen" });
+  tokenStore.saveProvider("kimi", {
+    access_token: "token-kimi",
+    token_type: "api_key",
+    provider: "kimi",
+    auth_type: "api_key",
+    default_model: "kimi-k2.7-code",
+  }, { name: "Kimi" });
+
+  const fetchFn = async (url, options = {}) => {
+    if (String(url).endsWith("/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v11" };
+        },
+      };
+    }
+    const body = JSON.parse(String(options.body || "{}"));
+    const logsDir = path.join(runtimeRoot, "logs");
+    fs.mkdirSync(logsDir, { recursive: true });
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+
+    if (!body.provider) {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-inference-deepseek",
+        success: true,
+        finalProvider: "deepseek",
+        finalModel: "deepseek-v4-pro",
+        providerSequence: [
+          { provider: "deepseek", status: 200, success: true, effective_model: "deepseek-v4-pro", actual_model: "deepseek-v4-pro" },
+        ],
+      }) + "\n", "utf8");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "deepseek-v4-pro",
+            content: [{ type: "text", text: "llmproxy-test-deepseek" }],
+          };
+        },
+      };
+    }
+
+    if (body.provider === "qwen") {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-fallback-qwen",
+        success: true,
+        finalProvider: "qwen",
+        finalModel: "qwen3.7-plus",
+        providerSequence: [
+          { provider: "qwen", status: 200, success: true, effective_model: "qwen3.7-plus", actual_model: "qwen3.7-plus" },
+        ],
+      }) + "\n", "utf8");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "qwen3.7-plus",
+            content: [{ type: "text", text: "llmproxy-test-qwen" }],
+          };
+        },
+      };
+    }
+
+    if (body.provider === "kimi") {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-fallback-kimi",
+        success: true,
+        finalProvider: "kimi",
+        finalModel: "kimi-k2.7-code",
+        providerSequence: [
+          { provider: "kimi", status: 200, success: true, effective_model: "kimi-k2.7-code", actual_model: "kimi-k2.7-code" },
+        ],
+      }) + "\n", "utf8");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "kimi-k2.7-code",
+            content: [{ type: "text", text: "llmproxy-test-kimi" }],
+          };
+        },
+      };
+    }
+
+    return {
+      ok: false,
+      status: 400,
+      async json() {
+        return {};
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "-i", "--all-providers"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stdout.toString(), /inference: ok \(deepseek \| deepseek-v4-pro\)/);
+  assert.match(stdout.toString(), /1st fallback: qwen \| qwen3\.7-plus/);
+  assert.match(stdout.toString(), /2nd fallback: kimi \| kimi-k2\.7-code/);
+  assert.match(stdout.toString(), /invalid fallback: commandcode -> HTTP 400 \(Qwen\/Qwen3\.7-Max\)/);
+  assert.match(stdout.toString(), /response: llmproxy-test-deepseek/);
 });
 
 test("stats prints provider and model token breakdown from local metering data", async () => {

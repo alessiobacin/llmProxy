@@ -2391,6 +2391,165 @@ test("test probes every configured provider with --all-providers", async () => {
   assert.doesNotMatch(stdout.toString(), /ok copilot|ok kimi/);
 });
 
+test("test --all-providers reports ok when response has no text content but request summary shows success", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-metadata-only-provider-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("opencode", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+  }, { name: "OpenCode Zen" });
+
+  const fetchFn = async (url) => {
+    if (String(url).endsWith("/health")) {
+      return {
+        ok: true, status: 200,
+        async json() { return { ok: true, manifest_version: "v11" }; },
+      };
+    }
+    // Simula il proxy: risposta con solo metadata e tool_use, nessun testo utile
+    const logsDir = path.join(runtimeRoot, "logs");
+    fs.mkdirSync(logsDir, { recursive: true });
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    fs.appendFileSync(logFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "request_summary",
+      requestId: "req-metadata-only",
+      success: true,
+      finalProvider: "opencode",
+      finalModel: "deepseek-v4-flash-free",
+      providerSequence: [
+        { provider: "opencode", status: 200, success: true, effective_model: "deepseek-v4-flash-free" },
+      ],
+    }) + "\n", "utf8");
+    return {
+      ok: true, status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "deepseek-v4-flash-free",
+          content: [
+            { type: "text", text: "[llmproxy] provider: opencode | model: deepseek-v4-flash-free\n\n" },
+            { type: "tool_use", id: "toolu_1", name: "bash", input: { command: "echo hello" } },
+          ],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "--all-providers"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /opencode: ok \(deepseek-v4-flash-free\)/);
+  assert.doesNotMatch(stdout.toString(), /fail risposta vuota/);
+});
+
+test("test --all-providers waits for a delayed per-provider request summary before declaring empty response", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-delayed-provider-summary-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("opencode", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+  }, { name: "OpenCode Zen" });
+
+  const logsDir = path.join(runtimeRoot, "logs");
+  fs.mkdirSync(logsDir, { recursive: true });
+  const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+
+  let proxyRequestIndex = 0;
+  let delayedSummaryWritten = false;
+  const fetchFn = async (url, options = {}) => {
+    if (String(url).endsWith("/health")) {
+      return {
+        ok: true, status: 200,
+        async json() { return { ok: true, manifest_version: "v11" }; },
+      };
+    }
+
+    proxyRequestIndex += 1;
+    const body = JSON.parse(String(options.body || "{}"));
+    if (proxyRequestIndex === 1) {
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-deepseek",
+        success: true,
+        finalProvider: "deepseek",
+        finalModel: "deepseek-v4-flash",
+        providerSequence: [
+          { provider: "deepseek", status: 200, success: true, effective_model: "deepseek-v4-flash" },
+        ],
+      }) + "\n", "utf8");
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: body.model,
+          content: [
+            { type: "text", text: `[llmproxy] provider: ${body.provider} | model: ${body.model}\n\n` },
+          ],
+        };
+      },
+    };
+  };
+
+  let sleepCalls = 0;
+  const sleep = async () => {
+    sleepCalls += 1;
+    if (!delayedSummaryWritten && sleepCalls >= 12) {
+      delayedSummaryWritten = true;
+      fs.appendFileSync(logFile, JSON.stringify({
+        ts: new Date().toISOString(),
+        event: "request_summary",
+        requestId: "req-opencode",
+        success: true,
+        finalProvider: "opencode",
+        finalModel: "deepseek-v4-flash-free",
+        providerSequence: [
+          { provider: "opencode", status: 200, success: true, effective_model: "deepseek-v4-flash-free" },
+        ],
+      }) + "\n", "utf8");
+    }
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test", "--all-providers"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+    sleep,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /deepseek: ok \(deepseek-v4-flash\)/);
+  assert.match(stdout.toString(), /opencode: ok \(deepseek-v4-flash-free\)/);
+  assert.doesNotMatch(stdout.toString(), /fail risposta vuota/);
+  assert.equal(delayedSummaryWritten, true);
+});
+
 test("test -i runs a real inference through fallback order and prints final provider plus response", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-inference-"));
   const stdout = createWritableBuffer();

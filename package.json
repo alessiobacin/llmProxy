@@ -1,5 +1,5 @@
 {
-  "name": "llmproxy",
+  "name": "@alessiobacin/llmproxy",
   "version": "0.2.64",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",

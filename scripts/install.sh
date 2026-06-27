@@ -45,6 +45,8 @@ if [ "$LOCALE" = "it" ]; then
   MSG_INSTALL_SOURCE="Sorgente installazione"
   MSG_INSTALL_RETRY_SUDO="npm install -g fallito, ritento con sudo"
   MSG_INSTALL_RETRY_LOCAL="Installazione globale non disponibile, passo a installazione user-local"
+  MSG_INSTALL_USE_SUDO="Prefix npm globale non scrivibile, uso sudo per l'installazione"
+  MSG_INSTALL_USE_LOCAL="Prefix npm globale non scrivibile e sudo non disponibile, uso installazione user-local"
   MSG_SERVICE="Avvio del servizio persistente in corso..."
   MSG_SERVICE_FAIL="Il servizio persistente o il runtime Docker non sono partiti correttamente."
   MSG_SERVICE_RETRY="service:start fallito, ritento con service:restart"
@@ -67,6 +69,8 @@ else
   MSG_INSTALL_SOURCE="Install source"
   MSG_INSTALL_RETRY_SUDO="npm install -g failed, retrying with sudo"
   MSG_INSTALL_RETRY_LOCAL="Global install unavailable, falling back to user-local install"
+  MSG_INSTALL_USE_SUDO="Global npm prefix is not writable, using sudo for installation"
+  MSG_INSTALL_USE_LOCAL="Global npm prefix is not writable and sudo is unavailable, using user-local install"
   MSG_SERVICE="Starting persistent service..."
   MSG_SERVICE_FAIL="The persistent service or Docker runtime did not start correctly."
   MSG_SERVICE_RETRY="service:start failed, retrying with service:restart"
@@ -373,11 +377,25 @@ fail_with_last_cmd_log() {
   error "$1"
 }
 
+npm_install_global_quiet() {
+  run_quiet_capture npm install -g --silent --no-progress --fund=false --update-notifier=false "$@"
+}
+
+npm_prefix_writable() {
+  prefix="$(npm prefix -g 2>/dev/null || true)"
+  [ -n "$prefix" ] || return 1
+  probe="$prefix"
+  while [ ! -e "$probe" ] && [ "$probe" != "/" ]; do
+    probe=$(dirname "$probe")
+  done
+  [ -w "$probe" ]
+}
+
 install_llmproxy_user_local() {
   local_prefix="$HOME/.local/share/llmproxy/npm-global"
   local_bin_dir="$HOME/.local/bin"
   mkdir -p "$local_prefix" "$local_bin_dir"
-  run_quiet_capture npm install -g --prefix "$local_prefix" "$INSTALL_SOURCE" || return 1
+  run_quiet_capture npm install -g --prefix "$local_prefix" --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE" || return 1
   if [ -x "$local_prefix/bin/llmproxy" ]; then
     ln -sf "$local_prefix/bin/llmproxy" "$local_bin_dir/llmproxy"
     PATH="$local_bin_dir:$local_prefix/bin:$PATH"
@@ -399,10 +417,32 @@ info "$MSG_INSTALLING"
 printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
 USED_SUDO_INSTALL=0
 USED_LOCAL_INSTALL=0
-if ! run_quiet_capture npm install -g "$INSTALL_SOURCE"; then
+npm_prefix_writable_flag=0
+if npm_prefix_writable; then
+  npm_prefix_writable_flag=1
+fi
+
+if [ "$npm_prefix_writable_flag" -eq 1 ]; then
+  if ! npm_install_global_quiet "$INSTALL_SOURCE"; then
+    if [ "$PLATFORM" != "windows" ] && has sudo; then
+      warn "$MSG_INSTALL_RETRY_SUDO"
+      if run_quiet_capture run_root npm install -g --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE"; then
+        USED_SUDO_INSTALL=1
+      else
+        warn "$MSG_INSTALL_RETRY_LOCAL"
+        install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+        USED_LOCAL_INSTALL=1
+      fi
+    else
+      warn "$MSG_INSTALL_RETRY_LOCAL"
+      install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+      USED_LOCAL_INSTALL=1
+    fi
+  fi
+else
   if [ "$PLATFORM" != "windows" ] && has sudo; then
-    warn "$MSG_INSTALL_RETRY_SUDO"
-    if run_quiet_capture run_root npm install -g "$INSTALL_SOURCE"; then
+    info "$MSG_INSTALL_USE_SUDO"
+    if run_quiet_capture run_root npm install -g --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE"; then
       USED_SUDO_INSTALL=1
     else
       warn "$MSG_INSTALL_RETRY_LOCAL"
@@ -410,7 +450,7 @@ if ! run_quiet_capture npm install -g "$INSTALL_SOURCE"; then
       USED_LOCAL_INSTALL=1
     fi
   else
-    warn "$MSG_INSTALL_RETRY_LOCAL"
+    info "$MSG_INSTALL_USE_LOCAL"
     install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
     USED_LOCAL_INSTALL=1
   fi

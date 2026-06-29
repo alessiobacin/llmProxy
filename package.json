@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.69",
+  "version": "0.2.70",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -76,6 +76,11 @@
     "0.2.69": [
       "release 0.2.69",
       "document in CLAUDE.md that every commit and push must include an llmproxy version bump first"
+    ],
+    "0.2.70": [
+      "release 0.2.70",
+      "fix self-update: recreate legacy wrappers such as /usr/bin/llmproxy after update",
+      "preserve standard wrapper paths during update cleanup to avoid removing the active command"
     ]
   },
   "dependencies": {

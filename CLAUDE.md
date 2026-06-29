@@ -1,5 +1,13 @@
 # CLAUDE.md — V11 Modules-Platform
 
+> [!WARNING]
+> ## RELEASE RULE FOR `llmproxy`
+> **EVERY TIME YOU DO `git commit` AND `git push`, YOU MUST ALSO BUMP THE `llmproxy` VERSION FIRST.**
+> - No exceptions.
+> - Do not create or push a commit without updating the project version.
+> - Treat version bump as part of the same mandatory change set as the code you are committing.
+> - If the version was not bumped yet, stop and bump it before committing.
+
 ## 1. What This File Is
 This file is the canonical architectural and behavioral guide for the V11 platform. It is loaded automatically by Claude Code at the start of every session. Every tool implementation, API route, database schema, and agent execution must strictly comply with the specs summarized below.
 
@@ -211,6 +219,7 @@ Platform ──> Agency/Tenant (agencyId) ──> Client (clientId) ──> Proj
 - **No Wildcard Assumptions:** If a requirement or database schema is ambiguous, stop and ask. Never guess keys, ports, or roles.
 - **No Direct DB Connection:** Every application component must communicate with PostgreSQL via the `db-layer` service DSL plane, never directly via raw PostgreSQL drivers.
 - **Test Exits:** Always execute Vitest tests with the `--run` flag. Do not run in default watch mode as the background process will hang and time out.
+- **Mandatory Version Bump Before Commit+Push:** For this repository, every `git commit` that will be followed by `git push` must include a version bump of `llmproxy` in the same change set. Never commit and push without updating the version first.
 
 ---
 
@@ -231,4 +240,3 @@ Rules:
 - Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
-

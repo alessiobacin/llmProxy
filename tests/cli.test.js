@@ -3288,9 +3288,11 @@ test("update runs the package manager command for the latest llmproxy release", 
   assert.equal(executed.at(-1)[0], "bash");
   assert.equal(executed.at(-1)[1][0], "-c");
   const scriptText = executed.at(-1)[1][1];
+  assert.match(scriptText, /original_npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /original_global_bin_path="\$original_npm_prefix\/bin\/llmproxy"/);
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /npm install -g --force "\$package_file"/);
-  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$global_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$global_bin_path" "\$original_global_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /for preserved_bin in \$preserved_bin_paths; do/);
   assert.match(scriptText, /ensure_wrapper_path "\$preserved_bin" >\/dev\/null 2>&1 \|\| true/);
   assert.match(scriptText, /done/);
@@ -3376,6 +3378,7 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.equal(typeof runSelfUpdate, "function");
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /used_sudo=0/);
+  assert.match(scriptText, /original_npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
   assert.match(scriptText, /if sudo npm install -g --force "\$package_file" 2>\/dev\/null; then\n\s+used_sudo=1/);
   assert.match(scriptText, /if \[ "\$used_sudo" -eq 1 \]; then\n\s+npm_prefix=\$\(sudo npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nelse\n\s+npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nfi/);
@@ -3396,7 +3399,7 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /global_bin_version=\$\(\"\$global_bin_path\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /ensure_global_bin >\/dev\/null 2>&1 \|\| true/);
-  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$global_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$global_bin_path" "\$original_global_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /is_preserved_bin_path\(\) \{/);
   assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \] && \[ "\$current_bin" != "\$global_bin_path" \]; then/);
   assert.match(scriptText, /current_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec node \\"\$new_bin\\" \\"\\\$@\\"" \)/);

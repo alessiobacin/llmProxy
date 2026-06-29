@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.70",
+  "version": "0.2.71",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -81,6 +81,11 @@
       "release 0.2.70",
       "fix self-update: recreate legacy wrappers such as /usr/bin/llmproxy after update",
       "preserve standard wrapper paths during update cleanup to avoid removing the active command"
+    ],
+    "0.2.71": [
+      "release 0.2.71",
+      "fix self-update with nvm: preserve the caller's original npm global bin path before switching Node versions",
+      "recreate llmproxy in the original npm prefix so the command remains available in the user's active shell"
     ]
   },
   "dependencies": {

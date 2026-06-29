@@ -340,13 +340,14 @@ test("provider:list shows the effective project fallback chain when Claude setti
     stdout,
     tokenStore,
     fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; } }),
+    env: { ...process.env, LLM_STATS_API_KEY: "" },
   });
 
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Provider effettivi per il progetto/);
-  assert.match(stdout.toString(), /1\. default \(Default Copilot\).*model=gpt-5\.4/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\).*model=kimi-k2\.5/);
-  assert.match(stdout.toString(), /3\. qwen \(Qwen\).*model=qwen3\.7-max/);
+  assert.match(stdout.toString(), /1\. default \(Default Copilot\)\n\s+model=gpt-5\.4 coding=n\/a/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\)\n\s+model=kimi-k2\.5 coding=n\/a/);
+  assert.match(stdout.toString(), /3\. qwen \(Qwen\)\n\s+model=qwen3\.7-max coding=n\/a/);
 });
 
 test("provider:list keeps provider default models when the project sets a global override model", async () => {
@@ -395,12 +396,13 @@ test("provider:list keeps provider default models when the project sets a global
     stdout,
     tokenStore,
     fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; } }),
+    env: { ...process.env, LLM_STATS_API_KEY: "" },
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\).*model=deepseek-v4-pro/);
-  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\).*model=minimax\/minimax-m3/);
-  assert.match(stdout.toString(), /3\. commandcode \(Command Code\).*model=Qwen\/Qwen3\.7-Max/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\)\n\s+model=deepseek-v4-pro coding=n\/a/);
+  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\)\n\s+model=minimax\/minimax-m3 coding=n\/a/);
+  assert.match(stdout.toString(), /3\. commandcode \(Command Code\)\n\s+model=Qwen\/Qwen3\.7-Max coding=n\/a/);
   assert.doesNotMatch(stdout.toString(), /model=gpt-5\.4/);
 });
 
@@ -475,6 +477,22 @@ test("provider:list shows residual credit plus current and best provider pricing
         async json() {
           return {
             data: { total_credits: 100.5, total_usage: 25.75 },
+          };
+        },
+      };
+    }
+    if (target === "https://api.zeroeval.com/stats/v1/models") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            models: [
+              { model: "deepseek-v4-pro", coding: 0.91 },
+              { model: "kimi-k2.7-code", top_scores: { code: 0.88 } },
+              { model: "minimax-m3", codingScore: 0.73 },
+              { model: "qwen3.7-plus", coding: 0.84 },
+            ],
           };
         },
       };
@@ -591,13 +609,14 @@ test("provider:list shows residual credit plus current and best provider pricing
     stdout,
     tokenStore,
     fetchFn,
+    env: { ...process.env, LLM_STATS_API_KEY: "stats-key" },
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\).*model=deepseek-v4-pro.*credit=USD 12\.34.*price=in=USD 0\.43\/1M out=USD 0\.87\/1M best=openrouter/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\).*model=kimi-k2\.7-code.*credit=49\.59.*price=n\/a best=openrouter/);
-  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\).*model=minimax\/minimax-m3.*credit=74\.75 credits.*price=in=USD 0\.30\/1M out=USD 1\.20\/1M best=fireworks/);
-  assert.match(stdout.toString(), /4\. qwen \(Qwen\).*model=qwen3\.7-plus.*credit=n\/a.*price=in=USD 0\.40\/1M out=USD 1\.60\/1M best=openrouter/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\)\n\s+model=deepseek-v4-pro coding=0\.91\n\s+credit=USD 12\.34\n\s+price=in=USD 0\.43\/1M out=USD 0\.87\/1M\n\s+best=openrouter/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\)\n\s+model=kimi-k2\.7-code coding=0\.88\n\s+credit=49\.59\n\s+price=n\/a\n\s+best=openrouter/);
+  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\)\n\s+model=minimax\/minimax-m3 coding=0\.73\n\s+credit=74\.75 credits\n\s+price=in=USD 0\.30\/1M out=USD 1\.20\/1M\n\s+best=fireworks/);
+  assert.match(stdout.toString(), /4\. qwen \(Qwen\)\n\s+model=qwen3\.7-plus coding=0\.84\n\s+credit=n\/a\n\s+price=in=USD 0\.40\/1M out=USD 1\.60\/1M\n\s+best=openrouter/);
 });
 
 test("provider:available shows supported providers with aliases and auth type", async () => {

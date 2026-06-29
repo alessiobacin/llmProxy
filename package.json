@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.2.72",
+  "version": "0.2.73",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -92,6 +92,11 @@
       "feat: auto-escalation to better providers on repeated requests",
       "add EscalationTracker — detects when the same user message is resent N times",
       "automatically escalates to the next provider after threshold identical messages (LLMPROXY_AUTO_ESCALATE=1)"
+    ],
+    "0.2.73": [
+      "release 0.2.73",
+      "fix self-update: make generated wrappers point directly to the installed package CLI instead of another global wrapper",
+      "fix nvm update path so llmproxy remains callable after upgrading from an older user-global install"
     ]
   },
   "dependencies": {

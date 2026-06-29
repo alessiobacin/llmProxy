@@ -3390,12 +3390,13 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /build_wrapper_payload\(\) \{/);
   assert.match(scriptText, /ensure_wrapper_path\(\) \{/);
   assert.match(scriptText, /ensure_global_bin\(\) \{/);
-  assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -f "\$package_cli" \]; then/);
+  assert.match(scriptText, /if \[ -f "\$package_cli" \]; then/);
   assert.match(scriptText, /package_cli_version=\$\(node "\$package_cli" version 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -x "\$global_bin_path" \]; then/);
   assert.match(scriptText, /new_bin_mode="node"/);
   assert.match(scriptText, /sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR=.*DBUS_SESSION_BUS_ADDRESS=.*node "\$new_bin" service:restart/);
   assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
-  assert.match(scriptText, /if \[ -x "\$global_bin_path" \]; then/);
+  assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -x "\$global_bin_path" \]; then/);
   assert.match(scriptText, /global_bin_version=\$\(\"\$global_bin_path\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /ensure_global_bin >\/dev\/null 2>&1 \|\| true/);

@@ -86,6 +86,12 @@
       "release 0.2.71",
       "fix self-update with nvm: preserve the caller's original npm global bin path before switching Node versions",
       "recreate llmproxy in the original npm prefix so the command remains available in the user's active shell"
+    ],
+    "0.2.72": [
+      "release 0.2.72",
+      "feat: auto-escalation to better providers on repeated requests",
+      "add EscalationTracker — detects when the same user message is resent N times",
+      "automatically escalates to the next provider after threshold identical messages (LLMPROXY_AUTO_ESCALATE=1)"
     ]
   },
   "dependencies": {

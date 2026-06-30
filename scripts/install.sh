@@ -48,7 +48,8 @@ if [ "$LOCALE" = "it" ]; then
   MSG_INSTALL_USE_SUDO="Prefix npm globale non scrivibile, uso sudo per l'installazione"
   MSG_INSTALL_USE_LOCAL="Prefix npm globale non scrivibile e sudo non disponibile, uso installazione user-local"
   MSG_SERVICE="Avvio del servizio persistente in corso..."
-  MSG_SERVICE_FAIL="Il servizio persistente o il runtime Docker non sono partiti correttamente."
+  MSG_SERVICE_FAIL="Il servizio persistente non e' partito correttamente."
+  MSG_DOCKER_FALLBACK="Docker non disponibile: llmProxy funzionera' in modalita' nativa."
   MSG_SERVICE_RETRY="service:start fallito, ritento con service:restart"
   MSG_DONE="Installazione completata!"
   MSG_POST="Ora configura un provider: llmproxy provider:add copilot"
@@ -72,7 +73,8 @@ else
   MSG_INSTALL_USE_SUDO="Global npm prefix is not writable, using sudo for installation"
   MSG_INSTALL_USE_LOCAL="Global npm prefix is not writable and sudo is unavailable, using user-local install"
   MSG_SERVICE="Starting persistent service..."
-  MSG_SERVICE_FAIL="The persistent service or Docker runtime did not start correctly."
+  MSG_SERVICE_FAIL="The persistent service did not start correctly."
+  MSG_DOCKER_FALLBACK="Docker unavailable: llmProxy will run in native mode."
   MSG_SERVICE_RETRY="service:start failed, retrying with service:restart"
   MSG_DONE="Installation complete!"
   MSG_POST="Next step: add a provider — llmproxy provider:add copilot"
@@ -409,8 +411,24 @@ install_llmproxy_user_local() {
 info "$MSG_DEPS"
 refresh_path
 ensure_node_ready
-ensure_docker_ready
-ensure_compose_ready
+
+# ── Docker setup (best-effort) ──────────────────────────────────────────
+# Docker non e' obbligatorio: se non e' disponibile o non si avvia,
+# llmProxy funziona in modalita' nativa (launchd/systemd diretto).
+DOCKER_SETUP_FAILED=0
+if ! has docker || ! docker info >/dev/null 2>&1; then
+  if ! install_docker >/dev/null 2>&1; then
+    DOCKER_SETUP_FAILED=1
+  fi
+fi
+if [ "$DOCKER_SETUP_FAILED" -eq 0 ]; then
+  if ! ensure_compose_ready >/dev/null 2>&1; then
+    DOCKER_SETUP_FAILED=1
+  fi
+fi
+if [ "$DOCKER_SETUP_FAILED" -eq 1 ]; then
+  warn "$MSG_DOCKER_FALLBACK"
+fi
 
 INSTALL_SOURCE="${LLMPROXY_INSTALL_SOURCE:-https://github.com/alessiobacin/llmProxy/archive/refs/heads/main.tar.gz}"
 info "$MSG_INSTALLING"
@@ -468,15 +486,20 @@ fi
 
 [ -n "$LLMPROXY_BIN" ] || error "llmproxy not found after npm install. Check your npm global prefix and PATH."
 
+SERVICE_ENV=""
+if [ "$DOCKER_SETUP_FAILED" -eq 1 ]; then
+  SERVICE_ENV="LLMPROXY_SERVICE_RUNTIME=native"
+fi
+
 info "$MSG_SERVICE"
 if [ "$PLATFORM" = "windows" ]; then
   printf "%s\n" "$MSG_WINDOWS_NOTE"
 fi
 
-if ! "$LLMPROXY_BIN" service:start 2>&1; then
+if ! env $SERVICE_ENV "$LLMPROXY_BIN" service:start 2>&1; then
   warn "$MSG_SERVICE_RETRY"
   sleep 2
-  "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
+  env $SERVICE_ENV "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
 fi
 
 printf "\n"

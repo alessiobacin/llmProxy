@@ -169,7 +169,7 @@ llmproxy run
 By default the server starts on:
 
 ```text
-http://127.0.0.1:5045
+http://127.0.0.1:7045
 ```
 
 ### 5. Add additional providers and fallback order

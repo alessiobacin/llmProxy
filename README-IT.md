@@ -38,7 +38,7 @@ Se vuoi installare la CLI in modo persistente con un solo comando, puoi sceglier
 Usa questi comandi se vuoi che il percorso di installazione continui a mostrare messaggi e spiegazioni in italiano:
 
 ```bash
-pppnpm run install:persistent-it
+pnpm run install:persistent-it
 ```
 
 Se la CLI e` gia` disponibile nel `PATH` perche` l'hai gia` installata globalmente in precedenza, puoi usare anche:
@@ -72,12 +72,12 @@ llmproxy help install
 
 In breve:
 
-- italiano: `pppnpm run install:persistent-it` oppure `llmproxy install:persistent-it`
-- inglese: `pppnpm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install` oppure `llmproxy install`
+- italiano: `pnpm run install:persistent-it` oppure `llmproxy install:persistent-it`
+- inglese: `pnpm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install` oppure `llmproxy install`
 
 Compatibilita`:
 
-- `ppnpm run install:persistent` continua a puntare al percorso italiano
+- `pnpm run install:persistent` continua a puntare al percorso italiano
 - `llmproxy install:persistent` continua a funzionare come alias legacy del percorso italiano
 
 Il bootstrap:
@@ -260,7 +260,7 @@ Puoi instradare modelli diversi su provider diversi direttamente da `ANTHROPIC_D
 ```json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
     "ANTHROPIC_DEFAULT_MODEL": "copilot:gpt-5.4,kimi:kimi-k2.5",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
@@ -307,7 +307,7 @@ llmproxy provider:list
   E` principalmente l'etichetta mostrata da Claude Code in UI/sessione. Puoi mantenerlo come `llmProxy`.
 
 - `ANTHROPIC_BASE_URL`
-  Deve puntare al proxy `llmProxy`. Il default di questo package e` `http://127.0.0.1:5045`.
+  Deve puntare al proxy `llmProxy`. Il default di questo package e` `http://127.0.0.1:7045`.
 - `ANTHROPIC_DEFAULT_MODEL`
   E` opzionale. Usalo solo se vuoi override di routing locali al progetto, per esempio un modello singolo o una chain provider come `copilot:gpt-5.4,kimi:kimi-k2.5`.
 - `API_TIMEOUT_MS`
@@ -338,7 +338,7 @@ Esempio minimo:
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045"
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045"
   }
 }
 ```
@@ -349,7 +349,7 @@ Esempio con override locale al progetto:
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
     "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-4.5"
   }
 }

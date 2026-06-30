@@ -50,21 +50,31 @@ test("resolveServiceEnvironment aligns service ports with the CLI runtime env", 
   assert.equal(serviceEnv.LLMPROXY_LOG_RETENTION_DAYS, "7");
 });
 
-test("resolveServiceEntryFile uses the Docker wrapper for production service mode", () => {
+test("resolveServiceEntryFile uses native server entrypoint by default even in production", () => {
   const entryFile = resolveServiceEntryFile({
     env: { LLMPROXY_ENV: "production" },
     packageRoot: "/tmp/node_modules/llmproxy",
     targetPlatform: "darwin",
   });
 
-  assert.equal(entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+  assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
 });
 
-test("resolveServiceEntryFile uses the Docker wrapper on Linux in production", () => {
+test("resolveServiceEntryFile uses native server entrypoint on Linux in production", () => {
   const entryFile = resolveServiceEntryFile({
     env: { LLMPROXY_ENV: "production" },
     packageRoot: "/tmp/node_modules/llmproxy",
     targetPlatform: "linux",
+  });
+
+  assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
+});
+
+test("resolveServiceEntryFile uses Docker entrypoint only when explicitly set", () => {
+  const entryFile = resolveServiceEntryFile({
+    env: { LLMPROXY_ENV: "production", LLMPROXY_SERVICE_RUNTIME: "docker" },
+    packageRoot: "/tmp/node_modules/llmproxy",
+    targetPlatform: "darwin",
   });
 
   assert.equal(entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
@@ -88,7 +98,7 @@ test("resolveServiceEntryFile allows forcing the native server runtime", () => {
   assert.equal(entryFile, "/tmp/node_modules/llmproxy/server.js");
 });
 
-test("resolveCliServiceManagerOptions uses the Docker wrapper for installed production runtime", () => {
+test("resolveCliServiceManagerOptions uses native server entrypoint for installed production runtime", () => {
   const options = resolveCliServiceManagerOptions({
     env: {
       LLMPROXY_RUNTIME_PROFILE: "production",
@@ -104,13 +114,13 @@ test("resolveCliServiceManagerOptions uses the Docker wrapper for installed prod
     targetPlatform: "darwin",
   });
 
-  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/server.js");
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
   assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
 });
 
-test("resolveCliServiceManagerOptions uses the Docker wrapper on Linux in production", () => {
+test("resolveCliServiceManagerOptions uses native server entrypoint on Linux in production", () => {
   const options = resolveCliServiceManagerOptions({
     env: {
       LLMPROXY_RUNTIME_PROFILE: "production",
@@ -126,7 +136,7 @@ test("resolveCliServiceManagerOptions uses the Docker wrapper on Linux in produc
     targetPlatform: "linux",
   });
 
-  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js");
+  assert.equal(options.entryFile, "/tmp/node_modules/llmproxy/server.js");
   assert.equal(options.environment.PORT, "7045");
   assert.equal(options.environment.HOST, "127.0.0.1");
   assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
@@ -1102,6 +1112,7 @@ test("service:start verifies Docker runtime and proxy health on production insta
     env: {
       LLMPROXY_RUNTIME_PROFILE: "production",
       LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+      LLMPROXY_SERVICE_RUNTIME: "docker",
     },
     stdout,
     stderr,
@@ -1161,6 +1172,7 @@ test("service:start falls back to legacy docker-compose when the plugin is unava
     env: {
       LLMPROXY_RUNTIME_PROFILE: "production",
       LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+      LLMPROXY_SERVICE_RUNTIME: "docker",
     },
     stdout,
     stderr,
@@ -1294,6 +1306,7 @@ test("service:restart recovers the Docker runtime when the managed container is 
     env: {
       LLMPROXY_RUNTIME_PROFILE: "production",
       LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+      LLMPROXY_SERVICE_RUNTIME: "docker",
     },
     stdout,
     stderr,

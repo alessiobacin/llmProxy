@@ -35,11 +35,7 @@ esac
 if [ "$LOCALE" = "it" ]; then
   MSG_DEPS="Verifica dipendenze..."
   MSG_NODE_INSTALL="Installazione/aggiornamento Node.js 22+..."
-  MSG_DOCKER_INSTALL="Installazione/avvio Docker..."
-  MSG_COMPOSE_INSTALL="Installazione Docker Compose..."
   MSG_NODE_FAIL="Impossibile installare o aggiornare Node.js 22+ automaticamente."
-  MSG_DOCKER_FAIL="Impossibile installare o avviare Docker automaticamente."
-  MSG_COMPOSE_FAIL="Impossibile installare Docker Compose automaticamente."
   MSG_INSTALLING="Installazione di llmProxy..."
   MSG_INSTALL_FAIL="Installazione npm fallita."
   MSG_INSTALL_SOURCE="Sorgente installazione"
@@ -49,7 +45,6 @@ if [ "$LOCALE" = "it" ]; then
   MSG_INSTALL_USE_LOCAL="Prefix npm globale non scrivibile e sudo non disponibile, uso installazione user-local"
   MSG_SERVICE="Avvio del servizio persistente in corso..."
   MSG_SERVICE_FAIL="Il servizio persistente non e' partito correttamente."
-  MSG_DOCKER_FALLBACK="Docker non disponibile: llmProxy funzionera' in modalita' nativa."
   MSG_SERVICE_RETRY="service:start fallito, ritento con service:restart"
   MSG_DONE="Installazione completata!"
   MSG_POST="Ora configura un provider: llmproxy provider:add copilot"
@@ -60,11 +55,7 @@ if [ "$LOCALE" = "it" ]; then
 else
   MSG_DEPS="Checking dependencies..."
   MSG_NODE_INSTALL="Installing/upgrading Node.js 22+..."
-  MSG_DOCKER_INSTALL="Installing/starting Docker..."
-  MSG_COMPOSE_INSTALL="Installing Docker Compose..."
   MSG_NODE_FAIL="Could not install or upgrade Node.js 22+ automatically."
-  MSG_DOCKER_FAIL="Could not install or start Docker automatically."
-  MSG_COMPOSE_FAIL="Could not install Docker Compose automatically."
   MSG_INSTALLING="Installing llmProxy..."
   MSG_INSTALL_FAIL="npm install failed."
   MSG_INSTALL_SOURCE="Install source"
@@ -74,7 +65,6 @@ else
   MSG_INSTALL_USE_LOCAL="Global npm prefix is not writable and sudo is unavailable, using user-local install"
   MSG_SERVICE="Starting persistent service..."
   MSG_SERVICE_FAIL="The persistent service did not start correctly."
-  MSG_DOCKER_FALLBACK="Docker unavailable: llmProxy will run in native mode."
   MSG_SERVICE_RETRY="service:start failed, retrying with service:restart"
   MSG_DONE="Installation complete!"
   MSG_POST="Next step: add a provider — llmproxy provider:add copilot"
@@ -252,82 +242,6 @@ install_node() {
   has node && [ "$(node_major)" -ge 22 ] && has npm
 }
 
-wait_for_docker() {
-  tries=0
-  while [ "$tries" -lt 60 ]; do
-    if has docker && docker info >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 2
-    tries=$((tries + 1))
-  done
-  return 1
-}
-
-install_docker() {
-  info "$MSG_DOCKER_INSTALL"
-  case "$PLATFORM" in
-    darwin)
-      install_homebrew_if_missing || return 1
-      brew install --cask docker || return 1
-      open -a Docker || true
-      ;;
-    linux)
-      if ! has docker; then
-        FETCH_URL https://get.docker.com | run_root sh
-      fi
-      if has systemctl; then
-        run_root systemctl enable --now docker || true
-      elif has service; then
-        run_root service docker start || true
-      fi
-      ;;
-    windows)
-      if has powershell.exe; then
-        powershell.exe -NoProfile -Command \
-          "if (Get-Command winget -ErrorAction SilentlyContinue) { winget install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --disable-interactivity } elseif (Get-Command choco -ErrorAction SilentlyContinue) { choco install docker-desktop -y } else { exit 1 }" \
-          || return 1
-        powershell.exe -NoProfile -Command "Start-Process 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -ErrorAction SilentlyContinue" || true
-      else
-        return 1
-      fi
-      ;;
-  esac
-  refresh_path
-  wait_for_docker
-}
-
-install_docker_compose() {
-  info "$MSG_COMPOSE_INSTALL"
-  case "$PLATFORM" in
-    darwin)
-      # Docker Desktop already includes compose. Just re-check after launch.
-      wait_for_docker || return 1
-      ;;
-    linux)
-      if has apt-get; then
-        run_root apt-get install -y docker-compose-plugin || run_root apt-get install -y docker-compose
-      elif has dnf; then
-        run_root dnf install -y docker-compose-plugin || run_root dnf install -y docker-compose
-      elif has yum; then
-        run_root yum install -y docker-compose-plugin || run_root yum install -y docker-compose
-      elif has zypper; then
-        run_root zypper --non-interactive install docker-compose || return 1
-      elif has pacman; then
-        run_root pacman -Sy --noconfirm docker-compose || return 1
-      elif has apk; then
-        run_root apk add --no-cache docker-cli-compose docker-compose || return 1
-      else
-        return 1
-      fi
-      ;;
-    windows)
-      wait_for_docker || return 1
-      ;;
-  esac
-  (docker compose version >/dev/null 2>&1) || has docker-compose
-}
-
 ensure_node_ready() {
   refresh_path
   activate_node22 >/dev/null 2>&1 || true
@@ -338,23 +252,6 @@ ensure_node_ready() {
   refresh_path
   activate_node22 >/dev/null 2>&1 || true
   has node && [ "$(node_major)" -ge 22 ] && has npm || error "$MSG_NODE_FAIL"
-}
-
-ensure_docker_ready() {
-  refresh_path
-  if has docker && docker info >/dev/null 2>&1; then
-    return 0
-  fi
-  install_docker || error "$MSG_DOCKER_FAIL"
-  has docker && docker info >/dev/null 2>&1 || error "$MSG_DOCKER_FAIL"
-}
-
-ensure_compose_ready() {
-  if docker compose version >/dev/null 2>&1 || has docker-compose; then
-    return 0
-  fi
-  install_docker_compose || error "$MSG_COMPOSE_FAIL"
-  docker compose version >/dev/null 2>&1 || has docker-compose || error "$MSG_COMPOSE_FAIL"
 }
 
 LAST_CMD_LOG=""
@@ -412,24 +309,6 @@ info "$MSG_DEPS"
 refresh_path
 ensure_node_ready
 
-# ── Docker setup (best-effort) ──────────────────────────────────────────
-# Docker non e' obbligatorio: se non e' disponibile o non si avvia,
-# llmProxy funziona in modalita' nativa (launchd/systemd diretto).
-DOCKER_SETUP_FAILED=0
-if ! has docker || ! docker info >/dev/null 2>&1; then
-  if ! install_docker >/dev/null 2>&1; then
-    DOCKER_SETUP_FAILED=1
-  fi
-fi
-if [ "$DOCKER_SETUP_FAILED" -eq 0 ]; then
-  if ! ensure_compose_ready >/dev/null 2>&1; then
-    DOCKER_SETUP_FAILED=1
-  fi
-fi
-if [ "$DOCKER_SETUP_FAILED" -eq 1 ]; then
-  warn "$MSG_DOCKER_FALLBACK"
-fi
-
 INSTALL_SOURCE="${LLMPROXY_INSTALL_SOURCE:-https://github.com/alessiobacin/llmProxy/archive/refs/heads/main.tar.gz}"
 info "$MSG_INSTALLING"
 printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
@@ -486,20 +365,15 @@ fi
 
 [ -n "$LLMPROXY_BIN" ] || error "llmproxy not found after npm install. Check your npm global prefix and PATH."
 
-SERVICE_ENV=""
-if [ "$DOCKER_SETUP_FAILED" -eq 1 ]; then
-  SERVICE_ENV="LLMPROXY_SERVICE_RUNTIME=native"
-fi
-
 info "$MSG_SERVICE"
 if [ "$PLATFORM" = "windows" ]; then
   printf "%s\n" "$MSG_WINDOWS_NOTE"
 fi
 
-if ! env $SERVICE_ENV "$LLMPROXY_BIN" service:start 2>&1; then
+if ! env LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:start 2>&1; then
   warn "$MSG_SERVICE_RETRY"
   sleep 2
-  env $SERVICE_ENV "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
+  env LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
 fi
 
 printf "\n"

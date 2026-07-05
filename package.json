@@ -1,10 +1,11 @@
 {
   "name": "llmproxy",
-  "version": "0.2.74",
+  "version": "0.2.75",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
-    "llmproxy": "bin/llmproxy.js"
+    "llmproxy": "bin/llmproxy.js",
+    "llmp": "bin/llmproxy.js"
   },
   "files": [
     "api/",
@@ -107,7 +108,8 @@
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
     "express": "^4.21.0",
-    "mongodb": "^7.2.0"
+    "mongodb": "^7.2.0",
+    "undici": "^6.21.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

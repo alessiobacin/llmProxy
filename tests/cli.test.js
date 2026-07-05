@@ -733,6 +733,38 @@ test("provider:add supports api-key providers like nvidia", async () => {
   assert.match(stdout.toString(), /Provider configurato con API key/);
 });
 
+test("provider:list loads legacy nvidia api-key entries saved without access_token", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-nvidia-legacy-"));
+  const stdout = createWritableBuffer();
+  const tokenFile = path.join(runtimeRoot, "copilot-token.json");
+
+  fs.writeFileSync(tokenFile, JSON.stringify({
+    version: 2,
+    providers: [
+      {
+        id: "nvidia",
+        name: "NVIDIA",
+        provider: "nvidia",
+        auth_type: "api_key",
+        api_key: "nvapi-legacy",
+        default_model: "z-ai/glm-5.2",
+      },
+    ],
+    order: ["nvidia"],
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return {}; } }),
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /nvidia/i);
+  assert.match(stdout.toString(), /1\. nvidia \(NVIDIA\)/);
+  assert.match(stdout.toString(), /model=z-ai\/glm-5\.2/);
+});
+
 test("provider:add supports api-key providers like qwen", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-"));
   const stdout = createWritableBuffer();
@@ -938,6 +970,31 @@ test("provider:add rejects api-key providers when the default model probe fails"
   assert.equal(exitCode, 1);
   assert.equal(tokenStore.getProvider("openrouter"), null);
   assert.match(stderr.toString(), /Test provider fallito/);
+});
+
+test("provider:test treats NVIDIA HTTP 429 as a reachable provider", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-nvidia-429-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("nvidia-glm-5.2", {
+    access_token: "nvapi-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "nvidia",
+    auth_type: "api_key",
+    default_model: "z-ai/glm-5.2",
+    vision: false,
+  }, { name: "NVIDIA" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn: async () => ({ ok: false, status: 429, async text() { return "rate limit"; } }),
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /NVIDIA \(z-ai\/glm-5\.2\)/i);
+  assert.match(stdout.toString(), /PASS - Visione correttamente disabilitata \(errore HTTP 429\)/i);
 });
 
 test("provider:add requires a default model for api-key providers", async () => {

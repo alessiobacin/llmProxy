@@ -86,3 +86,38 @@ test("token store keeps provider order stable when updating an existing provider
   assert.deepEqual(store.listProviders().map((provider) => provider.id), ["qwen", "deepseek"]);
   assert.equal(store.getProvider("qwen").access_token, "token-qwen-updated");
 });
+
+test("token store loads legacy api-key providers saved without access_token", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-legacy-apikey-"));
+  const tokenFile = path.join(tempRoot, "copilot-token.json");
+
+  fs.writeFileSync(tokenFile, JSON.stringify({
+    version: 2,
+    providers: [
+      {
+        id: "nvidia",
+        name: "NVIDIA",
+        provider: "nvidia",
+        auth_type: "api_key",
+        api_key: "nvapi-legacy",
+        default_model: "z-ai/glm-5.2",
+      },
+      {
+        id: "openrouter",
+        name: "OpenRouter",
+        provider: "openrouter",
+        auth_type: "api_key",
+        credentials: { api_key: "sk-or-legacy" },
+        default_model: "openai/gpt-4o",
+      },
+    ],
+    order: ["nvidia", "openrouter"],
+  }, null, 2));
+
+  const store = createTokenStore({ filePath: tokenFile });
+  const providers = store.listProviders();
+
+  assert.deepEqual(providers.map((provider) => provider.id), ["nvidia", "openrouter"]);
+  assert.equal(store.getProvider("nvidia").access_token, "nvapi-legacy");
+  assert.equal(store.getProvider("openrouter").access_token, "sk-or-legacy");
+});

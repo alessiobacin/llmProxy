@@ -126,6 +126,11 @@ test("parseProviderModelPreferences still supports zai- prefix shorthand", () =>
   assert.deepEqual(parsed, [{ provider: "zai", model: "glm-5" }]);
 });
 
+test("parseProviderModelPreferences expands nvidia glm shorthand to the provider-valid model id", () => {
+  const parsed = parseProviderModelPreferences("nvidia-glm-5.2");
+  assert.deepEqual(parsed, [{ provider: "nvidia", model: "z-ai/glm-5.2" }]);
+});
+
 test("sanitizeSchemaForMoonshot removes sibling keywords from $ref nodes and normalizes refs to $defs", () => {
   const input = {
     type: "object",

@@ -17,6 +17,8 @@ interface ProviderToken {
   default_model: string;
   endpoint_variant: string;
   vision?: boolean;
+  proxy_url?: string;
+  proxy_api_key?: string;
   created_at: number;
   updated_at: number;
 }
@@ -100,6 +102,12 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
   };
   if (provider?.vision === true || provider?.vision === false) {
     token.vision = provider.vision;
+  }
+  if (provider?.proxy_url) {
+    token.proxy_url = String(provider.proxy_url).trim();
+  }
+  if (provider?.proxy_api_key) {
+    token.proxy_api_key = String(provider.proxy_api_key).trim();
   }
   return token;
 }

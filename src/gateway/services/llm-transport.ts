@@ -37,6 +37,19 @@ interface ProviderSelection {
   providerCandidates?: Record<string, unknown>[];
 }
 
+interface LocalProviderEntry {
+  id?: string;
+  provider?: string;
+  default_model?: string;
+  access_token?: string;
+  auth_type?: string;
+  token_type?: string;
+  scope?: string;
+  endpoint_variant?: string;
+  vision?: boolean;
+  name?: string;
+}
+
 interface ProviderSelectionError {
   error: {
     status: number;
@@ -96,9 +109,36 @@ function resolveProviderSelection({
   providerRegistry: unknown;
 }): ProviderSelection | ProviderSelectionError {
   const provider = requestedProvider && requestedProvider !== "auto" ? requestedProvider : null;
+  const localTokenStore = tokenStore as {
+    getProvider?: (id: string) => LocalProviderEntry | null;
+    listProviders?: () => LocalProviderEntry[];
+  };
+
+  if (provider) {
+    const exactLocalProvider = localTokenStore.getProvider?.(provider);
+    if (exactLocalProvider?.access_token) {
+      return {
+        provider,
+        defaultModel: exactLocalProvider.default_model || null,
+        source: "local",
+        providerCandidates: [{
+          id: exactLocalProvider.id || provider,
+          name: String(exactLocalProvider.name || exactLocalProvider.provider || provider),
+          provider: String(exactLocalProvider.provider || provider),
+          access_token: String(exactLocalProvider.access_token || ""),
+          auth_type: String(exactLocalProvider.auth_type || (exactLocalProvider.provider === "copilot" ? "oauth" : "api_key")),
+          token_type: String(exactLocalProvider.token_type || (exactLocalProvider.provider === "copilot" ? "bearer" : "api_key")),
+          scope: String(exactLocalProvider.scope || (exactLocalProvider.provider === "copilot" ? "read:user" : "api_key")),
+          default_model: exactLocalProvider.default_model || "",
+          endpoint_variant: String(exactLocalProvider.endpoint_variant || ""),
+          ...(exactLocalProvider.vision === true || exactLocalProvider.vision === false ? { vision: exactLocalProvider.vision } : {}),
+        }],
+      };
+    }
+  }
 
   if (provider && !SUPPORTED_PROVIDERS.includes(provider)) {
-    const localProvider = (tokenStore as { getProvider?: (id: string) => { default_model?: string } | null }).getProvider?.(provider);
+    const localProvider = localTokenStore.getProvider?.(provider);
     if (!localProvider) {
       return {
         error: {
@@ -150,7 +190,7 @@ function resolveProviderSelection({
       providerCandidates: implementedCandidates.map((entry) => {
         const authType = String(entry.metadata?.auth_type || (entry.provider === "copilot" ? "oauth" : "api_key"));
         return {
-          id: entry.provider,
+          id: String((entry as { id?: string }).id || entry.provider),
           name: String(entry.metadata?.name || entry.provider),
           provider: entry.provider,
           access_token: String(entry.credentials?.access_token || entry.credentials?.api_key || ""),

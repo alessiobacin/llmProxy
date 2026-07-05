@@ -679,6 +679,7 @@ test("provider:available shows supported providers with aliases and auth type", 
   assert.match(stdout.toString(), /qwen \(Qwen \(DashScope\)\) auth=api_key/);
   assert.match(stdout.toString(), /opencode \(OpenCode Zen\) auth=api_key aliases=zen/);
   assert.match(stdout.toString(), /opencode-go \(OpenCode Go\) auth=api_key aliases=go, opencodego/);
+  assert.match(stdout.toString(), /nvidia \(NVIDIA\) auth=api_key/);
 });
 
 test("provider:add supports api-key providers like openrouter", async () => {
@@ -701,6 +702,34 @@ test("provider:add supports api-key providers like openrouter", async () => {
   assert.equal(provider.auth_type, "api_key");
   assert.equal(provider.provider, "openrouter");
   assert.equal(provider.default_model, "openai/gpt-4o");
+  assert.match(stdout.toString(), /Provider configurato con API key/);
+});
+
+test("provider:add supports api-key providers like nvidia", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-nvidia-"));
+  const stdout = createWritableBuffer();
+  const requestUrls = [];
+  const fetchFn = async (url) => {
+    requestUrls.push(url);
+    return { ok: true, status: 200, async json() { return {}; } };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "nvidia", "--name", "NVIDIA", "--api-key", "nvapi-test", "--model", "z-ai/glm-5.2", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const provider = tokenStore.getProvider("nvidia");
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requestUrls, ["https://integrate.api.nvidia.com/v1/chat/completions"]);
+  assert.ok(provider);
+  assert.equal(provider.access_token, "nvapi-test");
+  assert.equal(provider.auth_type, "api_key");
+  assert.equal(provider.provider, "nvidia");
+  assert.equal(provider.default_model, "z-ai/glm-5.2");
   assert.match(stdout.toString(), /Provider configurato con API key/);
 });
 

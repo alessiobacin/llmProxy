@@ -31,6 +31,7 @@ services:
       LLMPROXY_GLOBAL_SERVICE: "1"
       LLMPROXY_SHARED_PROVIDER_REGISTRY: "1"
       LLMPROXY_MODE: "platform"
+      LLMPROXY_HOME: "/root/.local/share/llmProxy"
       LLMPROXY_METERING_SINK: "dblayer"
       LLMPROXY_METERING_INLINE: "1"
       LLMPROXY_INFERENCE_INFO_INLINE: "1"

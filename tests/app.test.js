@@ -25,11 +25,13 @@ async function withServer(app, callback) {
 }
 
 function withInferenceMetadata(text, providerId, modelUsed, promptTokens = 0, completionTokens = 0, options = {}) {
-  const { header = true, footer = true } = options;
+  const { header = true, footer = true, reason } = options;
   const requestTokens = Number(promptTokens || 0) + Number(completionTokens || 0);
   const parts = [];
   if (header) {
-    parts.push(`[llmproxy] provider: ${providerId} | model: ${modelUsed}`);
+    let headerStr = `[llmproxy] provider: ${providerId} | model: ${modelUsed}`;
+    if (reason) headerStr += ` : ${reason}`;
+    parts.push(headerStr);
   }
   parts.push(text);
   if (footer) {
@@ -116,7 +118,7 @@ test("messages endpoint proxies a non-stream Copilot response into Anthropic for
     assert.equal(response.status, 200);
     assert.equal(payload.type, "message");
     assert.equal(payload.role, "assistant");
-    assert.equal(payload.content[0].text, withInferenceMetadata("pong from copilot", "default", "claude-sonnet-4.5", 11, 5));
+    assert.equal(payload.content[0].text, withInferenceMetadata("pong from copilot", "default", "claude-sonnet-4.5", 11, 5, { reason: "First in order from provider list" }));
     assert.equal(payload.model, "claude-sonnet-4.5");
   });
 });
@@ -265,6 +267,7 @@ test("messages endpoint honors LLMPROXY_INFERENCE_INFO_INLINE from Claude projec
       assert.equal(response.status, 200);
       assert.equal(payload.content[0].text, withInferenceMetadata("pong from project inline info", "default", "claude-sonnet-4.5", 9, 4, {
         footer: false,
+        reason: "First in order from provider list",
       }));
     });
   } finally {
@@ -759,7 +762,7 @@ test("messages endpoint rewrites provider metadata once when upstream response a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("build ok", "default", "claude-sonnet-4.5", 11, 5));
+    assert.equal(payload.content[0].text, withInferenceMetadata("build ok", "default", "claude-sonnet-4.5", 11, 5, { reason: "First in order from provider list" }));
   });
 });
 
@@ -907,7 +910,7 @@ test("messages endpoint falls back to the next Copilot provider when the first o
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by backup", "backup", "claude-sonnet-4.5", 11, 4));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by backup", "backup", "claude-sonnet-4.5", 11, 4, { reason: "Second in order because claude-sonnet-4.5 (primary) is returning: 503" }));
     assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
     const summaryLog = loggerCalls.find((entry) => entry.type === "summary");
     assert.ok(summaryLog);
@@ -1060,7 +1063,7 @@ test("messages endpoint truncates oversized Copilot tool lists and records the a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("trim ok", "default", "gpt-5.4", 9, 3));
+    assert.equal(payload.content[0].text, withInferenceMetadata("trim ok", "default", "gpt-5.4", 9, 3, { reason: "First in order from provider list" }));
     assert.equal(fetchBodies.length, 1);
     assert.equal(fetchBodies[0].tools.length, 128);
 
@@ -1141,7 +1144,7 @@ test("messages endpoint trims oldest messages and retries when Copilot rejects p
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("context trimmed ok", "default", "claude-sonnet-4.5", 100, 5));
+    assert.equal(payload.content[0].text, withInferenceMetadata("context trimmed ok", "default", "claude-sonnet-4.5", 100, 5, { reason: "First in order from provider list" }));
     assert.equal(requestBodies.length, 2);
     assert.equal(requestBodies[0].messages.length, 4);
     assert.equal(requestBodies[1].messages.length, 3);
@@ -1207,7 +1210,7 @@ test("messages endpoint retries transient socket-close errors before failing", a
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("retry success", "default", "claude-sonnet-4.5", 10, 3));
+    assert.equal(payload.content[0].text, withInferenceMetadata("retry success", "default", "claude-sonnet-4.5", 10, 3, { reason: "First in order from provider list" }));
     assert.equal(attempts, 2);
   });
 });
@@ -1283,7 +1286,7 @@ test("messages endpoint falls back to the next Copilot provider when the first o
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by backup after safety block", "backup", "gpt-5.4", 11, 4));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by backup after safety block", "backup", "gpt-5.4", 11, 4, { reason: "Second in order because claude-sonnet-4.5 (primary) is returning: 400" }));
     assert.deepEqual(attempts, ["Bearer token-primary", "Bearer token-backup"]);
   });
 });
@@ -1460,7 +1463,7 @@ test("messages endpoint falls back from Copilot to Z.ai for GLM models", async (
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "glm-5");
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by z.ai", "zai", "glm-5", 9, 4));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by z.ai", "zai", "glm-5", 9, 4, { reason: "Second in order because glm-5 (copilot) is returning: 400" }));
     assert.deepEqual(calls, [
       {
         url: "https://api.githubcopilot.com/chat/completions",
@@ -1582,7 +1585,14 @@ test("messages endpoint can fall back to every configurable API-key provider", a
                 ? "minimax-m3"
             : "provider-native-model";
         assert.equal(payload.model, expectedModel);
-        assert.equal(payload.content[0].text, withInferenceMetadata(`served by ${providerId}`, providerId, expectedModel, 3, 2));
+        // Il copilot model nel reason può essere provider-native-model o
+        // claude-sonnet-4.5. Verifichiamo la struttura completa con regex.
+        const fullPat =
+          `^\\[llmproxy\\] provider: ${providerId} \\| model: ${expectedModel}` +
+          ` : Second in order because .+ \\(copilot\\) is returning: 400\\n\\n` +
+          `served by ${providerId}\\n\\n` +
+          `\\[llmproxy\\] tokens: req 5 \\(in 3, out 2\\).+`;
+        assert.match(payload.content[0].text, new RegExp(fullPat));
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
         assert.equal(calls[1].model, expectedModel);
@@ -1676,7 +1686,7 @@ test("messages endpoint still tries providers in configured order when request c
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by openai vision", "openai", "gpt-4o-mini", 7, 4));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by openai vision", "openai", "gpt-4o-mini", 7, 4, { reason: "Second in order because deepseek-v4-flash (deepseek) is returning: 400" }));
     assert.equal(calls.length, 2);
     assert.equal(calls[0].auth, "Bearer token-deepseek");
     assert.equal(calls[0].model, "deepseek-v4-flash");
@@ -1745,7 +1755,73 @@ test("messages endpoint routes qwen token-plan keys to the token-plan endpoint",
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "qwen3.7-max");
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by qwen token plan", "qwen", "qwen3.7-max", 3, 2));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by qwen token plan", "qwen", "qwen3.7-max", 3, 2, { reason: "First in order from provider list" }));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
+    assert.equal(calls[0].model, "qwen3.7-max");
+  });
+});
+
+test("messages endpoint honors an explicit local provider variant id", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-explicit-provider-variant-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("qwen3.7-max", {
+    access_token: "sk-sp-qwen-token-plan",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen 3.7 Max" });
+
+  const calls = [];
+  const fetchFn = async (url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    calls.push({ url: String(url), model: body.model });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [
+            {
+              message: { content: "served by explicit local variant" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 3, completion_tokens: 2 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": "/Users/example/project-explicit-provider-variant",
+      },
+      body: JSON.stringify({
+        provider: "qwen3.7-max",
+        stream: false,
+        max_tokens: 64,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Ping" }],
+          },
+        ],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.model, "qwen3.7-max");
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by explicit local variant", "qwen3.7-max", "qwen3.7-max", 3, 2, { reason: "First in order from provider list" }));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions");
     assert.equal(calls[0].model, "qwen3.7-max");
@@ -1818,7 +1894,7 @@ test("messages endpoint tries a provider default model before moving to the next
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "kimi-k2.5");
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by provider default", "kimi", "kimi-k2.5", 1, 2));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by provider default", "kimi", "kimi-k2.5", 1, 2, { reason: "Second in order because gpt-5.4 is returning: 400" }));
     assert.deepEqual(calls, ["gpt-5.4", "kimi-k2.5"]);
   });
 });
@@ -2104,7 +2180,7 @@ test("messages endpoint falls back when DeepSeek returns 402 insufficient balanc
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.model, "gpt-4.1");
-    assert.equal(payload.content[0].text, withInferenceMetadata("served by openai fallback", "openai", "gpt-4.1", 3, 2));
+    assert.equal(payload.content[0].text, withInferenceMetadata("served by openai fallback", "openai", "gpt-4.1", 3, 2, { reason: "Second in order because deepseek-v4-flash (deepseek) is returning: 402" }));
     assert.deepEqual(calls, [
       { auth: "Bearer token-deepseek", model: "deepseek-v4-flash" },
       { auth: "Bearer token-openai", model: "gpt-4.1" },

@@ -82,6 +82,13 @@ test("getApiKeyProviderRequestUrls returns the OpenCode Go messages endpoint", (
   ]);
 });
 
+test("getApiKeyProviderRequestUrls returns the NVIDIA chat completions endpoint", () => {
+  const urls = getApiKeyProviderRequestUrls({ provider: "nvidia", access_token: "nvapi-test" });
+  assert.deepEqual(urls, [
+    "https://integrate.api.nvidia.com/v1/chat/completions",
+  ]);
+});
+
 test("probeApiKeyProviderModel retries qwen against the token-plan endpoint", async () => {
   const urls = [];
   const result = await probeApiKeyProviderModel({
@@ -183,6 +190,44 @@ test("sanitizeToolsForMoonshot sanitizes parameters of each tool", () => {
       },
     },
   });
+});
+
+test("sanitizeSchemaForMoonshot hoists definitions nested away from the schema root and rewrites non-standard $ref pointers", () => {
+  // Regression test: a recursive filter schema where `definitions` lives under
+  // a sub-property (not the parameters root) and the $ref is a deep JSON
+  // pointer rather than a plain "#/definitions/X" or bare name. Moonshot
+  // rejected this with: "references must start with #/$defs/".
+  const input = {
+    type: "object",
+    properties: {
+      filters: {
+        type: "object",
+        properties: {
+          $and: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                type: { $ref: "#/properties/filters/definitions/FilterType" },
+              },
+            },
+          },
+        },
+        definitions: {
+          FilterType: { type: "string", enum: ["field", "group"] },
+        },
+      },
+    },
+  };
+  const output = sanitizeSchemaForMoonshot(input);
+  assert.deepEqual(
+    output.properties.filters.properties.$and.items.properties.type,
+    { $ref: "#/$defs/FilterType" },
+  );
+  assert.deepEqual(output.$defs, {
+    FilterType: { type: "string", enum: ["field", "group"] },
+  });
+  assert.equal("definitions" in output.properties.filters, false);
 });
 
 test("sanitizeVisionContent replaces image_url blocks with [image] text for non-vision providers", () => {

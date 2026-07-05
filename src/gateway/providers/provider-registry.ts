@@ -22,6 +22,7 @@ const SUPPORTED_PROVIDERS = [
   "together",
   "fireworks",
   "commandcode",
+  "nvidia",
 ] as const;
 
 const VALID_SCOPE_TYPES = ["master", "agency", "client", "project", "user"] as const;

@@ -1808,12 +1808,21 @@ test("models:list uses the live Copilot model catalog when authenticated", async
 
 test("test sends a fixed inference prompt to the local proxy and prints the assistant reply", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-command-"));
+  const projectRoot = path.join(runtimeRoot, "workspace");
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
   const requests = [];
   const { createTokenStore } = require("../lib/token-store");
   const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
   tokenStore.saveProvider("auto", { access_token: "token-auto", token_type: "bearer", scope: "read:user", provider: "copilot", default_model: "claude-sonnet-4.5" }, { name: "auto" });
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:5045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
+    },
+  }, null, 2));
 
   const fetchFn = async (url, options = {}) => {
     requests.push({ url, options });
@@ -1832,6 +1841,7 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   };
 
   const exitCode = await runCli(["node", "llmproxy", "test"], {
+    cwd: projectRoot,
     dataRoot: runtimeRoot,
     stdout,
     stderr,
@@ -1854,6 +1864,55 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   assert.equal(body.messages[0].content[0].text, "Rispondi solo: llmproxy-test-auto");
   assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\)/);
   assert.doesNotMatch(stdout.toString(), /ciao creatore/);
+});
+
+test("test fails when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-missing-stats-key-"));
+  const projectRoot = path.join(runtimeRoot, "workspace");
+  const homeDir = path.join(runtimeRoot, "home");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const requests = [];
+  const { createTokenStore } = require("../lib/token-store");
+  const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("nvidia", { api_key: "nvapi-test", provider: "nvidia", default_model: "minimaxai/minimax-m3", vision: true }, { name: "NVIDIA MiniMax M3" });
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+    model: "llmProxy",
+  }, null, 2));
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    env: {},
+  }, null, 2));
+
+  const fetchFn = async (url, options = {}) => {
+    requests.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { ok: true, manifest_version: "v11" };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    env: { ...process.env, HOME: homeDir, LLMPROXY_RUNTIME_PROFILE: "production" },
+    stdout,
+    stderr,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "http://127.0.0.1:7045/v1/llm/health");
+  assert.match(stdout.toString(), /Proxy stato: OK/i);
+  assert.match(stderr.toString(), /LLMPROXY_LLM_STATS_API_KEY is mandatory/i);
 });
 
 test("test uses a deterministic per-user port when no explicit PORT is configured", async () => {

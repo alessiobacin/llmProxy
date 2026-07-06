@@ -290,6 +290,94 @@ npm_prefix_writable() {
   [ -w "$probe" ]
 }
 
+resolve_effective_npm_prefix() {
+  if [ "${USED_LOCAL_INSTALL:-0}" -eq 1 ]; then
+    printf "%s\n" "$HOME/.local/share/llmproxy/npm-global"
+    return 0
+  fi
+  if [ "${USED_SUDO_INSTALL:-0}" -eq 1 ] && [ "$PLATFORM" != "windows" ] && has sudo; then
+    sudo npm prefix -g 2>/dev/null || true
+    return 0
+  fi
+  npm prefix -g 2>/dev/null || true
+}
+
+ensure_unix_global_wrappers() {
+  prefix="$1"
+  [ -n "$prefix" ] || return 1
+  package_cli="$prefix/lib/node_modules/llmproxy/bin/llmproxy.js"
+  [ -f "$package_cli" ] || return 1
+  mkdir -p "$prefix/bin"
+  ln -sf ../lib/node_modules/llmproxy/bin/llmproxy.js "$prefix/bin/llmproxy"
+  ln -sf ../lib/node_modules/llmproxy/bin/llmproxy.js "$prefix/bin/llmp"
+  return 0
+}
+
+append_path_export_once() {
+  profile_file="$1"
+  bin_dir="$2"
+  [ -n "$profile_file" ] || return 0
+  [ -n "$bin_dir" ] || return 0
+  line="export PATH=\"$bin_dir:\$PATH\""
+  if [ ! -f "$profile_file" ]; then
+    : > "$profile_file"
+  fi
+  grep -F "$line" "$profile_file" >/dev/null 2>&1 && return 0
+  printf "\n%s\n" "$line" >> "$profile_file"
+}
+
+persist_npm_global_bin_path() {
+  prefix="$1"
+  [ -n "$prefix" ] || return 0
+  case "$prefix" in
+    "$HOME"/*) ;;
+    *) return 0 ;;
+  esac
+  bin_dir="$prefix/bin"
+  [ -d "$bin_dir" ] || return 0
+  append_path_export_once "$HOME/.profile" "$bin_dir"
+  append_path_export_once "$HOME/.bash_profile" "$bin_dir"
+  append_path_export_once "$HOME/.zprofile" "$bin_dir"
+  PATH="$bin_dir:$PATH"
+  export PATH
+  hash -r 2>/dev/null || true
+}
+
+resolve_installed_llmproxy_bin() {
+  prefix="$1"
+  package_cli=""
+  if [ -n "$prefix" ]; then
+    package_cli="$prefix/lib/node_modules/llmproxy/bin/llmproxy.js"
+    if [ -x "$prefix/bin/llmproxy" ] && "$prefix/bin/llmproxy" version >/dev/null 2>&1; then
+      printf "%s\n" "$prefix/bin/llmproxy"
+      return 0
+    fi
+    if [ -x "$prefix/bin/llmp" ] && "$prefix/bin/llmp" version >/dev/null 2>&1; then
+      printf "%s\n" "$prefix/bin/llmp"
+      return 0
+    fi
+    if [ -f "$package_cli" ] && node "$package_cli" version >/dev/null 2>&1; then
+      printf "%s\n" "$package_cli"
+      return 0
+    fi
+  fi
+  if has llmproxy; then
+    candidate="$(command -v llmproxy)"
+    if [ -n "$candidate" ] && [ -x "$candidate" ] && "$candidate" version >/dev/null 2>&1; then
+      printf "%s\n" "$candidate"
+      return 0
+    fi
+  fi
+  if has llmp; then
+    candidate="$(command -v llmp)"
+    if [ -n "$candidate" ] && [ -x "$candidate" ] && "$candidate" version >/dev/null 2>&1; then
+      printf "%s\n" "$candidate"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 install_llmproxy_user_local() {
   local_prefix="$HOME/.local/share/llmproxy/npm-global"
   local_bin_dir="$HOME/.local/bin"
@@ -315,7 +403,24 @@ printf "%s: %s\n" "$MSG_INSTALL_SOURCE" "$INSTALL_SOURCE"
 USED_SUDO_INSTALL=0
 USED_LOCAL_INSTALL=0
 if [ "$PLATFORM" != "windows" ] && [ "$(id -u)" -ne 0 ]; then
-  if has sudo; then
+  if npm_prefix_writable; then
+    if ! npm_install_global_quiet "$INSTALL_SOURCE"; then
+      if has sudo; then
+        info "$MSG_INSTALL_USE_SUDO"
+        if run_quiet_capture run_root npm install -g --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE"; then
+          USED_SUDO_INSTALL=1
+        else
+          warn "$MSG_INSTALL_RETRY_LOCAL"
+          install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+          USED_LOCAL_INSTALL=1
+        fi
+      else
+        warn "$MSG_INSTALL_RETRY_LOCAL"
+        install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+        USED_LOCAL_INSTALL=1
+      fi
+    fi
+  elif has sudo; then
     info "$MSG_INSTALL_USE_SUDO"
     if run_quiet_capture run_root npm install -g --silent --no-progress --fund=false --update-notifier=false "$INSTALL_SOURCE"; then
       USED_SUDO_INSTALL=1
@@ -347,21 +452,21 @@ else
     fi
   fi
 fi
-LLMPROXY_BIN=""
-if has llmproxy; then
-  LLMPROXY_BIN="$(command -v llmproxy)"
-else
-  if [ "$USED_LOCAL_INSTALL" -eq 1 ] && [ -x "$HOME/.local/bin/llmproxy" ]; then
-    LLMPROXY_BIN="$HOME/.local/bin/llmproxy"
-  elif [ "$USED_SUDO_INSTALL" -eq 1 ] && [ "$PLATFORM" != "windows" ] && has sudo; then
-    NPM_GLOBAL_PREFIX="$(sudo npm prefix -g 2>/dev/null || true)"
-  else
-    NPM_GLOBAL_PREFIX="$(npm prefix -g 2>/dev/null || true)"
-  fi
-  if [ -z "$LLMPROXY_BIN" ] && [ -n "${NPM_GLOBAL_PREFIX:-}" ] && [ -x "$NPM_GLOBAL_PREFIX/bin/llmproxy" ]; then
-    LLMPROXY_BIN="$NPM_GLOBAL_PREFIX/bin/llmproxy"
+
+NPM_GLOBAL_PREFIX="$(resolve_effective_npm_prefix)"
+if [ "$PLATFORM" != "windows" ] && [ "$USED_LOCAL_INSTALL" -ne 1 ] && [ -n "${NPM_GLOBAL_PREFIX:-}" ]; then
+  ensure_unix_global_wrappers "$NPM_GLOBAL_PREFIX" >/dev/null 2>&1 || true
+  persist_npm_global_bin_path "$NPM_GLOBAL_PREFIX"
+  if [ ! -f "$NPM_GLOBAL_PREFIX/lib/node_modules/llmproxy/bin/llmproxy.js" ]; then
+    warn "$MSG_INSTALL_RETRY_LOCAL"
+    install_llmproxy_user_local || fail_with_last_cmd_log "$MSG_INSTALL_FAIL"
+    USED_LOCAL_INSTALL=1
+    USED_SUDO_INSTALL=0
+    NPM_GLOBAL_PREFIX="$(resolve_effective_npm_prefix)"
   fi
 fi
+
+LLMPROXY_BIN="$(resolve_installed_llmproxy_bin "${NPM_GLOBAL_PREFIX:-}" || true)"
 
 [ -n "$LLMPROXY_BIN" ] || error "llmproxy not found after npm install. Check your npm global prefix and PATH."
 

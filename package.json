@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.01",
+  "version": "0.3.02",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -109,6 +109,12 @@
       "strengthen self-update with automatic backup, post-update smoke test, and rollback on verification failure",
       "verify the freshly installed CLI with version, config:list, and status before declaring success",
       "restore the previously installed global package and restart the managed service automatically when the new build does not pass validation"
+    ],
+    "0.3.02": [
+      "release 0.3.02",
+      "fix Linux installers so user-local npm prefixes are installed and persisted correctly without stale wrapper resolution",
+      "make llmproxy test print the provider HTTP error details for failed quick inference probes",
+      "add regression coverage for installer PATH persistence and quick test HTTP error reporting"
     ]
   },
   "dependencies": {

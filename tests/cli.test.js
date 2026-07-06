@@ -1952,6 +1952,50 @@ test("test probes only the active provider by default", async () => {
   assert.doesNotMatch(stdout.toString(), /kimi: ok \(kimi-k2\.5\)/);
 });
 
+test("test prints provider HTTP error details when the quick inference probe fails", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-http-error-detail-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("nvidia", {
+    access_token: "nvapi-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "nvidia",
+    auth_type: "api_key",
+    default_model: "minimaxai/minimax-m3",
+    vision: true,
+  }, { name: "NVIDIA MiniMax M3" });
+
+  const fetchFn = async (url) => {
+    if (String(url).endsWith("/v1/llm/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v11" };
+        },
+      };
+    }
+    return {
+      ok: false,
+      status: 400,
+      async text() {
+        return JSON.stringify({ error: { message: "model requires a different endpoint variant" } });
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    tokenStore,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stdout.toString(), /nvidia: fail HTTP 400: model requires a different endpoint variant \(minimaxai\/minimax-m3\)/);
+});
+
 test("test hides llmproxy metadata lines from the printed assistant reply", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-hide-metadata-"));
   const stdout = createWritableBuffer();
@@ -3959,6 +4003,20 @@ test("buildPersistentInstallScript includes used_sudo path for update service:re
   assert.match(script, /if sudo npm install -g/);
   assert.match(script, /used_sudo=1/);
   assert.match(script, /sudo -u "\$SUDO_USER"/);
+});
+
+test("buildPersistentInstallScript persists home-local npm bins in login shell profiles", () => {
+  const script = buildPersistentInstallScript({
+    packageRoot: "/tmp/pkg",
+    locale: "en",
+    platform: "linux",
+  });
+  assert.match(script, /append_path_export_once\(\) \{/);
+  assert.match(script, /persist_user_npm_bin_path\(\) \{/);
+  assert.match(script, /append_path_export_once "\$HOME\/\.profile" "\$bin_dir"/);
+  assert.match(script, /append_path_export_once "\$HOME\/\.bash_profile" "\$bin_dir"/);
+  assert.match(script, /append_path_export_once "\$HOME\/\.zprofile" "\$bin_dir"/);
+  assert.match(script, /persist_user_npm_bin_path "\$npm_prefix"/);
 });
 
 test("update keeps success when package install succeeds but service restart fails", async () => {

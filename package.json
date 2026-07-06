@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.20",
+  "version": "0.3.21",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -223,6 +223,12 @@
       "fix Windows native services by making nssm launch node.exe directly instead of routing through a cmd wrapper",
       "set the managed Windows service PATH explicitly inside nssm so server startup no longer depends on wrapper shell behavior",
       "keep the absolute netstat.exe port-guard fix from 0.3.19 while removing the last fragile batch layer from native startup"
+    ],
+    "0.3.21": [
+      "release 0.3.21",
+      "fix Windows self-update over SSH by routing git, npm, and post-install CLI commands through a quiet Start-Process helper",
+      "prevent PowerShell NativeCommandError noise from aborting llmproxy update when git clone or npm emit progress on stderr",
+      "keep the 0.3.20 direct-node nssm startup while making the updater resilient in non-interactive remote sessions"
     ]
   },
   "dependencies": {

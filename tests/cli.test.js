@@ -2886,10 +2886,13 @@ test("runSelfUpdateWindows resolves the global cmd wrapper explicitly", () => {
     return { status: 0, stdout: "", stderr: "" };
   });
   const windowsScriptText = executed[0][1][2];
+  assert.match(windowsScriptText, /\$PSNativeCommandUseErrorActionPreference = \$false/);
   assert.match(windowsScriptText, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
   assert.match(windowsScriptText, /Join-Path \$Prefix "llmproxy\.cmd"/);
   assert.match(windowsScriptText, /\$newBin = Resolve-LlmproxyGlobalBin \$npmPrefix/);
-  assert.match(windowsScriptText, /& "\$newBin" config:migrate 2>\$null \| Out-Null/);
+  assert.match(windowsScriptText, /git clone --depth=1 .* \*> \$null/);
+  assert.match(windowsScriptText, /npm install -g --force "\$packageFile" \*> \$null/);
+  assert.match(windowsScriptText, /& "\$newBin" config:migrate \*> \$null/);
 });
 
 test("install:persistent-it fails with prerequisite guidance when Docker is missing on Ubuntu", async () => {

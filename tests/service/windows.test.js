@@ -128,13 +128,13 @@ test("windows install prefers nssm when available", () => {
   assert.ok(nssmCalls.some((args) => args[0] === "install" && args[1] === "llmproxy"));
   const installCall = nssmCalls.find((args) => args[0] === "install" && args[1] === "llmproxy");
   assert.ok(installCall);
-  assert.equal(installCall[2], "C:\\Windows\\System32\\cmd.exe");
-  assert.match(String(installCall[3]), /runner\.cmd/);
+  assert.equal(installCall[2], process.execPath);
+  assert.match(String(installCall[3]), /server\.js/);
   assert.ok(nssmCalls.some((args) => args[0] === "set" && args[2] === "AppEnvironmentExtra"));
   const envCall = nssmCalls.find((args) => args[0] === "set" && args[2] === "AppEnvironmentExtra");
   assert.ok(envCall);
   assert.ok(envCall.includes(`PORT=7045`));
-  assert.ok(!envCall.some((arg) => String(arg).includes("/opt/homebrew/bin")));
+  assert.ok(envCall.some((arg) => String(arg).includes("PATH=C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\Wbem")));
 });
 
 test("windows install handles already existing service by deleting it first", () => {

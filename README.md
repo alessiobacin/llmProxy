@@ -1223,7 +1223,7 @@ The reinstall is forced even when the package version string is unchanged, so sa
 As part of the update, llmProxy also migrates managed configuration files to the current schema: legacy keys such as `LLM_STATS_API_KEY`, unprefixed `SENDGRID_*`, `LLMPROXY_SMART_*`, and the old split MongoDB variables are removed or rewritten to the supported names such as `LLMPROXY_LLM_STATS_API_KEY`, `LLMPROXY_SENDGRID_*`, and `LLMPROXY_MONGODB_CONNECTION_STRING`.
 Before reinstalling, the updater now proactively kills anything listening on port `7045`, removes stale global wrappers, best-effort uninstalls previous npm/pnpm copies, and purges legacy install directories discovered in common global locations. This is meant to make upgrades from `0.2.77` and older resilient even on machines with multiple historical installs.
 
-On Linux systems where npm global is under `/usr/local` (owned by root), the command automatically detects the permission error and retries with `sudo`. There is no need to manually run `sudo llmproxy update`.
+On Linux systems where the global npm prefix is under `/usr/local` (root-owned), the CLI now stops before changing anything if it cannot use `sudo` non-interactively. Run `sudo -v` first and then `llmproxy update`, or invoke `sudo llmproxy update` directly.
 
 ### `llmproxy install:persistent-it`
 
@@ -1243,6 +1243,7 @@ llmproxy install:persistent-it
 
 The command installs the current CLI globally and enables the native persistent service for the OS.
 Before changing anything, it validates prerequisites such as `npm`, the service manager, Docker, and Docker Compose, then prints OS-specific remediation commands if something is missing.
+If the global npm prefix is root-owned, pre-authorize sudo with `sudo -v` before running this CLI command, or run the command itself with `sudo`.
 When you use this command, the command output, dedicated help text, and error messages for this path are shown in Italian.
 
 ### `llmproxy install:persistent-en`
@@ -1269,6 +1270,7 @@ llmproxy install:persistent-en
 
 The command installs the current CLI globally and enables the native persistent service for the OS.
 Before changing anything, it validates prerequisites such as `npm`, the service manager, Docker, and Docker Compose, then prints OS-specific remediation commands if something is missing.
+If the global npm prefix is root-owned, pre-authorize sudo with `sudo -v` before running this CLI command, or run the command itself with `sudo`.
 When you use this command, the command output, dedicated help text, and error messages for this path are shown in English.
 
 ### `llmproxy install`

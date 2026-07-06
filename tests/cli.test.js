@@ -2930,6 +2930,46 @@ test("install:persistent-it fails with prerequisite guidance when Docker is miss
   assert.equal(commandCalls.some((entry) => entry.command === "sh"), false);
 });
 
+test("install:persistent-en stops early when the global npm prefix is protected and sudo is not pre-authorized", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-sudo-ticket-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-sudo-ticket-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const npmPrefix = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-protected-prefix-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+  fs.chmodSync(npmPrefix, 0o555);
+
+  try {
+    const exitCode = await runCli(["node", "llmproxy", "install:persistent-en"], {
+      dataRoot: runtimeRoot,
+      packageRoot,
+      platform: "linux",
+      stdout,
+      stderr,
+      env: { LLMPROXY_SERVICE_RUNTIME: "native" },
+      commandRunner(command, args) {
+        if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+        if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: `${npmPrefix}\n`, stderr: "" };
+        if (command === "systemctl" && args[0] === "--version") return { status: 0, stdout: "systemd 255\n", stderr: "" };
+        if (command === "bash") return { status: 0, stdout: "", stderr: "" };
+        if (command === "sudo" && args[0] === "--version") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
+        if (command === "sudo" && args[0] === "-n") return { status: 1, stdout: "", stderr: "sudo: a password is required" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.toString(), "");
+    assert.match(stderr.toString(), /sudo -v/);
+    assert.match(stderr.toString(), /rerun the command with `sudo`/i);
+  } finally {
+    fs.chmodSync(npmPrefix, 0o755);
+  }
+});
+
 test("install:persistent-it accepts legacy docker-compose during preflight", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-legacy-compose-"));
   const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-install-persistent-legacy-compose-pkg-")), "node_modules", "llmproxy");
@@ -4113,6 +4153,40 @@ test("update stops early and reports missing base prerequisites", async () => {
   assert.match(stderr.toString(), /Git \(`git`\) non trovato/i);
   assert.doesNotMatch(stderr.toString(), /pnpm non trovato/i);
   assert.equal(executed.some(([command]) => command === "bash"), false);
+});
+
+test("update stops early when the global npm prefix is protected and sudo is not pre-authorized", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-sudo-ticket-"));
+  const npmPrefix = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-protected-prefix-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  fs.chmodSync(npmPrefix, 0o555);
+
+  try {
+    const exitCode = await runCli(["node", "llmproxy", "update"], {
+      dataRoot: runtimeRoot,
+      stdout,
+      stderr,
+      env: { ...process.env, LLMPROXY_ENV: "development" },
+      fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
+      commandRunner(command, args) {
+        if (command === "git") return { status: 0, stdout: "git version 2.0.0\n", stderr: "" };
+        if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+        if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: `${npmPrefix}\n`, stderr: "" };
+        if (command === "sudo" && args[0] === "--version") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
+        if (command === "sudo" && args[0] === "-n") return { status: 1, stdout: "", stderr: "sudo: a password is required" };
+        return { status: 0, stdout: "", stderr: "" };
+      },
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.toString(), "");
+    assert.match(stderr.toString(), /sudo -v/);
+    assert.match(stderr.toString(), /sudo llmproxy update/);
+  } finally {
+    fs.chmodSync(npmPrefix, 0o755);
+  }
 });
 
 test("update keeps going when the remote version probe times out", async () => {

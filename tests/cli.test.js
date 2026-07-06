@@ -1724,6 +1724,43 @@ test("runCli uses the REST wrapper when the local service is reachable", async (
   assert.match(stdout.toString(), /REST Provider/);
 });
 
+test("update bypasses the REST wrapper even when the local service is reachable", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-rest-bypass-"));
+  const stdout = createWritableBuffer();
+  const requests = [];
+  const commandCalls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    restFetchFn: async (url) => {
+      requests.push(String(url));
+      if (String(url).endsWith("/health")) {
+        return { ok: true, async json() { return { ok: true }; } };
+      }
+      throw new Error(`unexpected REST call: ${url}`);
+    },
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
+    commandRunner(command, args) {
+      commandCalls.push([command, args]);
+      if (command === "git") return { status: 0, stdout: "git version 2.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: "/tmp/npm-prefix\n", stderr: "" };
+      if (command === "sudo") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
+      return {
+        status: 0,
+        stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.05\n__LLMPROXY_RELEASE_NOTES_START__\nChangelog 0.3.05:\n- release 0.3.05\n__LLMPROXY_RELEASE_NOTES_END__\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requests, []);
+  assert.equal(commandCalls.some(([command]) => command === "bash"), true);
+  assert.match(stdout.toString(), /Versione corrente: 0\.3\.05/);
+});
+
 test("models:list prints a numbered list of available models", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-list-"));
   const stdout = createWritableBuffer();

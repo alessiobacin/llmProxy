@@ -98,6 +98,37 @@ run_root() {
   error "$MSG_SUDO_REQUIRED"
 }
 
+cleanup_global_service_port() {
+  service_port="${1:-7045}"
+  [ -n "$service_port" ] || return 0
+
+  if has docker; then
+    docker_ids="$(docker ps --format '{{.ID}} {{.Ports}}' 2>/dev/null | awk -v port="$service_port" 'index($0, ":" port "->") > 0 { print $1 }')"
+    if [ -n "$docker_ids" ]; then
+      for docker_id in $docker_ids; do
+        docker stop "$docker_id" >/dev/null 2>&1 || run_root docker stop "$docker_id" >/dev/null 2>&1 || true
+        docker rm "$docker_id" >/dev/null 2>&1 || run_root docker rm "$docker_id" >/dev/null 2>&1 || true
+      done
+    fi
+  fi
+
+  if has lsof; then
+    listener_pids="$(lsof -tiTCP:"$service_port" -sTCP:LISTEN 2>/dev/null || true)"
+    if [ -n "$listener_pids" ]; then
+      for listener_pid in $listener_pids; do
+        kill "$listener_pid" >/dev/null 2>&1 || run_root kill "$listener_pid" >/dev/null 2>&1 || true
+      done
+      sleep 1
+      listener_pids="$(lsof -tiTCP:"$service_port" -sTCP:LISTEN 2>/dev/null || true)"
+      if [ -n "$listener_pids" ]; then
+        for listener_pid in $listener_pids; do
+          kill -9 "$listener_pid" >/dev/null 2>&1 || run_root kill -9 "$listener_pid" >/dev/null 2>&1 || true
+        done
+      fi
+    fi
+  fi
+}
+
 refresh_path() {
   for extra in \
     "/opt/homebrew/bin" \
@@ -475,9 +506,12 @@ if [ "$PLATFORM" = "windows" ]; then
   printf "%s\n" "$MSG_WINDOWS_NOTE"
 fi
 
+cleanup_global_service_port "${PORT:-7045}"
+
 if ! env LLMPROXY_MODE=standalone LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:start 2>&1; then
   warn "$MSG_SERVICE_RETRY"
   sleep 2
+  cleanup_global_service_port "${PORT:-7045}"
   env LLMPROXY_MODE=standalone LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
 fi
 

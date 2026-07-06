@@ -864,6 +864,7 @@ Prima di confermare il successo esegue ora uno smoke test sul CLI appena install
 Se questa verifica fallisce, `llmproxy update` ripristina automaticamente il package globale precedente e riavvia il servizio gestito dalla versione ripristinata.
 Durante l'update viene mantenuta una sola installazione globale attiva e vengono rimossi eventuali wrapper globali duplicati di `pnpm`.
 La reinstallazione è forzata anche quando la stringa di versione del package non cambia, così anche build di manutenzione con la stessa versione sostituiscono davvero i file installati.
+Come parte dell'update, llmProxy migra anche i file di configurazione gestiti allo schema corrente: chiavi legacy come `LLM_STATS_API_KEY`, `SENDGRID_*`, `LLMPROXY_SMART_*`, `LLMPROXY_METERING_SINK` e le vecchie variabili MongoDB separate vengono rimosse o riscritte nei nomi supportati.
 
 Su sistemi Linux dove npm globale è sotto `/usr/local` (di proprietà di root), il comando rileva automaticamente l'errore di permessi e ritenta con `sudo`. Non è necessario lanciare manualmente `sudo llmproxy update`.
 

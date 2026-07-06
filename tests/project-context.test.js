@@ -213,6 +213,61 @@ test("resolveClaudeProjectSettings reads LLMPROXY_LLM_STATS_API_KEY from Claude 
   assert.equal(result.llmStatsApiKey, "sk-free-demo");
 });
 
+test("resolveClaudeProjectSettings falls back to the global Claude LLMPROXY_LLM_STATS_API_KEY when the project key is absent", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-global-stats-key-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  const globalClaudeDir = path.join(homeDir, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.mkdirSync(globalClaudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(globalClaudeDir, "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir, { env: { ...process.env, HOME: homeDir } });
+
+  assert.equal(result.llmStatsApiKey, "sk-global-demo");
+});
+
+test("resolveClaudeProjectSettings lets an explicit empty project LLMPROXY_LLM_STATS_API_KEY override the global fallback", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-project-empty-stats-key-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  const globalClaudeDir = path.join(homeDir, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.mkdirSync(globalClaudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(globalClaudeDir, "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir, { env: { ...process.env, HOME: homeDir } });
+
+  assert.equal(result.llmStatsApiKey, "");
+});
+
 test("resolveClaudeProjectSettings reads SendGrid project notification settings", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-sendgrid-"));
   const projectRoot = path.join(root, "workspace");

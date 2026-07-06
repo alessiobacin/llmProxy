@@ -15,6 +15,9 @@ const {
   getServiceDefaultValues,
   isRestartRequired,
   isHotReloadable,
+  migrateManagedConfig,
+  normalizeClaudeSettingsConfig,
+  normalizeServiceConfigPayload,
   setScopeValue,
   getScopeValue,
   unsetScopeValue,
@@ -220,4 +223,102 @@ test("getServiceDefaultValues returns effective service defaults", () => {
   assert.equal(defaults.LLMPROXY_MONGODB_CONNECTION_STRING, "");
   assert.equal(defaults.LLMPROXY_SERVICE_RUNTIME, "native");
   assert.equal(defaults.LLMPROXY_LOG_MAX_BYTES, "5242880");
+});
+
+test("normalizeClaudeSettingsConfig removes legacy project variables and injects current llmproxy defaults", () => {
+  const normalized = normalizeClaudeSettingsConfig({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLM_STATS_API_KEY: "sk-legacy",
+      SENDGRID_API_KEY: "sg-legacy",
+      SENDGRID_FROM_EMAIL: "from@example.com",
+      SENDGRID_TO_EMAIL: "to@example.com",
+      SENDGRID_TO_MESSAGE_TYPE: "provider_error",
+      LLMPROXY_SMART_ROUTE: "hybrid",
+      LLMPROXY_SMART_PREFERENCE: "balanced",
+    },
+  }, {
+    cwd: tmpDir,
+    serviceConfigFile: path.join(tmpDir, "service", "config.json"),
+    injectDefaults: true,
+  });
+
+  assert.equal(normalized.env.LLMPROXY_LLM_STATS_API_KEY, "sk-legacy");
+  assert.equal(normalized.env.LLMPROXY_SENDGRID_API_KEY, "sg-legacy");
+  assert.equal(normalized.env.LLMPROXY_SENDGRID_FROM_EMAIL, "from@example.com");
+  assert.equal(normalized.env.LLMPROXY_SENDGRID_TO_EMAIL, "to@example.com");
+  assert.equal(normalized.env.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE, "provider_error");
+  assert.equal(normalized.env.LLMPROXY_PRICE_PERFORMANCE_ROUTING, "1");
+  assert.equal(normalized.env.LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER, "power");
+  assert.equal("LLM_STATS_API_KEY" in normalized.env, false);
+  assert.equal("SENDGRID_API_KEY" in normalized.env, false);
+  assert.equal("LLMPROXY_SMART_ROUTE" in normalized.env, false);
+  assert.equal("LLMPROXY_SMART_PREFERENCE" in normalized.env, false);
+});
+
+test("normalizeServiceConfigPayload removes legacy service variables and migrates Mongo connection string", () => {
+  const normalized = normalizeServiceConfigPayload(path.join(tmpDir, "service", "config.json"), {
+    env: {
+      PORT: "7045",
+      HOST: "127.0.0.1",
+      LLMPROXY_MODE: "standalone",
+      LLMPROXY_SERVICE_RUNTIME: "native",
+      LLMPROXY_METERING_SINK: "dblayer",
+      LLMPROXY_MONGODB_URI: "mongodb://mongo:27017/llmProxy",
+      LLMPROXY_MONGODB_DB: "llmProxy",
+      LLMPROXY_MONGODB_METERING_COLLECTION: "metering",
+      LLM_STATS_API_KEY: "sk-legacy",
+      SENDGRID_API_KEY: "sg-legacy",
+    },
+  }, {
+    injectDefaults: true,
+  });
+
+  assert.equal(normalized.env.LLMPROXY_MONGODB_CONNECTION_STRING, "mongodb://mongo:27017/llmProxy");
+  assert.equal("LLMPROXY_METERING_SINK" in normalized.env, false);
+  assert.equal("LLMPROXY_MONGODB_URI" in normalized.env, false);
+  assert.equal("LLMPROXY_MONGODB_DB" in normalized.env, false);
+  assert.equal("LLMPROXY_MONGODB_METERING_COLLECTION" in normalized.env, false);
+  assert.equal("LLM_STATS_API_KEY" in normalized.env, false);
+  assert.equal("SENDGRID_API_KEY" in normalized.env, false);
+  assert.equal(normalized.env.LLMPROXY_LOG_MAX_FILES, "5");
+});
+
+test("migrateManagedConfig rewrites legacy project and service config in place", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-migrate-"));
+  const projectRoot = path.join(root, "workspace");
+  const serviceConfigFile = path.join(root, "service", "config.json");
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.mkdirSync(path.dirname(serviceConfigFile), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLM_STATS_API_KEY: "sk-legacy",
+      LLMPROXY_SMART_ROUTE: "hybrid",
+    },
+  }, null, 2));
+  fs.writeFileSync(serviceConfigFile, JSON.stringify({
+    env: {
+      LLMPROXY_MONGODB_URI: "mongodb://mongo:27017/llmProxy",
+      LLMPROXY_METERING_SINK: "dblayer",
+    },
+  }, null, 2));
+
+  const migrated = migrateManagedConfig({
+    cwd: projectRoot,
+    serviceConfigFile,
+    packageRoot: path.join(__dirname, ".."),
+    dataRoot: root,
+  });
+
+  assert.deepEqual(migrated, { project: true, service: true });
+
+  const projectPayload = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
+  const servicePayload = JSON.parse(fs.readFileSync(serviceConfigFile, "utf8"));
+  assert.equal(projectPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-legacy");
+  assert.equal("LLMPROXY_SMART_ROUTE" in projectPayload.env, false);
+  assert.equal(servicePayload.env.LLMPROXY_MONGODB_CONNECTION_STRING, "mongodb://mongo:27017/llmProxy");
+  assert.equal("LLMPROXY_METERING_SINK" in servicePayload.env, false);
 });

@@ -6,6 +6,14 @@ const path = require("node:path");
 
 process.env.LLMPROXY_METERING_INLINE = "true";
 process.env.LLMPROXY_INFERENCE_INFO_INLINE = "true";
+const TEST_HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-home-"));
+fs.mkdirSync(path.join(TEST_HOME_DIR, ".claude"), { recursive: true });
+fs.writeFileSync(path.join(TEST_HOME_DIR, ".claude", "settings.json"), JSON.stringify({
+  env: {
+    LLMPROXY_LLM_STATS_API_KEY: "sk-test-global",
+  },
+}, null, 2));
+process.env.HOME = TEST_HOME_DIR;
 
 const { createApp } = require("../lib/app");
 const { API_KEY_PROVIDER_CONFIGS, escalationTracker } = require("../lib/copilot-proxy");
@@ -206,6 +214,103 @@ test("messages endpoint returns a static streaming response when project LLMPROX
     assert.match(payload, /event: content_block_delta/);
     assert.match(payload, /LLMPROXY_LLM_STATS_API_KEY is mandatory/i);
     assert.match(payload, /llm-stats\.com\/developer/i);
+  });
+});
+
+test("messages endpoint accepts the global Claude LLMPROXY_LLM_STATS_API_KEY when the project key is absent", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-global-llm-stats-fallback-"));
+  const homeDir = path.join(tempRoot, "home");
+  const projectRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(projectRoot, ".claude");
+  const globalClaudeDir = path.join(homeDir, ".claude");
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.save({ access_token: "token-global-fallback" });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.mkdirSync(globalClaudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(globalClaudeDir, "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+    },
+  }, null, 2));
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    env: { ...process.env, HOME: homeDir },
+    tokenStore,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          id: "resp-1",
+          choices: [{ message: { role: "assistant", content: "pong" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        };
+      },
+    }),
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": projectRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.type, "message");
+    assert.doesNotMatch(payload.content[0].text, /LLMPROXY_LLM_STATS_API_KEY is mandatory/i);
+  });
+});
+
+test("messages endpoint blocks inference when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-global-llm-stats-missing-"));
+  const homeDir = path.join(tempRoot, "home");
+  const projectRoot = path.join(tempRoot, "workspace");
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    env: { ...process.env, HOME: homeDir },
+    fetchFn: async () => {
+      throw new Error("fetch should not run when LLMPROXY_LLM_STATS_API_KEY is missing everywhere");
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": projectRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.match(payload.content[0].text, /LLMPROXY_LLM_STATS_API_KEY is mandatory/i);
   });
 });
 

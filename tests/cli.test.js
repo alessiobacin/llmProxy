@@ -2665,6 +2665,7 @@ test("runSelfUpdateWindows resolves the global cmd wrapper explicitly", () => {
   assert.match(windowsScriptText, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
   assert.match(windowsScriptText, /Join-Path \$Prefix "llmproxy\.cmd"/);
   assert.match(windowsScriptText, /\$newBin = Resolve-LlmproxyGlobalBin \$npmPrefix/);
+  assert.match(windowsScriptText, /& "\$newBin" config:migrate 2>\$null \| Out-Null/);
 });
 
 test("install:persistent-it fails with prerequisite guidance when Docker is missing on Ubuntu", async () => {
@@ -3952,6 +3953,8 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /build_wrapper_payload\(\) \{/);
   assert.match(scriptText, /ensure_wrapper_path\(\) \{/);
   assert.match(scriptText, /ensure_global_bin\(\) \{/);
+  assert.match(scriptText, /cleanup_global_service_port\(\) \{/);
+  assert.match(scriptText, /run_new_llmproxy config:migrate >\/dev\/null 2>&1 \|\| true/);
   assert.match(scriptText, /if \[ -f "\$package_cli" \]; then/);
   assert.match(scriptText, /package_cli_version=\$\(node "\$package_cli" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -x "\$global_bin_path" \]; then/);
@@ -3970,6 +3973,7 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" > "\$current_bin"/);
   assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" \| sudo tee "\$current_bin" >\/dev\/null/);
   assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
+  assert.match(scriptText, /cleanup_global_service_port "\$\{PORT:-7045\}"/);
   assert.match(scriptText, /post_update_check\(\) \{/);
   assert.match(scriptText, /if ! post_update_check; then\n\s+rollback_and_exit "post-update smoke test failed for \$target_version"/);
   assert.match(scriptText, /printf "__LLMPROXY_ROLLBACK__=1\\n"/);
@@ -3987,6 +3991,8 @@ test("buildPersistentInstallScript includes sudo-to-user D-Bus delegation on Lin
   assert.match(installScript, /used_sudo=0/);
   assert.match(installScript, /if sudo npm install -g/);
   assert.match(installScript, /used_sudo=1/);
+  assert.match(installScript, /cleanup_global_service_port\(\) \{/);
+  assert.match(installScript, /cleanup_global_service_port "\$\{PORT:-7045\}"/);
   assert.match(installScript, /if \[ "\$used_sudo" -eq 1 \] && \[ "\$platform" = "linux" \] && \[ -n "\$\{SUDO_USER:-\}" \] && command -v sudo >\/dev\/null 2>&1; then\n\s+sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR="\/run\/user\/\$\(id -u "\$SUDO_USER"\)" DBUS_SESSION_BUS_ADDRESS="unix:path=\/run\/user\/\$\(id -u "\$SUDO_USER"\)\/bus" LLMPROXY_MODE="standalone" LLMPROXY_SERVICE_RUNTIME="native" "\$global_bin" service:start/);
   assert.match(installScript, /else\n\s+LLMPROXY_MODE="standalone" LLMPROXY_SERVICE_RUNTIME="native" "\$global_bin" service:start\nfi/);
 });
@@ -4015,6 +4021,12 @@ test("buildPersistentInstallScript persists home-local npm bins in login shell p
   assert.match(script, /append_path_export_once "\$HOME\/\.bash_profile" "\$bin_dir"/);
   assert.match(script, /append_path_export_once "\$HOME\/\.zprofile" "\$bin_dir"/);
   assert.match(script, /persist_user_npm_bin_path "\$npm_prefix"/);
+});
+
+test("one-line installer reaps the global service port before starting llmproxy", () => {
+  const installer = fs.readFileSync(path.join(__dirname, "..", "scripts", "install.sh"), "utf8");
+  assert.match(installer, /cleanup_global_service_port\(\) \{/);
+  assert.match(installer, /cleanup_global_service_port "\$\{PORT:-7045\}"/);
 });
 
 test("update keeps success when package install succeeds but service restart fails", async () => {
@@ -4050,6 +4062,45 @@ test("update keeps success when package install succeeds but service restart fai
   assert.match(stdout.toString(), /Versione corrente: 0\.2\.60/);
   assert.match(stdout.toString(), /Bootstrap failed: 5: Input\/output error/);
   assert.equal(stderr.toString(), "");
+});
+
+test("config:migrate rewrites legacy project and service variables to the current schema", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-migrate-"));
+  const projectRoot = path.join(runtimeRoot, "workspace");
+  const stdout = createWritableBuffer();
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLM_STATS_API_KEY: "sk-legacy",
+      LLMPROXY_SMART_ROUTE: "hybrid",
+    },
+  }, null, 2));
+  fs.mkdirSync(path.join(runtimeRoot, "service"), { recursive: true });
+  fs.writeFileSync(path.join(runtimeRoot, "service", "config.json"), JSON.stringify({
+    env: {
+      LLMPROXY_MONGODB_URI: "mongodb://mongo:27017/llmProxy",
+      LLMPROXY_METERING_SINK: "dblayer",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "config:migrate"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Config migration completed: project, service/);
+
+  const projectPayload = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
+  const servicePayload = JSON.parse(fs.readFileSync(path.join(runtimeRoot, "service", "config.json"), "utf8"));
+  assert.equal(projectPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-legacy");
+  assert.equal("LLM_STATS_API_KEY" in projectPayload.env, false);
+  assert.equal("LLMPROXY_SMART_ROUTE" in projectPayload.env, false);
+  assert.equal(servicePayload.env.LLMPROXY_MONGODB_CONNECTION_STRING, "mongodb://mongo:27017/llmProxy");
+  assert.equal("LLMPROXY_METERING_SINK" in servicePayload.env, false);
 });
 
 test("update reports rollback details when the installed build fails post-update verification", async () => {

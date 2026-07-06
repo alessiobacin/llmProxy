@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.03",
+  "version": "0.3.04",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -121,6 +121,12 @@
       "fix llmproxy update so GitHub CLI is no longer required as a prerequisite",
       "allow self-update on lean Linux servers that only have git and npm installed",
       "keep update preflight focused on real requirements used by the updater"
+    ],
+    "0.3.04": [
+      "release 0.3.04",
+      "migrate managed project and service configuration automatically during self-update",
+      "remove legacy config variables such as LLM_STATS_API_KEY, SENDGRID_*, LLMPROXY_SMART_*, LLMPROXY_METERING_SINK, and split MongoDB keys",
+      "reap port 7045 before restart both in self-update and in the one-line installer to avoid stale runtime conflicts"
     ]
   },
   "dependencies": {

@@ -2328,6 +2328,7 @@ test("config:list shows effective llmproxy project defaults when values are unse
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /project\.LLMPROXY_AUTO_ESCALATE=1/);
   assert.match(stdout.toString(), /project\.LLMPROXY_LLM_STATS_API_KEY=/);
+  assert.match(stdout.toString(), /Global Claude configuration:/);
   assert.match(stdout.toString(), /project\.LLMPROXY_SENDGRID_API_KEY=/);
   assert.match(stdout.toString(), /project\.LLMPROXY_SENDGRID_FROM_EMAIL=/);
   assert.match(stdout.toString(), /project\.LLMPROXY_SENDGRID_TO_EMAIL=/);
@@ -2340,13 +2341,46 @@ test("config:list shows effective llmproxy project defaults when values are unse
   assert.match(stdout.toString(), /project\.LLMPROXY_SHORT_ANSWER=0/);
 });
 
+test("config:list inherits the global Claude defaults when the project has no local override", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-global-fallback-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+      LLMPROXY_SHORT_ANSWER: "1",
+    },
+  }, null, 2));
+
+  const stdout = createWritableBuffer();
+  const exitCode = await runCli(["node", "llmproxy", "config:list"], {
+    cwd: projectRoot,
+    stdout,
+    env: { ...process.env, HOME: homeDir },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Project configuration:/);
+  assert.match(stdout.toString(), /project\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+  assert.match(stdout.toString(), /project\.LLMPROXY_SHORT_ANSWER=1/);
+  assert.match(stdout.toString(), /Global Claude configuration:/);
+  assert.match(stdout.toString(), /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+  assert.match(stdout.toString(), /global\.LLMPROXY_SHORT_ANSWER=1/);
+  assert.match(stdout.toString(), /Service configuration:/);
+});
+
 test("config:list outside a project shows only service configuration", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-service-only-"));
+  const homeDir = path.join(tempRoot, "home");
+  fs.mkdirSync(homeDir, { recursive: true });
   const stdout = createWritableBuffer();
 
   const exitCode = await runCli(["node", "llmproxy", "config:list"], {
     cwd: tempRoot,
     stdout,
+    env: { ...process.env, HOME: homeDir },
   });
 
   assert.equal(exitCode, 0);

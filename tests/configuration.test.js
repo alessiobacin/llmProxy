@@ -18,6 +18,8 @@ const {
   migrateManagedConfig,
   normalizeClaudeSettingsConfig,
   normalizeServiceConfigPayload,
+  listGlobalProjectValues,
+  listScopeValues,
   setScopeValue,
   getScopeValue,
   unsetScopeValue,
@@ -194,6 +196,81 @@ test("getScopeValue reads project-scope variable", () => {
     cwd: tmpDir,
   });
   assert.equal(entry.value, "http://localhost:7045");
+});
+
+test("listScopeValues inherits global Claude project defaults when local override is absent", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-global-fallback-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+      LLMPROXY_SHORT_ANSWER: "1",
+    },
+  }, null, 2));
+
+  const values = listScopeValues({
+    scope: "project",
+    cwd: projectRoot,
+    env: { ...process.env, HOME: homeDir },
+    serviceConfigFile: path.join(tmpDir, "service", "config.json"),
+  });
+
+  const statsKey = values.find((entry) => entry.key === "LLMPROXY_LLM_STATS_API_KEY");
+  const shortAnswer = values.find((entry) => entry.key === "LLMPROXY_SHORT_ANSWER");
+  assert.equal(statsKey.value, "sk-global-demo");
+  assert.equal(statsKey.source, "global");
+  assert.equal(shortAnswer.value, "1");
+  assert.equal(shortAnswer.source, "global");
+});
+
+test("getScopeValue returns the effective global Claude fallback for project-scope variables", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-get-global-fallback-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+    },
+  }, null, 2));
+
+  const entry = getScopeValue({
+    key: "LLMPROXY_LLM_STATS_API_KEY",
+    scope: "project",
+    cwd: projectRoot,
+    env: { ...process.env, HOME: homeDir },
+    serviceConfigFile: path.join(tmpDir, "service", "config.json"),
+  });
+
+  assert.equal(entry.value, "sk-global-demo");
+  assert.equal(entry.scope, "project");
+  assert.equal(entry.source, "global");
+});
+
+test("listGlobalProjectValues exposes the user-level Claude defaults separately", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-global-view-"));
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+    },
+  }, null, 2));
+
+  const values = listGlobalProjectValues({
+    env: { ...process.env, HOME: homeDir },
+    serviceConfigFile: path.join(tmpDir, "service", "config.json"),
+    cwd: root,
+  });
+
+  const statsKey = values.find((entry) => entry.key === "LLMPROXY_LLM_STATS_API_KEY");
+  assert.equal(statsKey.scope, "global");
+  assert.equal(statsKey.value, "sk-global-demo");
+  assert.equal(statsKey.source, "global");
 });
 
 test("getProjectDefaultValues returns llmproxy project defaults", () => {

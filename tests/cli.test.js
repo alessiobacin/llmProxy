@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate, buildPersistentInstallScript } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate, runSelfUpdateWindows, buildPersistentInstallScript } = require("../lib/cli");
 const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
@@ -1414,6 +1414,47 @@ test("service:restart on launchd falls back to start when install is unavailable
   assert.equal(stderr.toString(), "");
 });
 
+test("service:restart on windows reinstalls the service directly", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-windows-direct-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const calls = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "service:restart"], {
+    dataRoot: runtimeRoot,
+    platform: "win32",
+    stdout,
+    stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
+    serviceManager: {
+      kind: "windows",
+      stop() {
+        calls.push("stop");
+        return { ok: true, stdout: "", stderr: "" };
+      },
+      install() {
+        calls.push("install");
+        return {
+          ok: true,
+          stdout: "",
+          stderr: "",
+          stdoutPath: path.join(runtimeRoot, "service.out.log"),
+          stderrPath: path.join(runtimeRoot, "service.err.log"),
+        };
+      },
+      start() {
+        calls.push("start");
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(calls, ["install"]);
+  assert.match(stdout.toString(), /Servizio riavviato/);
+  assert.equal(stderr.toString(), "");
+});
+
 test("service:restart recovers the Docker runtime when the managed container is not running", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-docker-"));
   const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-docker-pkg-")), "node_modules", "llmproxy");
@@ -1619,6 +1660,30 @@ test("status reports Docker runtime activity when the service runtime is docker"
   assert.match(stdout.toString(), /Service manager: docker/);
   assert.match(stdout.toString(), /Service active: yes/);
   assert.match(stdout.toString(), /llmproxy container active via docker compose/);
+  assert.equal(stderr.toString(), "");
+});
+
+test("windows status reports inactive cleanly when the service is not installed", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-status-windows-missing-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "status"], {
+    dataRoot: runtimeRoot,
+    platform: "win32",
+    stdout,
+    stderr,
+    serviceManager: {
+      kind: "windows",
+      status() {
+        return { ok: true, active: false, stdout: "", stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Service manager: windows/);
+  assert.match(stdout.toString(), /Service active: no/);
   assert.equal(stderr.toString(), "");
 });
 
@@ -2533,6 +2598,29 @@ test("install:persistent-en succeeds on Windows in English", async () => {
   assert.equal(stderr.toString(), "");
   assert.match(stdout.toString(), /Persistent installation completed/);
   assert.match(stdout.toString(), /Persistent service enabled/);
+});
+
+test("windows persistent install script resolves the global cmd wrapper explicitly", () => {
+  const script = buildPersistentInstallScript({
+    packageRoot: "/tmp/pkg",
+    locale: "en",
+    platform: "win32",
+  });
+  assert.match(script, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
+  assert.match(script, /Join-Path \$Prefix "llmproxy\.cmd"/);
+  assert.match(script, /\$globalBin = Resolve-LlmproxyGlobalBin \$npmPrefix/);
+});
+
+test("runSelfUpdateWindows resolves the global cmd wrapper explicitly", () => {
+  const executed = [];
+  runSelfUpdateWindows((command, args) => {
+    executed.push([command, args]);
+    return { status: 0, stdout: "", stderr: "" };
+  });
+  const windowsScriptText = executed[0][1][2];
+  assert.match(windowsScriptText, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
+  assert.match(windowsScriptText, /Join-Path \$Prefix "llmproxy\.cmd"/);
+  assert.match(windowsScriptText, /\$newBin = Resolve-LlmproxyGlobalBin \$npmPrefix/);
 });
 
 test("install:persistent-it fails with prerequisite guidance when Docker is missing on Ubuntu", async () => {
@@ -4237,6 +4325,42 @@ test("uninstall on linux stops systemd service and removes unit file", async () 
   assert.equal(serviceStopped, true);
   assert.equal(fs.existsSync(serviceFile), false, "systemd unit file should be removed");
   assert.equal(fs.existsSync(runtimeRoot), false, "data root should be removed");
+  assert.match(stdout.toString(), /Disinstallazione completata/);
+});
+
+test("uninstall on windows removes the service and all npm wrappers", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-windows-"));
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-uninstall-windows-pkg-"));
+  const stdout = createWritableBuffer();
+  let serviceStopped = false;
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "uninstall"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    stdout,
+    platform: "win32",
+    serviceManager: {
+      kind: "windows",
+      stop() {
+        serviceStopped = true;
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(serviceStopped, true);
+  const powershellCall = executed.find(([cmd]) => cmd === "powershell.exe");
+  assert.ok(powershellCall, "powershell uninstall script should run");
+  assert.match(powershellCall[1][2], /llmproxy\.cmd/);
+  assert.match(powershellCall[1][2], /llmproxy\.ps1/);
+  assert.match(powershellCall[1][2], /llmp\.cmd/);
+  assert.match(powershellCall[1][2], /llmp\.ps1/);
   assert.match(stdout.toString(), /Disinstallazione completata/);
 });
 

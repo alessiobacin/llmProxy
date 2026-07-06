@@ -3821,7 +3821,7 @@ test("update runs the package manager command for the latest llmproxy release", 
     fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner(command, args) {
       executed.push([command, args]);
-      if (["gh", "git", "pnpm"].includes(command)) {
+      if (["git", "pnpm"].includes(command)) {
         return { status: 0, stdout: "ok\n", stderr: "" };
       }
       if (command === "npm" && args[0] === "--version") {
@@ -3839,9 +3839,9 @@ test("update runs the package manager command for the latest llmproxy release", 
 
   assert.equal(exitCode, 0);
   assert.deepEqual(executed.slice(0, 3), [
-    ["gh", ["--version"]],
     ["git", ["--version"]],
     ["npm", ["--version"]],
+    ["npm", ["prefix", "-g"]],
   ]);
   assert.ok(executed.some(([command, args]) => command === "npm" && args[0] === "prefix" && args[1] === "-g"));
   assert.equal(executed.at(-1)[0], "bash");
@@ -3878,7 +3878,6 @@ test("update stops early and reports missing base prerequisites", async () => {
     fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
     commandRunner(command, args) {
       executed.push([command, args]);
-      if (command === "gh") return { status: 1, stdout: "", stderr: "gh missing" };
       if (command === "git") return { status: 1, stdout: "", stderr: "git missing" };
       if (command === "pnpm") return { status: 1, stdout: "", stderr: "pnpm missing" };
       if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
@@ -3891,7 +3890,6 @@ test("update stops early and reports missing base prerequisites", async () => {
   assert.equal(exitCode, 1);
   assert.equal(stdout.toString(), "");
   assert.match(stderr.toString(), /prerequisiti.*non sono soddisfatti/i);
-  assert.match(stderr.toString(), /GitHub CLI \(`gh`\) non trovato/i);
   assert.match(stderr.toString(), /Git \(`git`\) non trovato/i);
   assert.doesNotMatch(stderr.toString(), /pnpm non trovato/i);
   assert.equal(executed.some(([command]) => command === "bash"), false);

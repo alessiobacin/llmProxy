@@ -17,7 +17,11 @@
     { "key": "providerOrderPosition", "value": "1" },
     { "key": "providerEntryId", "value": "project:p-1:copilot" },
     { "key": "projectPath", "value": "/Users/alessiobacin/Development/llmProxy" },
-    { "key": "helpCommand", "value": "install:persistent-en" }
+    { "key": "helpCommand", "value": "install:persistent-en" },
+    { "key": "configKey", "value": "LLMPROXY_LLM_STATS_API_KEY" },
+    { "key": "configValue", "value": "your-free-key" },
+    { "key": "configScope", "value": "project" },
+    { "key": "serviceRuntime", "value": "docker" }
   ],
   "item": [
     {
@@ -81,7 +85,7 @@
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
         },
         {
-          "name": "POST /api/auth/login  (CLI: login)",
+          "name": "POST /api/auth/login  (CLI: login, Copilot legacy alias)",
           "request": { "method": "POST", "url": "{{baseUrl}}/api/auth/login" },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
         },
@@ -108,6 +112,19 @@
         {
           "name": "POST /api/service/restart  (CLI: service:restart)",
           "request": { "method": "POST", "url": "{{baseUrl}}/api/service/restart" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/service/runtime  (CLI: service:runtime)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"runtime\": \"{{serviceRuntime}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/service/runtime"
+          },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
         },
         {
@@ -144,6 +161,64 @@
               "raw": "{\n  \"model\": \"{{claudeSetupModelIndex}}\",\n  \"projectPath\": \"{{projectPath}}\"\n}"
             },
             "url": "{{baseUrl}}/api/claude/setup"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "GET /api/config?scope={{configScope}}  (CLI: config:list)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/config?scope={{configScope}}&projectPath={{projectPath}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "config"],
+              "query": [
+                { "key": "scope", "value": "{{configScope}}" },
+                { "key": "projectPath", "value": "{{projectPath}}" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "GET /api/config/:key  (CLI: config:get)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/config/{{configKey}}?scope={{configScope}}&projectPath={{projectPath}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "config", "{{configKey}}"],
+              "query": [
+                { "key": "scope", "value": "{{configScope}}" },
+                { "key": "projectPath", "value": "{{projectPath}}" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /api/config/:key  (CLI: config:set)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"{{configScope}}\",\n  \"value\": \"{{configValue}}\",\n  \"projectPath\": \"{{projectPath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/config/{{configKey}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "DELETE /api/config/:key  (CLI: config:unset)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"{{configScope}}\",\n  \"projectPath\": \"{{projectPath}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/config/{{configKey}}"
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 400', function () {", "  pm.expect([200, 400]).to.include(pm.response.code);", "});"] } }]
         },

@@ -8,57 +8,63 @@ const { loadRuntimeEnv, resolveProxyHostPort } = require("../lib/runtime-env");
 
 test("loadRuntimeEnv keeps local checkout defaults from .env in development", () => {
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-local-"));
-  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nHOST=127.0.0.1\nLLMPROXY_ENV=development\nDBLAYER_URL=http://localhost:5046\n", "utf8");
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-local-data-"));
+  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nHOST=127.0.0.1\nLLMPROXY_ENV=development\nDBLAYER_URL=http://localhost:5001\n", "utf8");
 
-  const env = loadRuntimeEnv({ env: {}, packageRoot });
+  const env = loadRuntimeEnv({ env: {}, packageRoot, dataRoot });
 
   assert.equal(env.PORT, "5045");
   assert.equal(env.HOST, "127.0.0.1");
   assert.equal(env.LLMPROXY_ENV, "development");
-  assert.equal(env.DBLAYER_URL, "http://localhost:5046");
+  assert.equal(env.DBLAYER_URL, "http://localhost:5001");
 });
 
 test("loadRuntimeEnv ignores package .env for global installs and defaults to production ports", () => {
   const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-global-")), "node_modules", "llmproxy");
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-global-data-"));
   fs.mkdirSync(packageRoot, { recursive: true });
-  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nHOST=127.0.0.1\nLLMPROXY_ENV=development\nDBLAYER_URL=http://localhost:5046\nEVENTBUS_URL=http://localhost:5048\n", "utf8");
+  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nHOST=127.0.0.1\nLLMPROXY_ENV=development\nDBLAYER_URL=http://localhost:5001\nEVENTBUS_URL=http://localhost:5048\n", "utf8");
 
-  const env = loadRuntimeEnv({ env: {}, packageRoot });
+  const env = loadRuntimeEnv({ env: {}, packageRoot, dataRoot });
 
   assert.equal(env.PORT, undefined);
   assert.equal(env.HOST, undefined);
   assert.equal(env.LLMPROXY_ENV, "production");
-  assert.equal(env.DBLAYER_URL, "http://localhost:7046");
+  assert.equal(env.DBLAYER_URL, "http://localhost:7001");
   assert.equal(env.EVENTBUS_URL, "http://localhost:7048");
 });
 
 test("loadRuntimeEnv resolves staging defaults when explicitly requested", () => {
   const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-staging-")), "node_modules", "llmproxy");
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-staging-data-"));
   fs.mkdirSync(packageRoot, { recursive: true });
 
   const env = loadRuntimeEnv({
     env: { LLMPROXY_ENV: "staging" },
     packageRoot,
+    dataRoot,
   });
 
   assert.equal(env.PORT, undefined);
   assert.equal(env.LLMPROXY_ENV, "staging");
-  assert.equal(env.DBLAYER_URL, "http://localhost:6046");
+  assert.equal(env.DBLAYER_URL, "http://localhost:6001");
   assert.equal(env.EVENTBUS_URL, "http://localhost:6048");
 });
 
 test("loadRuntimeEnv honors an explicit runtime profile even when the package root is the local checkout", () => {
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-explicit-profile-"));
-  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nLLMPROXY_ENV=development\nDBLAYER_URL=http://localhost:5046\n", "utf8");
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-explicit-profile-data-"));
+  fs.writeFileSync(path.join(packageRoot, ".env"), "PORT=5045\nLLMPROXY_ENV=development\nDBLAYER_URL=http://localhost:5001\n", "utf8");
 
   const env = loadRuntimeEnv({
     env: { LLMPROXY_RUNTIME_PROFILE: "production" },
     packageRoot,
+    dataRoot,
   });
 
   assert.equal(env.PORT, undefined);
   assert.equal(env.LLMPROXY_ENV, "production");
-  assert.equal(env.DBLAYER_URL, "http://localhost:7046");
+  assert.equal(env.DBLAYER_URL, "http://localhost:7001");
 });
 
 test("resolveProxyHostPort uses the fixed production service port when the runtime profile is production", () => {

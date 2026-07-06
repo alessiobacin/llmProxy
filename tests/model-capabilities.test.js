@@ -5,6 +5,8 @@ const assert = require("node:assert/strict");
 const {
   getCapabilities,
   getTierForModel,
+  getPowerScore,
+  getSpeedScore,
   findBestModel,
   MODEL_TIERS,
   MODEL_CAPABILITIES,
@@ -58,6 +60,16 @@ describe("model-capabilities", () => {
 
     it("ritorna standard per modello sconosciuto (default)", () => {
       assert.equal(getTierForModel("fantasy-model"), "standard");
+    });
+  });
+
+  describe("power/speed scores", () => {
+    it("assegna piu potenza ai tier premium rispetto agli economy", () => {
+      assert.ok(getPowerScore("gpt-5") > getPowerScore("deepseek-chat"));
+    });
+
+    it("assegna piu velocita stimata ai tier economy rispetto ai premium", () => {
+      assert.ok(getSpeedScore("deepseek-chat") > getSpeedScore("gpt-5"));
     });
   });
 

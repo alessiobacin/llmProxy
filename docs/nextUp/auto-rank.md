@@ -166,7 +166,7 @@ Dedup alerts SendGrid: `{ alerts: [{ model, suggestedProviderId, sentAt }] }`.
 
 | Nome | Default | Note |
 |---|---|---|
-| `LLM_STATS_API_KEY` | (none) | già presente |
+| `LLMPROXY_LLM_STATS_API_KEY` | (none) | già presente |
 | `LLM_STATS_BASE_URL` | `https://api.zeroeval.com` | **nuovo** |
 | `LLMPROXY_AUTO_RANK_ENABLED` | `false` | **nuovo** |
 | `LLMPROXY_AUTO_RANK_TOP_N` | `20` | **nuovo** |
@@ -179,9 +179,9 @@ Dedup alerts SendGrid: `{ alerts: [{ model, suggestedProviderId, sentAt }] }`.
 | `LLMPROXY_AUTO_RANK_MAX_PER_PROVIDER` | `2` | **nuovo** |
 | `LLMPROXY_AUTO_RANK_MAX_INPUT_PER_M` | (none) | **nuovo**, opzionale |
 | `LLMPROXY_AUTO_RANK_MAX_OUTPUT_PER_M` | (none) | **nuovo**, opzionale |
-| `SENDGRID_API_KEY` | (none) | già presente, ora letto |
-| `SENDGRID_FROM_EMAIL` | (none) | già presente, ora letto |
-| `SENDGRID_TO_EMAIL` | (none) | già presente, ora letto |
+| `LLMPROXY_SENDGRID_API_KEY` | (none) | già presente, ora letto |
+| `LLMPROXY_SENDGRID_FROM_EMAIL` | (none) | già presente, ora letto |
+| `LLMPROXY_SENDGRID_TO_EMAIL` | (none) | già presente, ora letto |
 
 ---
 
@@ -235,7 +235,7 @@ llm-stats elenca vendor diretti + gateway. **v1 considera SOLO i vendor diretti*
 7. `llmproxy provider:list` → colonne `input/output` popolate + footer slot counter.
 8. **Cap 10**: 15 provider configurati, run-once, 10 restano (1° tick NON rimuove → 2° tick sì).
 9. **Cap 2/provider**: 1 solo provider, top-5 modelli tutti suoi → solo 2 slot.
-10. **Cache fallback**: `LLM_STATS_API_KEY=invalid`, run-once → cache fresh riusata, altrimenti no-op.
+10. **Cache fallback**: `LLMPROXY_LLM_STATS_API_KEY=invalid`, run-once → cache fresh riusata, altrimenti no-op.
 11. **HTTP**: `curl localhost:5045/api/auto-rank/status` → JSON.
 12. **Persistent**: `llmproxy service:restart`, attendere 60s, `auto-rank tick` nei log.
 13. **Email**: provider cheap non configurato → ricevuta email con comando `provider:add ...`.

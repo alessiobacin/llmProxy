@@ -104,6 +104,40 @@ test("notifyRecovered sends email", async () => {
   assert.ok(msg.subject.includes("recovered"));
 });
 
+test("notifyProviderError sends email", async () => {
+  const n = createSendGridNotifier({
+    apiKey: "sk-test",
+    fromEmail: "from@test.com",
+    toEmail: "to@test.com",
+  });
+  await n.notifyProviderError({
+    provider: "openrouter",
+    model: "gpt-4.1",
+    reason: "HTTP 429",
+    requestId: "req_123",
+    projectPath: "/tmp/project",
+  });
+  assert.equal(sgMailMock.sentEmails.length, 1);
+  const msg = sgMailMock.sentEmails[0];
+  assert.ok(msg.subject.includes("provider error"));
+  assert.ok(msg.html.includes("openrouter"));
+  assert.ok(msg.html.includes("gpt-4.1"));
+  assert.ok(msg.html.includes("HTTP 429"));
+});
+
+test("message type filter suppresses disabled notification categories", async () => {
+  const n = createSendGridNotifier({
+    apiKey: "sk-test",
+    fromEmail: "from@test.com",
+    toEmail: "to@test.com",
+    messageTypes: "provider_error",
+  });
+  await n.notifyUnreachable("db-layer", "http://localhost:5001", new Error("fail"));
+  assert.equal(sgMailMock.sentEmails.length, 0);
+  await n.notifyProviderError({ provider: "openrouter", model: "gpt-4.1", reason: "HTTP 500" });
+  assert.equal(sgMailMock.sentEmails.length, 1);
+});
+
 // ─── Dedup ─────────────────────────────────────────────────────────────────
 
 test("dedup: second call within 5 min does not send", async () => {
@@ -164,4 +198,27 @@ test("reconfigure with new apiKey sets on sgMail after lazy load", async () => {
 
   n.reconfigure({ apiKey: "sk-new" });
   assert.equal(sgMailMock.apiKeySet, "sk-new");
+});
+
+test("reconfigure updates recipient, sender, and message types", async () => {
+  const n = createSendGridNotifier({
+    apiKey: "sk-old",
+    fromEmail: "from@test.com",
+    toEmail: "to@test.com",
+    messageTypes: "service_unreachable",
+  });
+
+  n.reconfigure({
+    fromEmail: "next-from@test.com",
+    toEmail: "next-to@test.com",
+    messageTypes: "provider_error",
+  });
+
+  await n.notifyUnreachable("db-layer", "http://localhost:5001", new Error("fail"));
+  assert.equal(sgMailMock.sentEmails.length, 0);
+
+  await n.notifyProviderError({ provider: "deepseek", model: "deepseek-v4-flash", reason: "HTTP 429" });
+  assert.equal(sgMailMock.sentEmails.length, 1);
+  assert.equal(sgMailMock.sentEmails[0].from, "next-from@test.com");
+  assert.equal(sgMailMock.sentEmails[0].to, "next-to@test.com");
 });

@@ -47,6 +47,7 @@ interface LocalProviderEntry {
   scope?: string;
   endpoint_variant?: string;
   vision?: boolean;
+  free_model?: boolean;
   name?: string;
 }
 
@@ -84,6 +85,8 @@ interface GatewayRequestParams {
   configuredModel: string | null;
   inlineMetering?: boolean | null;
   inlineInferenceInfo?: boolean | null;
+  pricePerformanceRouting?: boolean | null;
+  pricePerformanceTieBreaker?: string | null;
   tokenStore: unknown;
   logger: unknown;
   fetchFn: typeof fetch;
@@ -132,6 +135,7 @@ function resolveProviderSelection({
           default_model: exactLocalProvider.default_model || "",
           endpoint_variant: String(exactLocalProvider.endpoint_variant || ""),
           ...(exactLocalProvider.vision === true || exactLocalProvider.vision === false ? { vision: exactLocalProvider.vision } : {}),
+          ...(exactLocalProvider.free_model === true || exactLocalProvider.free_model === false ? { free_model: exactLocalProvider.free_model } : {}),
         }],
       };
     }
@@ -200,6 +204,7 @@ function resolveProviderSelection({
           default_model: entry.default_model || "",
           endpoint_variant: entry.metadata?.endpoint_variant ? String(entry.metadata.endpoint_variant) : "",
           ...(entry.metadata?.vision === true || entry.metadata?.vision === false ? { vision: entry.metadata.vision } : {}),
+          ...(entry.metadata?.free_model === true || entry.metadata?.free_model === false ? { free_model: entry.metadata.free_model } : {}),
         };
       }),
     };
@@ -243,6 +248,8 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
     configuredModel: params.configuredModel,
     inlineMetering: params.inlineMetering,
     inlineInferenceInfo: params.inlineInferenceInfo,
+    pricePerformanceRouting: params.pricePerformanceRouting,
+    pricePerformanceTieBreaker: params.pricePerformanceTieBreaker,
     tokenStore: params.tokenStore,
     logger: params.logger,
     fetchFn: params.fetchFn,

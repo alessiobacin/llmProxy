@@ -51,6 +51,25 @@ test("token store persists multiple providers and fallback order", () => {
   assert.equal(reloaded.getProvider("primary").name, "Primary Copilot");
 });
 
+test("token store persists free_model flags for provider/model instances", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-free-model-"));
+  const tokenFile = path.join(tempRoot, "copilot-token.json");
+  const store = createTokenStore({ filePath: tokenFile });
+
+  store.saveProvider("opencode", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    free_model: true,
+  }, { name: "OpenCode" });
+
+  const reloaded = createTokenStore({ filePath: tokenFile });
+  assert.equal(reloaded.getProvider("opencode").free_model, true);
+});
+
 test("token store keeps provider order stable when updating an existing provider", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-update-order-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");

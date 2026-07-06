@@ -8,8 +8,9 @@ process.env.LLMPROXY_METERING_INLINE = "true";
 process.env.LLMPROXY_INFERENCE_INFO_INLINE = "true";
 
 const { createApp } = require("../lib/app");
-const { API_KEY_PROVIDER_CONFIGS } = require("../lib/copilot-proxy");
+const { API_KEY_PROVIDER_CONFIGS, escalationTracker } = require("../lib/copilot-proxy");
 const { createTokenStore } = require("../lib/token-store");
+const { createProviderRegistry } = require("../lib/provider-registry");
 
 async function withServer(app, callback) {
   const server = await new Promise((resolve) => {
@@ -63,6 +64,148 @@ test("health and auth status endpoints reflect standalone runtime state", async 
     const authPayload = await authResponse.json();
     assert.equal(authResponse.status, 200);
     assert.equal(authPayload.authenticated, true);
+  });
+});
+
+test("auth status is true when only API-key providers are configured", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-auth-provider-registry-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  const providerRegistry = createProviderRegistry({ filePath: path.join(tempRoot, "providers.json") });
+  providerRegistry.upsert({
+    id: "project:p-1:openrouter",
+    provider: "openrouter",
+    scope_type: "project",
+    scope_id: "p-1",
+    default_model: "openai/gpt-4o",
+    credentials: { api_key: "sk-or-test" },
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    providerRegistry,
+    fetchFn: async () => {
+      throw new Error("fetch should not run");
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const authResponse = await fetch(`${baseUrl}/auth/status`);
+    const authPayload = await authResponse.json();
+    assert.equal(authResponse.status, 200);
+    assert.equal(authPayload.authenticated, true);
+  });
+});
+
+test("auth status endpoint is also available in platform mode", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-auth-platform-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  const providerRegistry = createProviderRegistry({ filePath: path.join(tempRoot, "providers.json") });
+  providerRegistry.upsert({
+    id: "project:p-1:deepseek",
+    provider: "deepseek",
+    scope_type: "project",
+    scope_id: "p-1",
+    default_model: "deepseek-v4-flash",
+    credentials: { api_key: "sk-ds-test" },
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    providerRegistry,
+    mode: "platform",
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const authResponse = await fetch(`${baseUrl}/auth/status`);
+    const authPayload = await authResponse.json();
+    assert.equal(authResponse.status, 200);
+    assert.equal(authPayload.authenticated, true);
+  });
+});
+
+test("messages endpoint returns a static non-stream response when project LLMPROXY_LLM_STATS_API_KEY is missing", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-llm-stats-required-"));
+  const claudeDir = path.join(tempRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "",
+    },
+  }, null, 2));
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    fetchFn: async () => {
+      throw new Error("fetch should not run when LLMPROXY_LLM_STATS_API_KEY is missing");
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": tempRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.type, "message");
+    assert.match(payload.content[0].text, /LLMPROXY_LLM_STATS_API_KEY is mandatory/i);
+    assert.match(payload.content[0].text, /llm-stats\.com\/developer/i);
+  });
+});
+
+test("messages endpoint returns a static streaming response when project LLMPROXY_LLM_STATS_API_KEY is missing", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-llm-stats-required-stream-"));
+  const claudeDir = path.join(tempRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "",
+    },
+  }, null, 2));
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    fetchFn: async () => {
+      throw new Error("fetch should not run when LLMPROXY_LLM_STATS_API_KEY is missing");
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": tempRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: true,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+      }),
+    });
+
+    const payload = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(payload, /event: content_block_delta/);
+    assert.match(payload, /LLMPROXY_LLM_STATS_API_KEY is mandatory/i);
+    assert.match(payload, /llm-stats\.com\/developer/i);
   });
 });
 
@@ -123,6 +266,374 @@ test("messages endpoint proxies a non-stream Copilot response into Anthropic for
   });
 });
 
+test("messages endpoint does not auto-escalate away from a free_model provider", async () => {
+  const originalEscalationEnabled = escalationTracker.enabled;
+  escalationTracker.enabled = true;
+
+  try {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-free-model-escalation-"));
+    const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+    tokenStore.saveProvider("deepseek", {
+      access_token: "token-deepseek",
+      token_type: "api_key",
+      scope: "api_key",
+      provider: "deepseek",
+      auth_type: "api_key",
+      default_model: "deepseek-v4-flash",
+      free_model: true,
+    }, { name: "DeepSeek Free" });
+    tokenStore.saveProvider("opencode", {
+      access_token: "token-opencode",
+      token_type: "api_key",
+      scope: "api_key",
+      provider: "opencode",
+      auth_type: "api_key",
+      default_model: "deepseek-v4-flash-free",
+      free_model: false,
+    }, { name: "OpenCode" });
+
+    const fetchFn = async (url) => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: String(url).includes("deepseek.com") ? "deepseek-v4-flash" : "deepseek-v4-flash-free",
+          choices: [
+            {
+              message: { content: String(url).includes("deepseek.com") ? "served by deepseek" : "served by opencode" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 4, completion_tokens: 2 },
+        };
+      },
+    });
+
+    const app = createApp({
+      dataRoot: tempRoot,
+      tokenStore,
+      fetchFn,
+    });
+
+    await withServer(app, async (baseUrl) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await fetch(`${baseUrl}/v1/messages`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-project-path": "/Users/example/project-free-model",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-5",
+            stream: false,
+            max_tokens: 64,
+            messages: [
+              {
+                role: "user",
+                content: [{ type: "text", text: "Repeat this request exactly" }],
+              },
+            ],
+          }),
+        });
+
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        assert.match(payload.content[0].text, /^\[llmproxy\] provider: deepseek \| model: deepseek-v4-flash : First in order from provider list/m);
+        assert.match(payload.content[0].text, /served by deepseek/);
+        assert.doesNotMatch(payload.content[0].text, /served by opencode/);
+      }
+    });
+  } finally {
+    escalationTracker.enabled = originalEscalationEnabled;
+    escalationTracker.store.clear();
+  }
+});
+
+test("messages endpoint auto-escalates to the next provider after repeated identical requests", async () => {
+  const originalEscalationEnabled = escalationTracker.enabled;
+  escalationTracker.enabled = true;
+
+  try {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-positional-escalation-"));
+    const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+    tokenStore.saveProvider("openai", {
+      access_token: "token-openai",
+      token_type: "api_key",
+      scope: "api_key",
+      provider: "openai",
+      auth_type: "api_key",
+      default_model: "gpt-5",
+    }, { name: "OpenAI Expensive" });
+    tokenStore.saveProvider("deepseek", {
+      access_token: "token-deepseek",
+      token_type: "api_key",
+      scope: "api_key",
+      provider: "deepseek",
+      auth_type: "api_key",
+      default_model: "deepseek-v4-flash",
+    }, { name: "DeepSeek Cheap" });
+
+    const fetchFn = async (url) => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: String(url).includes("openai.com") ? "gpt-5" : "deepseek-v4-flash",
+          choices: [
+            {
+              message: { content: String(url).includes("openai.com") ? "served by openai" : "served by deepseek" },
+              finish_reason: "stop",
+            },
+          ],
+          usage: { prompt_tokens: 4, completion_tokens: 2 },
+        };
+      },
+    });
+
+    const app = createApp({
+      dataRoot: tempRoot,
+      tokenStore,
+      fetchFn,
+    });
+
+    await withServer(app, async (baseUrl) => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetch(`${baseUrl}/v1/messages`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-project-path": "/Users/example/project-positional-escalation",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-5",
+            stream: false,
+            max_tokens: 64,
+            messages: [{ role: "user", content: [{ type: "text", text: "Escalate me positionally" }] }],
+          }),
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        assert.match(payload.content[0].text, /served by openai/);
+      }
+
+      const escalatedResponse = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-project-path": "/Users/example/project-positional-escalation",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Escalate me positionally" }] }],
+        }),
+      });
+
+      const escalatedPayload = await escalatedResponse.json();
+      assert.equal(escalatedResponse.status, 200);
+      assert.match(escalatedPayload.content[0].text, /^\[llmproxy\] provider: deepseek \| model: deepseek-v4-flash : Auto-escalated to provider #2 after repeated identical request/m);
+      assert.match(escalatedPayload.content[0].text, /served by deepseek/);
+    });
+  } finally {
+    escalationTracker.enabled = originalEscalationEnabled;
+    escalationTracker.store.clear();
+  }
+});
+
+test("messages endpoint price/performance routing prefers the most powerful free provider", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-price-performance-power-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+    free_model: false,
+  }, { name: "DeepSeek Paid" });
+  tokenStore.saveProvider("opencode", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    free_model: true,
+  }, { name: "OpenCode Free" });
+  tokenStore.saveProvider("openai", {
+    access_token: "token-openai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openai",
+    auth_type: "api_key",
+    default_model: "gpt-5",
+    free_model: true,
+  }, { name: "OpenAI Free" });
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llm-proxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
+      LLMPROXY_INFERENCE_INFO_INLINE: "1",
+      LLMPROXY_PRICE_PERFORMANCE_ROUTING: "1",
+      LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER: "power",
+    },
+  }, null, 2));
+
+  const fetchFn = async (url) => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        model: String(url).includes("openai.com") ? "gpt-5" : String(url).includes("opencode.ai") ? "deepseek-v4-flash-free" : "deepseek-v4-flash",
+        choices: [
+          {
+            message: {
+              content: String(url).includes("openai.com")
+                ? "served by openai"
+                : String(url).includes("opencode.ai")
+                  ? "served by opencode"
+                  : "served by deepseek",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 4, completion_tokens: 2 },
+      };
+    },
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Pick the best free model" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.match(payload.content[0].text, /^\[llmproxy\] provider: openai \| model: gpt-5 : Price\/performance routing preferred free provider \(power\)/m);
+    assert.match(payload.content[0].text, /served by openai/);
+  });
+});
+
+test("messages endpoint price/performance routing prefers the fastest free provider when requested", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-price-performance-speed-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "token-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+    free_model: false,
+  }, { name: "DeepSeek Paid" });
+  tokenStore.saveProvider("openai", {
+    access_token: "token-openai",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openai",
+    auth_type: "api_key",
+    default_model: "gpt-5",
+    free_model: true,
+  }, { name: "OpenAI Free" });
+  tokenStore.saveProvider("opencode", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    free_model: true,
+  }, { name: "OpenCode Free" });
+
+  const workspaceRoot = path.join(tempRoot, "workspace");
+  const claudeDir = path.join(workspaceRoot, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llm-proxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
+      LLMPROXY_INFERENCE_INFO_INLINE: "1",
+      LLMPROXY_PRICE_PERFORMANCE_ROUTING: "1",
+      LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER: "speed",
+    },
+  }, null, 2));
+
+  const fetchFn = async (url) => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        model: String(url).includes("openai.com") ? "gpt-5" : String(url).includes("opencode.ai") ? "deepseek-v4-flash-free" : "deepseek-v4-flash",
+        choices: [
+          {
+            message: {
+              content: String(url).includes("openai.com")
+                ? "served by openai"
+                : String(url).includes("opencode.ai")
+                  ? "served by opencode"
+                  : "served by deepseek",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 4, completion_tokens: 2 },
+      };
+    },
+  });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn,
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-project-path": workspaceRoot,
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        stream: false,
+        max_tokens: 64,
+        messages: [{ role: "user", content: [{ type: "text", text: "Pick the fastest free model" }] }],
+      }),
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.match(payload.content[0].text, /^\[llmproxy\] provider: opencode \| model: deepseek-v4-flash-free : Price\/performance routing preferred free provider \(speed\)/m);
+    assert.match(payload.content[0].text, /served by opencode/);
+  });
+});
+
+
 test("messages endpoint honors LLMPROXY_METERING_INLINE from Claude project settings", async () => {
   const previousInlineEnv = process.env.LLMPROXY_METERING_INLINE;
   const previousInferenceEnv = process.env.LLMPROXY_INFERENCE_INFO_INLINE;
@@ -141,6 +652,7 @@ test("messages endpoint honors LLMPROXY_METERING_INLINE from Claude project sett
       model: "llm-proxy",
       env: {
         ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+        LLMPROXY_LLM_STATS_API_KEY: "sk-test",
         LLMPROXY_METERING_INLINE: "1",
       },
     }, null, 2));
@@ -221,6 +733,7 @@ test("messages endpoint honors LLMPROXY_INFERENCE_INFO_INLINE from Claude projec
       model: "llm-proxy",
       env: {
         ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+        LLMPROXY_LLM_STATS_API_KEY: "sk-test",
         LLMPROXY_INFERENCE_INFO_INLINE: "1",
       },
     }, null, 2));
@@ -302,6 +815,7 @@ test("messages endpoint does not inherit inline flags from process env when Clau
       model: "llm-proxy",
       env: {
         ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+        LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       },
     }, null, 2));
 
@@ -1926,6 +2440,7 @@ test("messages endpoint honors provider/model fallback lists from Claude setting
     model: "gpt-5.4",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       ANTHROPIC_DEFAULT_MODEL: "kimi-k2.5,zai-glm-5",
     },
   }, null, 2));
@@ -1990,6 +2505,7 @@ test("messages endpoint keeps deepseek model names intact from Claude settings",
     model: "ignored-by-settings",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       ANTHROPIC_DEFAULT_MODEL: "deepseek-v4-flash",
     },
   }, null, 2));
@@ -2062,6 +2578,7 @@ test("messages endpoint uses default models for providers not listed in Claude s
     model: "ignored",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       ANTHROPIC_DEFAULT_MODEL: "copilot:gpt-5.4",
     },
   }, null, 2));
@@ -2346,6 +2863,7 @@ test("messages endpoint ignores sticky Claude models when project settings deleg
     model: "llm-proxy",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
     },
   }, null, 2));
 
@@ -2423,6 +2941,7 @@ test("messages endpoint prefers the Claude project-configured model over the inc
   fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:5045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       ANTHROPIC_DEFAULT_MODEL: "gpt-5.4",
     },
   }, null, 2));
@@ -2528,6 +3047,7 @@ test("messages endpoint ignores sticky Claude models when project settings deleg
     model: "llmProxy",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
     },
   }, null, 2));
 
@@ -2593,6 +3113,7 @@ test("messages endpoint injects a short-answer system instruction from Claude pr
     model: "llmProxy",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       LLMPROXY_SHORT_ANSWER: "1",
     },
   }, null, 2));
@@ -2712,6 +3233,7 @@ test("messages endpoint lets a request disable project shortAnswer with shortAns
     model: "llmProxy",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-test",
       LLMPROXY_SHORT_ANSWER: "true",
     },
   }, null, 2));
@@ -2981,16 +3503,6 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     const statsPayload = await statsResponse.json();
     assert.equal(statsResponse.status, 200);
     assert.equal(statsPayload.success, true);
-
-    const smartStatusResponse = await fetch(`${baseUrl}/api/smart/status`);
-    const smartStatusPayload = await smartStatusResponse.json();
-    assert.equal(smartStatusResponse.status, 200);
-    assert.equal(smartStatusPayload.success, true);
-
-    const smartRefreshResponse = await fetch(`${baseUrl}/api/smart/refresh`, { method: "POST" });
-    const smartRefreshPayload = await smartRefreshResponse.json();
-    assert.equal(smartRefreshResponse.status, 200);
-    assert.equal(smartRefreshPayload.success, true);
   });
 
   assert.ok(serviceCalls.includes("status"));
@@ -3067,28 +3579,30 @@ test("model:set and config endpoints are exposed via REST", async () => {
     assert.equal(modelResponse.status, 200);
     assert.equal(modelPayload.success, true);
 
-    const configSetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SMART_ROUTE`, {
+    const configSetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_PRICE_PERFORMANCE_ROUTING`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ projectPath: projectRoot, scope: "project", value: "hybrid" }),
+      body: JSON.stringify({ projectPath: projectRoot, scope: "project", value: "1" }),
     });
     const configSetPayload = await configSetResponse.json();
     assert.equal(configSetResponse.status, 200);
     assert.equal(configSetPayload.success, true);
 
-    const configGetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SMART_ROUTE?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
+    const configGetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_PRICE_PERFORMANCE_ROUTING?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
     const configGetPayload = await configGetResponse.json();
     assert.equal(configGetResponse.status, 200);
     assert.equal(configGetPayload.success, true);
-    assert.match(configGetPayload.data.output, /project\.LLMPROXY_SMART_ROUTE=hybrid/);
+    assert.match(configGetPayload.data.output, /project\.LLMPROXY_PRICE_PERFORMANCE_ROUTING=1/);
 
     const configListResponse = await fetch(`${baseUrl}/api/config?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
     const configListPayload = await configListResponse.json();
     assert.equal(configListResponse.status, 200);
     assert.equal(configListPayload.success, true);
     assert.match(configListPayload.data.output, /Project configuration:/);
+    assert.match(configListPayload.data.output, /project\.LLMPROXY_AUTO_ESCALATE=1/);
+    assert.match(configListPayload.data.output, /project\.LLMPROXY_INFERENCE_INFO_INLINE=1/);
 
-    const configUnsetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SMART_ROUTE`, {
+    const configUnsetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_PRICE_PERFORMANCE_ROUTING`, {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ projectPath: projectRoot, scope: "project" }),
@@ -3101,7 +3615,7 @@ test("model:set and config endpoints are exposed via REST", async () => {
   const settings = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
   assert.equal(settings.model, "deepseek:deepseek-v4-flash");
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "deepseek:deepseek-v4-flash");
-  assert.equal("LLMPROXY_SMART_ROUTE" in settings.env, false);
+  assert.equal("LLMPROXY_PRICE_PERFORMANCE_ROUTING" in settings.env, false);
 });
 
 test("REST surface covers the CLI command families that are meant to have HTTP equivalents", () => {
@@ -3112,12 +3626,9 @@ test("REST surface covers the CLI command families that are meant to have HTTP e
     "/api/providers/available",
     "/api/providers/usage",
     "/api/stats",
-    "/api/smart/add",
-    "/api/smart/status",
-    "/api/smart/test",
-    "/api/smart/refresh",
     "/api/config",
     "/api/config/:key",
+    "/api/service/runtime",
     "/api/update",
     "/api/uninstall",
   ];

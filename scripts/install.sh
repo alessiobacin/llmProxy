@@ -370,10 +370,10 @@ if [ "$PLATFORM" = "windows" ]; then
   printf "%s\n" "$MSG_WINDOWS_NOTE"
 fi
 
-if ! env LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:start 2>&1; then
+if ! env LLMPROXY_MODE=standalone LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:start 2>&1; then
   warn "$MSG_SERVICE_RETRY"
   sleep 2
-  env LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
+  env LLMPROXY_MODE=standalone LLMPROXY_SERVICE_RUNTIME=native "$LLMPROXY_BIN" service:restart 2>&1 || error "$MSG_SERVICE_FAIL"
 fi
 
 printf "\n"

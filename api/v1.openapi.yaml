@@ -267,6 +267,19 @@ paths:
                 properties:
                   ok: {type: boolean}
                   authenticated: {type: boolean}
+  /auth/status:
+    get:
+      tags: [runtime]
+      summary: Authentication status for Claude-compatible local clients.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated: {type: boolean}
   /api/release-notes:
     get:
       tags: [control-plane]
@@ -299,6 +312,28 @@ paths:
               properties:
                 model: {type: string}
                 projectPath: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/service/runtime:
+    post:
+      tags: [control-plane]
+      summary: Switch the managed runtime between docker and native service mode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runtime]
+              properties:
+                runtime:
+                  type: string
+                  enum: [docker, native, launchd, systemd]
       responses:
         "200":
           description: CLI-style command response.

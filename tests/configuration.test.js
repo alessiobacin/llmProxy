@@ -11,6 +11,8 @@ const {
   getConfigSpec,
   listConfigSpecs,
   getAllConfigSpecs,
+  getProjectDefaultValues,
+  getServiceDefaultValues,
   isRestartRequired,
   isHotReloadable,
   setScopeValue,
@@ -34,7 +36,7 @@ test.after(() => {
 // ─── CONFIG_SPECS expansion ─────────────────────────────────────────────────
 
 test("CONFIG_SPECS includes all expected variables", () => {
-  assert.ok(CONFIG_SPECS.length >= 30, `expected >=30 specs, got ${CONFIG_SPECS.length}`);
+  assert.ok(CONFIG_SPECS.length >= 28, `expected >=28 specs, got ${CONFIG_SPECS.length}`);
 });
 
 test("getConfigSpec returns full metadata for DBLAYER_URL", () => {
@@ -62,9 +64,22 @@ test("getConfigSpec for project-scope variable", () => {
   assert.equal(spec.hotReloadable, true);
 });
 
-test("getConfigSpec for SENDGRID_API_KEY", () => {
-  const spec = getConfigSpec("SENDGRID_API_KEY");
-  assert.equal(spec.scope, "service");
+test("getConfigSpec exposes price/performance routing project variables", () => {
+  const routingSpec = getConfigSpec("LLMPROXY_PRICE_PERFORMANCE_ROUTING");
+  const tieBreakerSpec = getConfigSpec("LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER");
+  const autoEscalateSpec = getConfigSpec("LLMPROXY_AUTO_ESCALATE");
+  const meteringInlineSpec = getConfigSpec("LLMPROXY_METERING_INLINE");
+  assert.equal(routingSpec.scope, "project");
+  assert.equal(routingSpec.hotReloadable, true);
+  assert.equal(tieBreakerSpec.scope, "project");
+  assert.equal(tieBreakerSpec.restartRequired, false);
+  assert.equal(autoEscalateSpec.scope, "project");
+  assert.equal(meteringInlineSpec.scope, "project");
+});
+
+test("getConfigSpec for LLMPROXY_SENDGRID_API_KEY", () => {
+  const spec = getConfigSpec("LLMPROXY_SENDGRID_API_KEY");
+  assert.equal(spec.scope, "project");
   assert.equal(spec.restartRequired, false);
   assert.equal(spec.hotReloadable, true);
 });
@@ -176,4 +191,33 @@ test("getScopeValue reads project-scope variable", () => {
     cwd: tmpDir,
   });
   assert.equal(entry.value, "http://localhost:7045");
+});
+
+test("getProjectDefaultValues returns llmproxy project defaults", () => {
+  const defaults = getProjectDefaultValues({ cwd: tmpDir, serviceConfigFile: path.join(tmpDir, "service", "config.json") });
+  assert.equal(defaults.LLMPROXY_AUTO_ESCALATE, "1");
+  assert.equal(defaults.LLMPROXY_LLM_STATS_API_KEY, "");
+  assert.equal(defaults.LLMPROXY_SENDGRID_API_KEY, "");
+  assert.equal(defaults.LLMPROXY_SENDGRID_FROM_EMAIL, "");
+  assert.equal(defaults.LLMPROXY_SENDGRID_TO_EMAIL, "");
+  assert.equal(defaults.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE, "service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update");
+  assert.equal(defaults.LLMPROXY_INFERENCE_INFO_INLINE, "1");
+  assert.equal(defaults.LLMPROXY_METERING_INLINE, "0");
+  assert.equal(defaults.LLMPROXY_PRICE_PERFORMANCE_ROUTING, "1");
+  assert.equal(defaults.LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER, "power");
+  assert.equal(defaults.LLMPROXY_PROVIDER_CREDIT_INLINE, "1");
+  assert.equal(defaults.LLMPROXY_SHORT_ANSWER, "0");
+});
+
+test("getServiceDefaultValues returns effective service defaults", () => {
+  const defaults = getServiceDefaultValues({
+    env: {},
+    packageRoot: tmpDir,
+    dataRoot: tmpDir,
+    serviceConfigFile: path.join(tmpDir, "service", "config.json"),
+  });
+  assert.equal(defaults.LLMPROXY_MODE, "standalone");
+  assert.equal(defaults.LLMPROXY_MONGODB_CONNECTION_STRING, "");
+  assert.equal(defaults.LLMPROXY_SERVICE_RUNTIME, "native");
+  assert.equal(defaults.LLMPROXY_LOG_MAX_BYTES, "5242880");
 });

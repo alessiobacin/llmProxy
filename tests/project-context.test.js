@@ -150,7 +150,7 @@ test("resolveClaudeProjectSettings reads shortAnswer from Claude env when using 
 
   const result = resolveClaudeProjectSettings(nestedDir);
 
-  assert.equal(result.shortAnswer, true);
+  assert.equal(result.shortAnswer, 1);
 });
 
 test("resolveClaudeProjectSettings reads LLMPROXY_METERING_INLINE from Claude env", () => {
@@ -193,6 +193,52 @@ test("resolveClaudeProjectSettings reads LLMPROXY_INFERENCE_INFO_INLINE from Cla
   assert.equal(result.inlineInferenceInfo, true);
 });
 
+test("resolveClaudeProjectSettings reads LLMPROXY_LLM_STATS_API_KEY from Claude env", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-llm-stats-key-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_LLM_STATS_API_KEY: "sk-free-demo",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.llmStatsApiKey, "sk-free-demo");
+});
+
+test("resolveClaudeProjectSettings reads SendGrid project notification settings", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-sendgrid-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_SENDGRID_API_KEY: "sg-demo",
+      LLMPROXY_SENDGRID_FROM_EMAIL: "from@example.com",
+      LLMPROXY_SENDGRID_TO_EMAIL: "to@example.com",
+      LLMPROXY_SENDGRID_TO_MESSAGE_TYPE: "service_unreachable, provider_error",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.sendgridApiKey, "sg-demo");
+  assert.equal(result.sendgridFromEmail, "from@example.com");
+  assert.equal(result.sendgridToEmail, "to@example.com");
+  assert.equal(result.sendgridToMessageType, "service_unreachable,provider_error");
+});
+
 test("resolveClaudeProjectSettings defaults missing boolean flags in Claude env to false", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-boolean-defaults-"));
   const projectRoot = path.join(root, "workspace");
@@ -211,11 +257,11 @@ test("resolveClaudeProjectSettings defaults missing boolean flags in Claude env 
 
   assert.equal(result.inlineMetering, false);
   assert.equal(result.inlineInferenceInfo, false);
-  assert.equal(result.shortAnswer, false);
+  assert.equal(result.shortAnswer, 0);
 });
 
-test("resolveClaudeProjectSettings reads LLMPROXY_SMART_ROUTE from env", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-smart-route-"));
+test("resolveClaudeProjectSettings reads price/performance routing preferences from Claude env", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-price-performance-"));
   const projectRoot = path.join(root, "workspace");
   const nestedDir = path.join(projectRoot, "src");
   const claudeDir = path.join(projectRoot, ".claude");
@@ -225,54 +271,13 @@ test("resolveClaudeProjectSettings reads LLMPROXY_SMART_ROUTE from env", () => {
     model: "llmProxy",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
-      LLMPROXY_SMART_ROUTE: "hybrid",
-      LLMPROXY_SMART_PREFERENCE: "economy",
-      LLMPROXY_SMART_CACHE_TTL: "600000",
+      LLMPROXY_PRICE_PERFORMANCE_ROUTING: "1",
+      LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER: "speed",
     },
   }, null, 2));
 
   const result = resolveClaudeProjectSettings(nestedDir);
 
-  assert.equal(result.smartRoute, "hybrid");
-  assert.equal(result.smartPreference, "economy");
-  assert.equal(result.smartCacheTtl, 600000);
-});
-
-test("resolveClaudeProjectSettings returns null smartRoute when env var not set", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-no-smart-"));
-  const projectRoot = path.join(root, "workspace");
-  const nestedDir = path.join(projectRoot, "src");
-  const claudeDir = path.join(projectRoot, ".claude");
-  fs.mkdirSync(nestedDir, { recursive: true });
-  fs.mkdirSync(claudeDir, { recursive: true });
-  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
-    model: "llmProxy",
-    env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:7045" },
-  }, null, 2));
-
-  const result = resolveClaudeProjectSettings(nestedDir);
-
-  assert.equal(result.smartRoute, null);
-  assert.equal(result.smartPreference, "balanced");
-  assert.equal(result.smartCacheTtl, 300000);
-});
-
-test("resolveClaudeProjectSettings validates smart route mode values", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-smart-invalid-"));
-  const projectRoot = path.join(root, "workspace");
-  const nestedDir = path.join(projectRoot, "src");
-  const claudeDir = path.join(projectRoot, ".claude");
-  fs.mkdirSync(nestedDir, { recursive: true });
-  fs.mkdirSync(claudeDir, { recursive: true });
-  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
-    model: "llmProxy",
-    env: {
-      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
-      LLMPROXY_SMART_ROUTE: "invalid-mode",
-    },
-  }, null, 2));
-
-  const result = resolveClaudeProjectSettings(nestedDir);
-
-  assert.equal(result.smartRoute, null, "invalid mode must be rejected");
+  assert.equal(result.pricePerformanceRouting, true);
+  assert.equal(result.pricePerformanceTieBreaker, "speed");
 });

@@ -148,12 +148,20 @@ test("GET /api/config returns all variables", async () => {
   assert.equal(status, 200);
   assert.equal(body.success, true);
   assert.ok(Array.isArray(body.variables));
-  assert.ok(body.variables.length >= 30, `expected >=30, got ${body.variables.length}`);
+  assert.ok(body.variables.length >= 28, `expected >=28, got ${body.variables.length}`);
 
   const dblayer = body.variables.find((v) => v.key === "DBLAYER_URL");
-  assert.ok(dblayer, "DBLAYER_URL should be listed");
-  assert.equal(dblayer.scope, "service");
-  assert.equal(dblayer.value, null);
+  assert.equal(dblayer, undefined);
+
+  const autoEscalate = body.variables.find((v) => v.key === "LLMPROXY_AUTO_ESCALATE");
+  assert.ok(autoEscalate, "LLMPROXY_AUTO_ESCALATE should be listed");
+  assert.equal(autoEscalate.scope, "project");
+  assert.equal(autoEscalate.value, "1");
+
+  const statsKey = body.variables.find((v) => v.key === "LLMPROXY_LLM_STATS_API_KEY");
+  assert.ok(statsKey, "LLMPROXY_LLM_STATS_API_KEY should be listed");
+  assert.equal(statsKey.scope, "project");
+  assert.equal(statsKey.value, "");
 });
 
 // ─── POST /api/config/:key — unknown key ──────────────────────────────────────
@@ -188,12 +196,15 @@ test("POST /api/config/EVENTBUS_URL returns restarting:false", async () => {
   assert.equal(body.restarting, false);
 });
 
-test("POST /api/config/SENDGRID_API_KEY returns restarting:false", async () => {
+test("POST /api/config/LLMPROXY_SENDGRID_API_KEY returns restarting:false", async () => {
   const app = makeApp();
-  const { status, body } = await fetchFromApp(app, "POST", "/api/config/SENDGRID_API_KEY", { value: "sk-test" });
+  const { status, body } = await fetchFromApp(app, "POST", "/api/config/LLMPROXY_SENDGRID_API_KEY", { value: "sk-test" });
   assert.equal(status, 200);
   assert.equal(body.success, true);
   assert.equal(body.restarting, false);
+
+  const raw = JSON.parse(fs.readFileSync(claudeSettingsFile, "utf8"));
+  assert.equal(raw.env.LLMPROXY_SENDGRID_API_KEY, "sk-test");
 });
 
 // ─── POST /api/config/:key — restart-required ─────────────────────────────────

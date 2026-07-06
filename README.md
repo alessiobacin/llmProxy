@@ -34,7 +34,7 @@ The script automatically:
 - forces a final `llmproxy service:restart` so the Docker-backed runtime is created/recreated and health-checked before the installer exits
 - auto-selects English or Italian output based on your locale
 
-> **Next step after install**: `llmproxy provider:add copilot`
+> **Next step after install**: configure at least one provider with `llmproxy provider:add <provider>`. Use `copilot` only if you explicitly want GitHub Copilot OAuth.
 
 ### 1. Clone the repository (alternative)
 
@@ -68,7 +68,7 @@ If you want to install the CLI persistently with a single command, you can expli
 Use these commands if you want the installation flow to keep showing messages and explanations in Italian:
 
 ```bash
-pppnpm run install:persistent-it
+pnpm run install:persistent-it
 ```
 
 If the CLI is already available in your `PATH` because you installed it globally before, you can also use:
@@ -102,12 +102,12 @@ llmproxy help install
 
 In short:
 
-- Italian: `pppnpm run install:persistent-it` or `llmproxy install:persistent-it`
-- English: `pppnpm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install`, or `llmproxy install`
+- Italian: `pnpm run install:persistent-it` or `llmproxy install:persistent-it`
+- English: `pnpm run install:persistent-en`, `node bin/llmproxy.js install:persistent-en`, `node bin/llmproxy.js install`, or `llmproxy install`
 
 Compatibility:
 
-- `ppnpm run install:persistent` still points to the Italian path
+- `pnpm run install:persistent` still points to the Italian path
 - `llmproxy install:persistent` still works as a legacy alias for the Italian path
 
 The bootstrap flow:
@@ -118,6 +118,7 @@ The bootstrap flow:
 - installs the current CLI globally from the repository package
 - removes any duplicate global wrappers
 - launches `llmproxy service:start` through the newly installed global binary
+- forces the persistent service defaults to `LLMPROXY_MODE=standalone` and `LLMPROXY_SERVICE_RUNTIME=native` during bootstrap
 
 This way the persistent service always points to the final global installation starting from the local repository checkout.
 For Docker-backed profiles, the installer accepts both `docker compose` and the legacy `docker-compose` binary.
@@ -145,7 +146,9 @@ Shows:
 - the package data root
 - the native service manager selected for the OS
 
-### 3. Add the Copilot provider
+### 3. Add a provider
+
+If you want GitHub Copilot via device flow:
 
 ```bash
 llmproxy provider:add copilot
@@ -158,7 +161,11 @@ The CLI:
 3. waits for login completion
 4. stores the provider locally
 
-`llmproxy login` still exists as a deprecated compatibility alias of `llmproxy provider:add copilot`.
+If you want an API-key provider instead, no `/login` is required:
+
+```bash
+llmproxy provider:add openrouter --api-key "$OPENROUTER_API_KEY" --model openai/gpt-4o --vision true
+```
 
 ### 4. Start in foreground
 
@@ -170,6 +177,12 @@ By default the server starts on:
 
 ```text
 http://127.0.0.1:7045
+```
+
+To stop only the local/dev foreground instance on `5045` from another shell:
+
+```bash
+llmproxy stop
 ```
 
 ### 5. Add additional providers and fallback order
@@ -193,13 +206,13 @@ llmproxy service:start
 Or, if you want global installation plus service activation in one step:
 
 ```bash
-pppnpm run install:persistent-it
+pnpm run install:persistent-it
 ```
 
 For the same flow in English:
 
 ```bash
-pppnpm run install:persistent-en
+pnpm run install:persistent-en
 ```
 
 On macOS this creates and loads a user `LaunchAgent`.
@@ -239,6 +252,7 @@ llmproxy claude:setup --model 2
 ```
 
 The command creates or updates `.claude/settings.json` in the current folder by merging the `env` section with values compatible with `llmProxy`.
+`ANTHROPIC_AUTH_TOKEN` is handled automatically and is written only to the global Claude settings in `~/.claude/settings.json`, so you do not need to add it manually to the project file.
 The `--model` option accepts the numeric index from `llmproxy models:list`.
 When you are authenticated, `llmproxy models:list` reads the live catalog from GitHub Copilot and stores it in the local cache, so the index reflects the models actually available for your account.
 
@@ -257,6 +271,90 @@ If you prefer manual configuration, set both the top-level `model` field and the
 ```
 
 ### Optional concise answers with `shortAnswer`
+
+## Routing Controls
+
+`llmProxy` now has two separate routing controls:
+
+### `LLMPROXY_PRICE_PERFORMANCE_ROUTING`
+
+Project-scoped variable stored in `.claude/settings.json`.
+
+Supported values:
+
+- `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`
+- `LLMPROXY_PRICE_PERFORMANCE_ROUTING=true`
+
+Related variable:
+
+- `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER=power|speed`
+
+What it does:
+
+- reorders the provider list before the first request attempt
+- always prefers `free_model=true` providers over paid ones
+- if multiple providers have the same effective cost, it breaks ties by:
+  - `power`: prefer the strongest model tier
+  - `speed`: prefer the fastest model tier
+
+Important:
+
+- this does not replace `LLMPROXY_AUTO_ESCALATE`
+- this does not analyze the request content
+- this is a static provider-order optimization layer
+- it applies before the normal fallback loop starts
+
+### `LLMPROXY_AUTO_ESCALATE`
+
+Service/runtime variable.
+
+What it does:
+
+- watches for repeated identical user requests in the same project/thread
+- after the configured threshold, promotes the next provider in fallback order
+
+Important:
+
+- it is runtime recovery logic
+- it does not rank by cost
+
+### Interaction Rules When Multiple Features Are Enabled
+
+Precedence order:
+
+1. Explicit project model/provider configuration
+2. `LLMPROXY_PRICE_PERFORMANCE_ROUTING`
+3. Manual provider order
+4. `LLMPROXY_AUTO_ESCALATE` on repeated identical requests
+
+Concrete behavior:
+
+- if `PRICE_PERFORMANCE_ROUTING` is enabled, the request uses the cheapest/free-first provider order
+- `AUTO_ESCALATE` can still reshuffle later retries after repeated identical requests
+
+Recommended usage:
+
+- use `PRICE_PERFORMANCE_ROUTING` when several providers expose equivalent models and you want cost control
+- use `AUTO_ESCALATE` when you want repeated identical requests to move to the next fallback automatically
+
+### Example `.claude/settings.json`
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
+    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
+    "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "speed"
+  }
+}
+```
+
+In this configuration:
+
+- free providers are preferred first
+- if more than one provider is free, the fastest one is preferred
+- if fallback is needed afterward, the remaining chain still follows the cost-aware order
 
 If you want to reduce completion length and save output tokens, you can enable a concise-answer mode.
 
@@ -646,9 +744,7 @@ POST /api/test
 POST /api/claude/setup
 
 GET    /api/providers
-GET    /api/providers/available
 GET    /api/providers/status
-GET    /api/providers/usage
 POST   /api/providers/{id}/login
 POST   /api/providers/{id}/api-key
 POST   /api/providers/order
@@ -656,10 +752,6 @@ POST   /api/providers/{id}/rename
 DELETE /api/providers/{id}
 
 GET    /api/stats
-POST   /api/smart/add
-GET    /api/smart/status
-POST   /api/smart/test
-POST   /api/smart/refresh
 
 GET    /api/config
 GET    /api/config/{key}
@@ -752,7 +844,7 @@ x-project-path: /absolute/path/to/project
 | `llmproxy help [cmd]` | `GET /api/help[?command=cmd]` |
 | `llmproxy setup` | `GET /api/setup` |
 | `llmproxy release-notes [--version <v>]` | `GET /api/release-notes` |
-| `llmproxy login` | `POST /api/auth/login` (legacy alias of `provider:add copilot`) |
+| `llmproxy login` | `POST /api/auth/login` (legacy compatibility alias; prefer `llmproxy provider:add copilot`) |
 | `llmproxy logout` | `POST /api/auth/logout` |
 | `llmproxy status` | `GET /api/service/status` |
 | `llmproxy service:start` | `POST /api/service/start` |
@@ -764,10 +856,8 @@ x-project-path: /absolute/path/to/project
 | `llmproxy model:set <model>` | `POST /api/model/set` |
 | `llmproxy test` | `POST /api/test` |
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
-| `llmproxy provider:available` | `GET /api/providers/available` |
 | `llmproxy provider:list` | `GET /api/providers` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
-| `llmproxy provider:usage` | `GET /api/providers/usage` |
 | `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
 | `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
@@ -775,10 +865,6 @@ x-project-path: /absolute/path/to/project
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
-| `llmproxy smart:add ...` | `POST /api/smart/add` |
-| `llmproxy smart:status` | `GET /api/smart/status` |
-| `llmproxy smart:test` | `POST /api/smart/test` |
-| `llmproxy smart:refresh` | `POST /api/smart/refresh` |
 | `llmproxy config:list [--project\|--service]` | `GET /api/config` |
 | `llmproxy config:get <key> [--project\|--service]` | `GET /api/config/{key}` |
 | `llmproxy config:set <key> <value> [--project\|--service]` | `POST /api/config/{key}` |
@@ -792,17 +878,14 @@ x-project-path: /absolute/path/to/project
 
 Prepares runtime directories and shows the selected service manager.
 
-### `llmproxy login`
-
-Deprecated compatibility alias. It runs the same GitHub Copilot device flow as `llmproxy provider:add copilot` and stores or updates the default Copilot provider.
-
-### `llmproxy logout`
-
-Removes all local Copilot providers.
-
 ### `llmproxy run`
 
-Starts the proxy in the foreground.
+Starts the local/dev proxy in the foreground on `127.0.0.1:5045`.
+It loads runtime variables from the local package `.env` in development and falls back to the built-in defaults when a variable is missing.
+
+### `llmproxy stop`
+
+Stops only the local/dev foreground instance on `127.0.0.1:5045`. It does not stop the persistent service runtime.
 
 ### `llmproxy status`
 
@@ -1039,9 +1122,31 @@ The single-command card includes syntax, description, when to use it, and a prac
 
 Restarts the persistent service and also validates the Docker runtime when the installed profile is Docker-backed. If the managed `llmproxy` container is missing or stopped, the command also recreates it with `docker compose up -d` or legacy `docker-compose up -d` (and `--build` when required by the wrapper) before the final health check.
 
+### `llmproxy service:runtime`
+
+Explicit runtime switch command:
+
+- `llmproxy service:runtime docker`
+  Removes the native persistent service artifacts, stops/removes the managed Docker runtime if present, recreates the `llmproxy` container, persists `LLMPROXY_SERVICE_RUNTIME=docker`, and verifies `/health`.
+- `llmproxy service:runtime launchd`
+  macOS-only alias for the native runtime. Stops/removes the managed Docker runtime, installs the user `LaunchAgent`, persists `LLMPROXY_SERVICE_RUNTIME=native`, and verifies `/health`.
+- `llmproxy service:runtime native`
+  Cross-platform native selector (`launchd` on macOS, `systemd --user` on Linux, Windows Service on Windows).
+- `llmproxy service:runtime systemd`
+  Linux-only alias for the native runtime.
+
+Practical examples:
+
+```bash
+llmproxy service:runtime docker
+llmproxy service:runtime launchd
+```
+
 ### `llmproxy claude:setup`
 
 Creates or updates `.claude/settings.json` in the current folder with the `env` variables required to use `llmProxy` as the local backend for Claude Code.
+
+As part of the setup, llmProxy also synchronizes a small global Claude support entry in `~/.claude/settings.json` for the local auth placeholder used by Claude itself. This is not the project configuration and does not replace the `.claude/settings.json` created in the current folder.
 
 Supports `--model <index>` to show the selected default model in CLI output while keeping `.claude/settings.json` minimal (`model: llmProxy` plus proxy base URL).
 
@@ -1049,47 +1154,27 @@ Supports `--model <index>` to show the selected default model in CLI output whil
 
 These commands expose the full supported configuration surface both from CLI and REST.
 
-- `--project` writes only variables that belong in `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_SMART_ROUTE`, and `LLMPROXY_SHORT_ANSWER`.
+- `--project` writes only variables that belong in `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_PRICE_PERFORMANCE_ROUTING`, and `LLMPROXY_SHORT_ANSWER`.
 - `--service` writes only variables that govern the runtime service, such as `PORT`, `LLMPROXY_MODE`, and `LLMPROXY_SECRET`.
 - Scope mismatches are rejected both by CLI and REST. For example, `PORT` cannot be written with `--project`.
 
-### Smart Router
+### Price/Performance Routing
 
-The smart router automatically selects the best model for each request based on complexity, vision, and tool requirements. It uses a lightweight LLM classifier to analyze incoming requests and route them to the most cost-effective model that meets the requirements.
+`LLMPROXY_PRICE_PERFORMANCE_ROUTING` is the project-scoped routing control that remains available after the smart router removal.
 
 #### How it works
 
-1. **Classifier**: A small, fast LLM (e.g., DeepSeek on OpenRouter) analyzes each request and classifies it by:
-   - `complexity`: simple, moderate, complex
-   - `needsVision`: whether the request contains images
-   - `needsTools`: whether the request uses tool definitions
-   - `type`: coding, creative, reasoning, qa
-
-2. **Routing rules**: Based on the classification, the router selects a model from the registered providers:
-   - `economy` tier (deepseek-chat, gpt-4o-mini, etc.) for simple requests without tools
-   - `standard` tier (claude-haiku-4.5, gpt-4.1, etc.) for requests with vision or moderate complexity
-   - `premium` tier (claude-opus-4, gpt-5, etc.) for complex requests with many tools or long context
-
-3. **Preference modes**: You can bias the routing with `LLMPROXY_SMART_PREFERENCE`:
-   - `balanced` (default): prefer lowest tier that meets requirements, then lowest cost
-   - `economy`: always prefer the cheapest model that works
-   - `quality`: always prefer the most capable model that works
+1. `llmProxy` starts from the configured provider order.
+2. If `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`, it reorders the first attempt to prefer:
+   - free providers first (`free_model=true`)
+   - otherwise the lowest estimated cost
+3. If more than one candidate has the same effective cost, `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` decides whether to prefer:
+   - `power`
+   - `speed`
 
 #### Configuration
 
-**Step 1: Add the classifier**
-
-Configure a lightweight LLM as the classifier. Use a fast, cheap model like `deepseek-chat` on OpenRouter:
-
-```bash
-llmproxy smart:add --provider openrouter --model deepseek-chat --api-key sk-or-xxx
-```
-
-This saves the classifier configuration to `~/.local/share/llmProxy/smart-router.json` (Linux) or `~/Library/Application Support/llmProxy/smart-router.json` (macOS).
-
-**Step 2: Enable smart routing in your project**
-
-Add these environment variables to your project's `.claude/settings.json`:
+Add these variables to your project's `.claude/settings.json`:
 
 ```json
 {
@@ -1098,8 +1183,8 @@ Add these environment variables to your project's `.claude/settings.json`:
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
-    "LLMPROXY_SMART_ROUTE": "hybrid",
-    "LLMPROXY_SMART_PREFERENCE": "balanced"
+    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
+    "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "power"
   }
 }
 ```
@@ -1108,41 +1193,16 @@ Add these environment variables to your project's `.claude/settings.json`:
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `LLMPROXY_SMART_ROUTE` | `rules`, `llm`, `hybrid`, disabled | disabled | Routing mode: `rules` uses only static heuristics, `llm` uses only the classifier, `hybrid` combines rules plus classifier |
-| `LLMPROXY_SMART_PREFERENCE` | `balanced`, `economy`, `quality` | `balanced` | Cost vs quality tradeoff |
-| `LLMPROXY_SMART_CACHE_TTL` | milliseconds | `300000` (5 min) | How long to cache provider availability checks |
+| `LLMPROXY_PRICE_PERFORMANCE_ROUTING` | `0`, `1`, `false`, `true` | disabled | Enables cost-aware provider reordering before the first attempt |
+| `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` | `power`, `speed` | `power` | Chooses whether equal-cost candidates prefer stronger or faster models |
 
-**Step 3: Verify configuration**
+#### Example behavior
 
-Check the smart router status and simulate routing:
+With providers `openai (gpt-5, free_model=false)`, `opencode (deepseek-v4-flash-free, free_model=true)`, and `nvidia (z-ai/glm-5.2, free_model=true)`:
 
-```bash
-llmproxy smart:status    # shows classifier config, API key (masked), registered providers
-llmproxy smart:test      # simulates routing for simple/moderate/complex scenarios
-```
-
-#### CLI commands
-
-| Command | Description |
-|---------|-------------|
-| `llmproxy smart:add --provider <p> --model <m> --api-key <k>` | Configure the classifier LLM |
-| `llmproxy smart:status` | Show smart router status and classifier config |
-| `llmproxy smart:test` | Simulate routing for 3 scenarios (simple, moderate, complex) |
-| `llmproxy smart:refresh` | Invalidate provider availability cache |
-
-#### Example: routing behavior
-
-With providers `qwen (qwen3.7-max)`, `deepseek (deepseek-v4-pro)`, and `kimi (kimi-k2.6)`:
-
-- **Simple chat** (no tools, no vision) → `qwen3.7-max` (economy tier, lowest cost)
-- **Moderate with tools** → `qwen3.7-max` (economy tier, supports tools)
-- **Complex with vision + tools** → no suitable model (none of the registered models support vision)
-
-To handle vision requests, add a provider with a vision-capable model:
-
-```bash
-llmproxy provider:add openrouter --model claude-sonnet-4 --api-key sk-or-xxx
-```
+- with `LLMPROXY_PRICE_PERFORMANCE_ROUTING=0`, the manual provider order is used
+- with `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`, free providers are moved ahead of paid ones
+- with `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER=speed`, the faster free provider wins among the free candidates
 
 ### `llmproxy model:set <model>`
 
@@ -1154,6 +1214,8 @@ Use it when you want to switch to a raw provider-aware value such as `deepseek:d
 
 Updates the global `llmproxy` installation by cloning the latest version from the GitHub repository `alessiobacin/llmProxy` and reinstalling it globally.
 After the update, it relaunches the updated binary with `llmproxy version` to verify that the new installation is active.
+Before confirming success, it now runs a smoke test on the freshly installed CLI (`version`, `config:list`, `status`).
+If that verification fails, `llmproxy update` automatically restores the previously installed global package and restarts the managed service from the restored version.
 During the update, only one active global installation is kept, and any duplicate `pnpm` wrappers are removed.
 The reinstall is forced even when the package version string is unchanged, so same-version maintenance builds still replace the installed files.
 
@@ -1166,7 +1228,7 @@ Explicit Italian path for persistent installation.
 If you are working from the local checkout and do not yet have `llmproxy` in your `PATH`, run:
 
 ```bash
-ppnpm run install:persistent-it
+pnpm run install:persistent-it
 ```
 
 If the CLI is already installed globally, you can use:
@@ -1186,7 +1248,7 @@ Explicit English path for persistent installation.
 If you are working from the local checkout and do not yet have `llmproxy` in your `PATH`, run:
 
 ```bash
-ppnpm run install:persistent-en
+pnpm run install:persistent-en
 ```
 
 Or:
@@ -1270,7 +1332,6 @@ Inside the data root, the following files are created:
 - `copilot-models.json`
 - `copilot-endpoints.json`
 - `provider-registry.json`
-- `smart-router.json`
 - `logs/service.out.log`
 - `logs/service.err.log`
 - `logs/requests-YYYY-MM-DD.jsonl`
@@ -1305,7 +1366,7 @@ Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, 
 ```bash
 llmproxy config:list                        # elenca le variabili disponibili
 llmproxy config:get ANTHROPIC_BASE_URL      # legge una variabile
-llmproxy config:set LLMPROXY_SMART_ROUTE hybrid   # imposta una variabile
+llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1   # imposta una variabile
 llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
 ```
 
@@ -1313,13 +1374,32 @@ llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
 | --- | --- | --- | --- |
 | `ANTHROPIC_BASE_URL` | auto | URL (e.g. `http://127.0.0.1:7045`) | Anthropic-compatible endpoint base URL (the proxy itself) |
 | `ANTHROPIC_DEFAULT_MODEL` | unset | any model ID or fallback chain | default model for Anthropic requests; supports chains like `copilot:claude-sonnet-4-6,openai:gpt-5` |
-| `ANTHROPIC_AUTH_TOKEN` | unset | string | authentication token for the Anthropic endpoint |
+| `ANTHROPIC_AUTH_TOKEN` | auto-managed | string | local placeholder used by Claude to call the proxy; injected automatically into `~/.claude/settings.json`, not required in project `.claude/settings.json` |
 | `API_TIMEOUT_MS` | auto | milliseconds | API request timeout |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | unset | `0`, `1` | if `1`, disables Claude Code experimental betas |
+| `LLMPROXY_LLM_STATS_API_KEY` | unset | string | required Claude Code stats key used by llmProxy inference |
+| `LLMPROXY_SENDGRID_API_KEY` | unset | string | SendGrid API key for project-scoped email notifications |
+| `LLMPROXY_SENDGRID_FROM_EMAIL` | unset | email | sender address for project-scoped email notifications |
+| `LLMPROXY_SENDGRID_TO_EMAIL` | unset | email | recipient address for project-scoped email notifications |
+| `LLMPROXY_SENDGRID_TO_MESSAGE_TYPE` | `service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update` | comma-separated list, `all`, `*` | which notification categories are enabled for the project |
 | `LLMPROXY_SHORT_ANSWER` | unset (`off`) | `0`, `1` | if `1`, enables short answer mode |
-| `LLMPROXY_SMART_ROUTE` | unset | `hybrid`, `economy`, `standard`, `premium` | automatic routing strategy based on request complexity |
-| `LLMPROXY_SMART_PREFERENCE` | unset | `balanced`, `economy`, `quality` | cost/quality balance preference for smart routing |
-| `LLMPROXY_SMART_CACHE_TTL` | unset | seconds | smart router cache TTL |
+| `LLMPROXY_PRICE_PERFORMANCE_ROUTING` | unset (`off`) | `0`, `1`, `false`, `true` | enables free-first / lower-cost provider reordering |
+| `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` | `power` | `power`, `speed` | tie-breaker used when multiple candidates have the same effective cost |
+
+Example project notification block:
+
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "LLMPROXY_LLM_STATS_API_KEY": "your-free-key",
+    "LLMPROXY_SENDGRID_API_KEY": "SG.xxx",
+    "LLMPROXY_SENDGRID_FROM_EMAIL": "llmproxy@example.com",
+    "LLMPROXY_SENDGRID_TO_EMAIL": "ops@example.com",
+    "LLMPROXY_SENDGRID_TO_MESSAGE_TYPE": "service_unreachable,service_recovered,provider_error"
+  }
+}
+```
 
 ### Service-Scope (.env — richiede restart)
 
@@ -1341,13 +1421,13 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `PORT` | auto (from profile) | any valid port | proxy port; auto-derived: `5045` dev, `6045` staging, `7045` production |
 | `NODE_ENV` | auto (from profile) | `development`, `staging`, `production` | standard Node.js environment |
 | `LLMPROXY_ENV` | auto (from profile) | `development`, `staging`, `production` | llmProxy environment |
-| `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (or `dev`), `staging`, `production` (or `prod`) | runtime profile; determines defaults for NODE_ENV, LLMPROXY_ENV, ports, metering sink |
-| `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` for local dev; `platform` for V11 integration with `X-Hierarchy-Context` header |
-| `LLMPROXY_METERING_SINK` | `dblayer` | `dblayer`, `jsonl`, `inline`, `noop`, or `+`-separated combos | LLM call metering sink |
+| `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (or `dev`), `staging`, `production` (or `prod`) | runtime profile; determines defaults for `NODE_ENV`, `LLMPROXY_ENV`, ports, db-layer URL, and event-bus URL |
+| `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` is the default. `platform` is allowed only when both db-layer and event-bus are reachable; default production checks are `http://localhost:7001/health` and `http://localhost:7048/health` |
+| `LLMPROXY_MONGODB_CONNECTION_STRING` | unset | full MongoDB connection string | standalone persistence target for metering/log storage; when unset, standalone mode falls back to local JSONL storage. Ignored when `LLMPROXY_MODE=platform` |
 | `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | if `1`, appends inline token/metering stats at the end of the inference; if absent in `.claude/settings.json`, the project value is `0` |
 | `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | if `1`, prepends inline provider/model info at the start of the inference; if absent in `.claude/settings.json`, the project value is `0` |
-| `DBLAYER_URL` | unset | full URL (e.g. `http://localhost:5046`) | db-layer service URL; if **unset**, db-layer is **not active** (no POST attempts). Set to `localhost:5046` (dev), `localhost:6046` (staging), or `localhost:7046` (production) |
-| `EVENTBUS_URL` | unset | full URL (e.g. `http://localhost:5048`) | event-bus service URL; if **unset**, event-bus is **no-op**. Set to `localhost:5048` (dev), `localhost:6048` (staging), or `localhost:7048` (production) |
+| `DBLAYER_URL` | auto | full URL | optional explicit db-layer override. If absent, llmProxy derives `5001` dev, `6001` staging, `7001` production |
+| `EVENTBUS_URL` | auto | full URL | optional explicit event-bus override. If absent, llmProxy derives `5048` dev, `6048` staging, `7048` production |
 | `LLMPROXY_SECRET` | unset | arbitrary string | optional HMAC secret for internal token signing |
 | `LLMPROXY_SERVICE_RUNTIME` | auto | `native`, `docker` | persistent service runtime: `native` (LaunchAgent/systemd) or `docker` (Docker Compose) |
 | `LLMPROXY_DOCKER_COMPOSE_FILE` | auto | file path | Docker Compose file for docker runtime |
@@ -1358,10 +1438,6 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` (dev/staging), `30` (production) | integer | JSONL log retention in days |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | integer | max JSONL file size before rotation |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | integer | max archived JSONL files per day |
-| `LLM_STATS_API_KEY` | unset | string | API key for stats service |
-| `SENDGRID_API_KEY` | unset | string | SendGrid API key for email notifications |
-| `SENDGRID_FROM_EMAIL` | unset | email | sender address for email notifications |
-| `SENDGRID_TO_EMAIL` | unset | email | recipient address for email notifications |
 
 ### Port Mapping by Environment
 
@@ -1385,11 +1461,23 @@ This means:
 - it does not require PM2
 - it does not start before the user logs in
 
-If you use `ppnpm run install:persistent`, the command first installs the CLI globally and then registers the same `LaunchAgent`, so restart after reboot keeps working.
+If you use `pnpm run install:persistent`, the command first installs the CLI globally and then registers the same `LaunchAgent`, so restart after reboot keeps working.
+
+If you want to switch the same machine from the Docker runtime back to the native macOS service, use:
+
+```bash
+llmproxy service:runtime launchd
+```
 
 ### Linux
 
 The `llmproxy service:start` command installs a `systemd --user` service.
+
+If you want to switch the same machine from the native runtime to Docker, use:
+
+```bash
+llmproxy service:runtime docker
+```
 
 Practical note:
 

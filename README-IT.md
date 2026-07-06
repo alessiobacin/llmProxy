@@ -88,6 +88,7 @@ Il bootstrap:
 - installa globalmente la CLI corrente con `pnpm install -g`
 - rimuove eventuali wrapper globali duplicati
 - lancia `llmproxy service:start` tramite il binario globale appena installato
+- forza i default del servizio persistente a `LLMPROXY_MODE=standalone` e `LLMPROXY_SERVICE_RUNTIME=native` durante il bootstrap
 
 In questo modo il servizio persistente punta sempre all'installazione globale definitiva partendo dal checkout locale del repository.
 Per i profili che usano Docker, l'installer accetta sia `docker compose` sia il binario legacy `docker-compose`.
@@ -116,7 +117,7 @@ La CLI:
 3. aspetta il completamento del login
 4. salva il provider localmente
 
-`llmproxy login` resta disponibile solo come alias legacy deprecato di `llmproxy provider:add copilot`.
+`llmproxy login` resta disponibile solo come alias legacy di compatibilita` di `llmproxy provider:add copilot`.
 
 ### 3. Avvio in foreground
 
@@ -151,13 +152,13 @@ llmproxy service:start
 Oppure, se vuoi fare installazione globale + attivazione del servizio in un solo passo:
 
 ```bash
-pppnpm run install:persistent-it
+pnpm run install:persistent-it
 ```
 
 Per lo stesso flusso in inglese:
 
 ```bash
-pppnpm run install:persistent-en
+pnpm run install:persistent-en
 ```
 
 Su macOS questo crea e carica un `LaunchAgent` utente.
@@ -207,6 +208,11 @@ Se preferisci configurare a mano, imposta sia il campo top-level `model` sia la 
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+    "LLMPROXY_LLM_STATS_API_KEY": "your-free-key",
+    "LLMPROXY_SENDGRID_API_KEY": "",
+    "LLMPROXY_SENDGRID_FROM_EMAIL": "",
+    "LLMPROXY_SENDGRID_TO_EMAIL": "",
+    "LLMPROXY_SENDGRID_TO_MESSAGE_TYPE": "service_unreachable,service_recovered,provider_error",
     "LLMPROXY_SHORT_ANSWER": "1"
   }
 }
@@ -550,22 +556,21 @@ x-project-path: /assoluto/percorso/del/progetto
 | `llmproxy help [cmd]` | `GET /api/help[?command=cmd]` |
 | `llmproxy setup` | `GET /api/setup` |
 | `llmproxy release-notes [--version <v>]` | `GET /api/release-notes` |
-| `llmproxy login` | `POST /api/auth/login` (alias legacy di `provider:add copilot`) |
+| `llmproxy login` | `POST /api/auth/login` (alias legacy di compatibilita`; preferisci `provider:add copilot`) |
 | `llmproxy logout` | `POST /api/auth/logout` |
 | `llmproxy status` | `GET /api/service/status` |
 | `llmproxy service:start` | `POST /api/service/start` |
 | `llmproxy service:stop` | `POST /api/service/stop` |
 | `llmproxy service:restart` | `POST /api/service/restart` |
+| `llmproxy service:runtime <docker\|native\|launchd>` | `POST /api/service/runtime` |
 | `llmproxy logs` | `GET /api/logs` |
 | `llmproxy logs --follow` | `GET /api/logs/stream` |
 | `llmproxy models:list` | `GET /api/models` |
 | `llmproxy model:set <model>` | `POST /api/model/set` |
 | `llmproxy test` | `POST /api/test` |
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
-| `llmproxy provider:available` | `GET /api/providers/available` |
 | `llmproxy provider:list` | `GET /api/providers` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
-| `llmproxy provider:usage` | `GET /api/providers/usage` |
 | `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
 | `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
@@ -573,10 +578,6 @@ x-project-path: /assoluto/percorso/del/progetto
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
-| `llmproxy smart:add ...` | `POST /api/smart/add` |
-| `llmproxy smart:status` | `GET /api/smart/status` |
-| `llmproxy smart:test` | `POST /api/smart/test` |
-| `llmproxy smart:refresh` | `POST /api/smart/refresh` |
 | `llmproxy config:list [--project\|--service]` | `GET /api/config` |
 | `llmproxy config:get <key> [--project\|--service]` | `GET /api/config/{key}` |
 | `llmproxy config:set <key> <value> [--project\|--service]` | `POST /api/config/{key}` |
@@ -592,15 +593,19 @@ Prepara directory runtime e mostra il service manager selezionato.
 
 ### `llmproxy login`
 
-Alias legacy deprecato. Esegue lo stesso device flow di `llmproxy provider:add copilot` e salva o aggiorna il provider Copilot predefinito.
+Alias legacy di compatibilita`. Esegue lo stesso device flow di `llmproxy provider:add copilot`.
 
 ### `llmproxy logout`
 
-Rimuove tutti i provider Copilot locali.
+Rimuove i token Copilot locali.
 
 ### `llmproxy run`
 
-Avvia il proxy in foreground.
+Avvia il proxy locale/dev in foreground su `127.0.0.1:5045`.
+
+### `llmproxy stop`
+
+Ferma solo l'istanza locale/dev su `127.0.0.1:5045`. Non ferma il servizio persistente.
 
 ### `llmproxy status`
 
@@ -796,89 +801,47 @@ Crea o aggiorna `.claude/settings.json` nella cartella corrente con le variabili
 
 Supporta `--model <indice>` per mostrare in output il modello selezionato dalla lista, mantenendo `.claude/settings.json` minimale (`model: llmProxy` piu` base URL del proxy).
 
-### Smart Router
+### Routing prezzo/prestazioni
 
-Lo smart router seleziona automaticamente il modello migliore per ogni richiesta in base a complessità, visione e strumenti. Usa un LLM classifier leggero per analizzare le richieste in arrivo e instradarle al modello più economico che soddisfa i requisiti.
+`LLMPROXY_PRICE_PERFORMANCE_ROUTING` e` il controllo di routing statico disponibile a livello progetto.
 
-#### Come funziona
+Come funziona:
 
-1. **Classifier**: Un LLM piccolo e veloce (es. DeepSeek su OpenRouter) analizza ogni richiesta e la classifica per:
-   - `complexity`: simple, moderate, complex
-   - `needsVision`: se la richiesta contiene immagini
-   - `needsTools`: se la richiesta usa definizioni di tool
-   - `type`: coding, creative, reasoning, qa
+1. parte dall'ordine provider configurato
+2. se `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`, riordina il primo tentativo preferendo:
+   - provider/modelli gratuiti (`free_model=true`)
+   - in alternativa i provider con costo stimato inferiore
+3. se più candidati hanno costo equivalente, `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` decide se preferire:
+   - `power`
+   - `speed`
 
-2. **Regole di routing**: In base alla classificazione, il router seleziona un modello dai provider registrati:
-   - Tier `economy` (deepseek-chat, gpt-4o-mini, ecc.) per richieste semplici senza tool
-   - Tier `standard` (claude-haiku-4.5, gpt-4.1, ecc.) per richieste con visione o complessità moderata
-   - Tier `premium` (claude-opus-4, gpt-5, ecc.) per richieste complesse con molti tool o contesto lungo
-
-3. **Modalità di preferenza**: Puoi orientare il routing con `LLMPROXY_SMART_PREFERENCE`:
-   - `balanced` (default): preferisci il tier più basso che soddisfa i requisiti, poi il costo più basso
-   - `economy`: preferisci sempre il modello più economico che funziona
-   - `quality`: preferisci sempre il modello più capace che funziona
-
-#### Configurazione
-
-**Passo 1: Aggiungi il classifier**
-
-Configura un LLM leggero come classifier. Usa un modello veloce ed economico come `deepseek-chat` su OpenRouter:
-
-```bash
-llmproxy smart:add --provider openrouter --model deepseek-chat --api-key sk-or-xxx
-```
-
-Questo salva la configurazione del classifier in `~/.local/share/llmProxy/smart-router.json` (Linux) o `~/Library/Application Support/llmProxy/smart-router.json` (macOS).
-
-**Passo 2: Abilita lo smart routing nel tuo progetto**
-
-Aggiungi queste variabili d'ambiente al `.claude/settings.json` del tuo progetto:
+Esempio `.claude/settings.json`:
 
 ```json
 {
   "model": "llmProxy",
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
-    "LLMPROXY_SMART_ROUTE": "hybrid",
-    "LLMPROXY_SMART_PREFERENCE": "balanced"
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
+    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
+    "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "power"
   }
 }
 ```
 
-**Variabili d'ambiente:**
+Esempio notifiche progetto:
 
-| Variabile | Valori | Default | Descrizione |
-|-----------|--------|---------|-------------|
-| `LLMPROXY_SMART_ROUTE` | `rules`, `llm`, `hybrid`, disabilitato | disabilitato | Modalita` di routing: `rules` usa solo euristiche statiche, `llm` usa solo il classifier, `hybrid` combina regole e classifier |
-| `LLMPROXY_SMART_PREFERENCE` | `balanced`, `economy`, `quality` | `balanced` | Tradeoff costo vs qualità |
-| `LLMPROXY_SMART_CACHE_TTL` | millisecondi | `300000` (5 min) | Quanto tempo tenere in cache i check di disponibilità dei provider |
-
-**Passo 3: Verifica la configurazione**
-
-Controlla lo stato dello smart router e simula il routing:
-
-```bash
-llmproxy smart:status    # mostra config classifier, API key (mascherata), provider registrati
-llmproxy smart:test      # simula routing per scenari simple/moderate/complex
+```json
+{
+  "model": "llmProxy",
+  "env": {
+    "LLMPROXY_LLM_STATS_API_KEY": "your-free-key",
+    "LLMPROXY_SENDGRID_API_KEY": "SG.xxx",
+    "LLMPROXY_SENDGRID_FROM_EMAIL": "llmproxy@example.com",
+    "LLMPROXY_SENDGRID_TO_EMAIL": "ops@example.com",
+    "LLMPROXY_SENDGRID_TO_MESSAGE_TYPE": "service_unreachable,service_recovered,provider_error"
+  }
+}
 ```
-
-#### Comandi CLI
-
-| Comando | Descrizione |
-|---------|-------------|
-| `llmproxy smart:add --provider <p> --model <m> --api-key <k>` | Configura il classifier LLM |
-| `llmproxy smart:status` | Mostra stato smart router e config classifier |
-| `llmproxy smart:test` | Simula routing per 3 scenari (simple, moderate, complex) |
-| `llmproxy smart:refresh` | Invalida cache disponibilità provider |
-
-#### Esempio: comportamento di routing
-
-Con provider `qwen (qwen3.7-max)`, `deepseek (deepseek-v4-pro)`, e `kimi (kimi-k2.6)`:
-
-- **Chat semplice** (no tool, no visione) → `qwen3.7-max` (tier economy, costo più basso)
-- **Moderato con tool** → `qwen3.7-max` (tier economy, supporta tool)
 - **Complesso con visione + tool** → nessun modello adatto (nessuno dei modelli registrati supporta visione)
 
 Per gestire richieste con visione, aggiungi un provider con un modello che supporti visione:
@@ -897,6 +860,8 @@ Usalo quando vuoi passare a un valore raw provider-aware come `deepseek:deepseek
 
 Aggiorna l'installazione globale di `llmproxy` clonando l'ultima versione della repository GitHub `alessiobacin/llmProxy` e reinstallandola globalmente.
 Dopo l'update rilancia il binario aggiornato con `llmproxy version` per verificare che la nuova installazione sia attiva.
+Prima di confermare il successo esegue ora uno smoke test sul CLI appena installato (`version`, `config:list`, `status`).
+Se questa verifica fallisce, `llmproxy update` ripristina automaticamente il package globale precedente e riavvia il servizio gestito dalla versione ripristinata.
 Durante l'update viene mantenuta una sola installazione globale attiva e vengono rimossi eventuali wrapper globali duplicati di `pnpm`.
 La reinstallazione è forzata anche quando la stringa di versione del package non cambia, così anche build di manutenzione con la stessa versione sostituiscono davvero i file installati.
 
@@ -1048,7 +1013,8 @@ Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, 
 ```bash
 llmproxy config:list                        # elenca le variabili disponibili
 llmproxy config:get ANTHROPIC_BASE_URL      # legge una variabile
-llmproxy config:set LLMPROXY_SMART_ROUTE hybrid   # imposta una variabile
+llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --project   # imposta una variabile di progetto
+llmproxy config:set LLMPROXY_LLM_STATS_API_KEY your-free-key --project   # imposta la chiave stats per Claude Code
 llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
 ```
 
@@ -1056,13 +1022,17 @@ llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
 | --- | --- | --- | --- |
 | `ANTHROPIC_BASE_URL` | auto | URL (es. `http://127.0.0.1:7045`) | URL base dell'endpoint Anthropic-compatibile (il proxy stesso) |
 | `ANTHROPIC_DEFAULT_MODEL` | unset | qualsiasi model ID o catena di fallback | modello predefinito per le richieste Anthropic; supporta catene come `copilot:claude-sonnet-4-6,openai:gpt-5` |
-| `ANTHROPIC_AUTH_TOKEN` | unset | stringa | token di autenticazione per l'endpoint Anthropic |
+| `ANTHROPIC_AUTH_TOKEN` | auto-managed | stringa | placeholder locale gestito automaticamente in `~/.claude/settings.json`; non serve nel file progetto |
 | `API_TIMEOUT_MS` | auto | millisecondi | timeout per le richieste API |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | unset | `0`, `1` | se `1`, disabilita le beta sperimentali di Claude Code |
+| `LLMPROXY_LLM_STATS_API_KEY` | unset | stringa | chiave stats obbligatoria per le inferenze Claude Code tramite llmProxy |
+| `LLMPROXY_SENDGRID_API_KEY` | unset | stringa | API key SendGrid per notifiche email a livello progetto |
+| `LLMPROXY_SENDGRID_FROM_EMAIL` | unset | email | mittente delle notifiche email del progetto |
+| `LLMPROXY_SENDGRID_TO_EMAIL` | unset | email | destinatario delle notifiche email del progetto |
+| `LLMPROXY_SENDGRID_TO_MESSAGE_TYPE` | `service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update` | lista separata da virgole, `all`, `*` | categorie di notifiche abilitate nel progetto |
 | `LLMPROXY_SHORT_ANSWER` | unset (`off`) | `0`, `1` | se `1`, attiva la modalità risposta breve |
-| `LLMPROXY_SMART_ROUTE` | unset | `hybrid`, `economy`, `standard`, `premium` | strategia di routing automatico in base alla complessità della richiesta |
-| `LLMPROXY_SMART_PREFERENCE` | unset | `balanced`, `economy`, `quality` | preferenza per il bilanciamento costo/qualità nello smart routing |
-| `LLMPROXY_SMART_CACHE_TTL` | unset | secondi | TTL della cache dello smart router |
+| `LLMPROXY_PRICE_PERFORMANCE_ROUTING` | unset (`off`) | `0`, `1`, `false`, `true` | abilita il riordino free-first / lower-cost prima del primo tentativo |
+| `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` | `power` | `power`, `speed` | tie-breaker quando più candidati hanno costo equivalente |
 
 ### Service-Scope (.env — richiede restart)
 
@@ -1084,13 +1054,13 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `PORT` | auto (da profilo) | qualsiasi porta valida | porta del proxy; auto-derivata: `5045` dev, `6045` staging, `7045` production |
 | `NODE_ENV` | auto (da profilo) | `development`, `staging`, `production` | ambiente Node.js standard |
 | `LLMPROXY_ENV` | auto (da profilo) | `development`, `staging`, `production` | ambiente llmProxy |
-| `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (o `dev`), `staging`, `production` (o `prod`) | profilo runtime; determina i default di NODE_ENV, LLMPROXY_ENV, porte, metering sink |
-| `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` per uso locale sviluppatore; `platform` per integrazione V11 con header `X-Hierarchy-Context` |
-| `LLMPROXY_METERING_SINK` | `dblayer` | `dblayer`, `jsonl`, `inline`, `noop`, o combinazioni con `+` | sink per il metering delle chiamate LLM |
+| `LLMPROXY_RUNTIME_PROFILE` | auto | `development` (o `dev`), `staging`, `production` (o `prod`) | profilo runtime; determina i default di `NODE_ENV`, `LLMPROXY_ENV`, porte, db-layer URL ed event-bus URL |
+| `LLMPROXY_MODE` | `standalone` | `standalone`, `platform` | `standalone` e` il default. `platform` e` consentito solo se db-layer ed event-bus rispondono ai rispettivi `/health` |
+| `LLMPROXY_MONGODB_CONNECTION_STRING` | unset | stringa completa MongoDB | destinazione standalone per persistenza metering/log; se assente usa JSONL locale. Ignorata se `LLMPROXY_MODE=platform` |
 | `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | se `1`, aggiunge in fondo all'inferenza le statistiche token/metering inline; se assente in `.claude/settings.json`, il valore di progetto e` `0` |
 | `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | se `1`, aggiunge all'inizio dell'inferenza provider e modello usati; se assente in `.claude/settings.json`, il valore di progetto e` `0` |
-| `DBLAYER_URL` | unset | URL completo (es. `http://localhost:5046`) | URL del servizio db-layer; se **non impostato**, db-layer **non è attivo** (nessun tentativo di POST). Imposta a `localhost:5046` (dev), `localhost:6046` (staging) o `localhost:7046` (production) |
-| `EVENTBUS_URL` | unset | URL completo (es. `http://localhost:5048`) | URL del servizio event-bus; se **non impostato**, event-bus è **no-op**. Imposta a `localhost:5048` (dev), `localhost:6048` (staging) o `localhost:7048` (production) |
+| `DBLAYER_URL` | auto | URL completo | override esplicito opzionale del db-layer. Se assente, llmProxy deriva `5001` dev, `6001` staging, `7001` production |
+| `EVENTBUS_URL` | auto | URL completo | override esplicito opzionale dell'event-bus. Se assente, llmProxy deriva `5048` dev, `6048` staging, `7048` production |
 | `LLMPROXY_SECRET` | unset | stringa arbitraria | secret HMAC opzionale per la firma di token interni |
 | `LLMPROXY_SERVICE_RUNTIME` | auto | `native`, `docker` | runtime del servizio persistente: `native` (LaunchAgent/systemd) o `docker` (Docker Compose) |
 | `LLMPROXY_DOCKER_COMPOSE_FILE` | auto | percorso file | file Docker Compose per il runtime docker |
@@ -1101,11 +1071,6 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` (dev/staging), `30` (production) | numero intero | giorni di retention dei log JSONL |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | numero intero | dimensione massima in byte di un file JSONL prima della rotazione |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | numero intero | numero massimo di file JSONL archiviati per giorno |
-| `LLM_STATS_API_KEY` | unset | stringa | API key per il servizio statistiche |
-| `SENDGRID_API_KEY` | unset | stringa | API key SendGrid per notifiche email |
-| `SENDGRID_FROM_EMAIL` | unset | email | indirizzo mittente per notifiche email |
-| `SENDGRID_TO_EMAIL` | unset | email | indirizzo destinatario per notifiche email |
-
 ### Port Mapping per Ambiente
 
 Le porte dei servizi seguono la convenzione V11: `<prefix><module_number>`, dove prefix è `5` (dev), `6` (staging), `7` (production).

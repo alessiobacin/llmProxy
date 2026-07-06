@@ -5,6 +5,7 @@ const {
   assertGlobalServicePortAccess,
   listPortListeners,
   parseLsofListeners,
+  parseWindowsNetstatListeners,
   reapConflictingPortListeners,
 } = require("../lib/port-guard");
 
@@ -34,6 +35,37 @@ test("listPortListeners returns empty when lsof reports no listeners", () => {
   });
 
   assert.deepEqual(listeners, []);
+});
+
+test("parseWindowsNetstatListeners extracts pid and endpoint records", () => {
+  const listeners = parseWindowsNetstatListeners([
+    "  TCP    0.0.0.0:7045           0.0.0.0:0              LISTENING       65876",
+    "  TCP    [::]:7045              [::]:0                 LISTENING       65876",
+    "  TCP    127.0.0.1:5045         0.0.0.0:0              LISTENING       777",
+  ].join("\n"), 7045);
+
+  assert.deepEqual(listeners, [
+    { pid: 65876, command: "", endpoint: "0.0.0.0:7045" },
+    { pid: 65876, command: "", endpoint: "[::]:7045" },
+  ]);
+});
+
+test("listPortListeners parses Windows netstat output when platform is win32", () => {
+  const listeners = listPortListeners({
+    port: 7045,
+    platform: "win32",
+    execCommand() {
+      return {
+        status: 0,
+        stdout: "  TCP    0.0.0.0:7045           0.0.0.0:0              LISTENING       65876\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.deepEqual(listeners, [
+    { pid: 65876, command: "", endpoint: "0.0.0.0:7045" },
+  ]);
 });
 
 test("assertGlobalServicePortAccess blocks reserved service ports for non-global runtimes", () => {

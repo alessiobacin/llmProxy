@@ -50,6 +50,7 @@ test("windows wrapper content includes env vars and paths", () => {
   assert.match(wrapper, /server\.js/);
   assert.match(wrapper, /service\.out\.log/);
   assert.doesNotMatch(wrapper, /\/opt\/homebrew\/bin/);
+  assert.match(wrapper, /C:\\Windows\\System32/);
 });
 
 test("windows install creates wrapper, registers service, configures auto-restart, and starts", () => {
@@ -125,6 +126,10 @@ test("windows install prefers nssm when available", () => {
   assert.equal(result.ok, true);
   assert.ok(nssmCalls.some((args) => args[0] === "version"));
   assert.ok(nssmCalls.some((args) => args[0] === "install" && args[1] === "llmproxy"));
+  const installCall = nssmCalls.find((args) => args[0] === "install" && args[1] === "llmproxy");
+  assert.ok(installCall);
+  assert.equal(installCall[2], "C:\\Windows\\System32\\cmd.exe");
+  assert.match(String(installCall[3]), /runner\.cmd/);
   assert.ok(nssmCalls.some((args) => args[0] === "set" && args[2] === "AppEnvironmentExtra"));
   const envCall = nssmCalls.find((args) => args[0] === "set" && args[2] === "AppEnvironmentExtra");
   assert.ok(envCall);

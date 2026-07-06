@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -211,6 +211,12 @@
       "fix Windows global-service port probing by invoking netstat.exe explicitly instead of relying on extension-less command resolution",
       "prevent native Windows startup from still failing on hosts where spawnSync cannot resolve netstat without the .exe suffix",
       "keep the nssm wrapper-based startup and Windows system PATH restoration introduced in 0.3.17"
+    ],
+    "0.3.19": [
+      "release 0.3.19",
+      "fix Windows native startup on constrained environments by invoking C:\\\\Windows\\\\System32\\\\netstat.exe with an absolute path",
+      "avoid any remaining dependence on PATH-based native command resolution during global-service port cleanup on Windows",
+      "keep the wrapper-based nssm startup and previous Windows update/service fixes intact"
     ]
   },
   "dependencies": {

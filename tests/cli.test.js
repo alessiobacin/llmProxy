@@ -2811,10 +2811,10 @@ test("install:persistent-it succeeds on Windows", async () => {
     stderr,
     commandRunner(command, args) {
       commandCalls.push({ command, args });
-      if ((command === "npm" || command === "npm.cmd") && args[0] === "--version") {
+      if (command === "cmd.exe" && args[3] === "npm.cmd --version") {
         return { status: 0, stdout: "10.0.0\n", stderr: "" };
       }
-      if ((command === "npm" || command === "npm.cmd") && args[0] === "prefix" && args[1] === "-g") {
+      if (command === "cmd.exe" && args[3] === "npm.cmd prefix -g") {
         return { status: 0, stdout: `${packageRoot}`, stderr: "" };
       }
       if (command === "powershell.exe") {
@@ -2845,10 +2845,10 @@ test("install:persistent-en succeeds on Windows in English", async () => {
     stderr,
     commandRunner(command, args) {
       commandCalls.push({ command, args });
-      if ((command === "npm" || command === "npm.cmd") && args[0] === "--version") {
+      if (command === "cmd.exe" && args[3] === "npm.cmd --version") {
         return { status: 0, stdout: "10.0.0\n", stderr: "" };
       }
-      if ((command === "npm" || command === "npm.cmd") && args[0] === "prefix" && args[1] === "-g") {
+      if (command === "cmd.exe" && args[3] === "npm.cmd prefix -g") {
         return { status: 0, stdout: `${packageRoot}`, stderr: "" };
       }
       if (command === "powershell.exe") {
@@ -3077,10 +3077,10 @@ test("install alias succeeds on Windows in English", async () => {
     stderr,
     commandRunner(command, args) {
       commandCalls.push({ command, args });
-      if ((command === "npm" || command === "npm.cmd") && args[0] === "--version") {
+      if (command === "cmd.exe" && args[3] === "npm.cmd --version") {
         return { status: 0, stdout: "10.0.0\n", stderr: "" };
       }
-      if ((command === "npm" || command === "npm.cmd") && args[0] === "prefix" && args[1] === "-g") {
+      if (command === "cmd.exe" && args[3] === "npm.cmd prefix -g") {
         return { status: 0, stdout: `${packageRoot}`, stderr: "" };
       }
       if (command === "powershell.exe") {
@@ -4241,14 +4241,14 @@ test("update on Windows accepts npm.cmd during preflight", async () => {
       executed.push([command, args]);
       if (command === "git") return { status: 0, stdout: "git version 2.0.0\n", stderr: "" };
       if (command === "npm") return { status: 1, stdout: "", stderr: "'npm' is not recognized" };
-      if (command === "npm.cmd" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
-      if (command === "npm.cmd" && args[0] === "prefix") return { status: 0, stdout: "C:\\Users\\test\\AppData\\Roaming\\npm\n", stderr: "" };
+      if (command === "cmd.exe" && args[3] === "npm.cmd --version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "cmd.exe" && args[3] === "npm.cmd prefix -g") return { status: 0, stdout: "C:\\Users\\test\\AppData\\Roaming\\npm\n", stderr: "" };
       return { status: 0, stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.11\n", stderr: "" };
     },
   });
 
   assert.equal(exitCode, 0);
-  assert.equal(executed.some(([command]) => command === "npm.cmd"), true);
+  assert.equal(executed.some(([command, args]) => command === "cmd.exe" && args[3] === "npm.cmd --version"), true);
   assert.equal(executed.some(([command]) => command === "powershell.exe"), true);
   assert.match(stdout.toString(), /Versione corrente: 0\.3\.11/);
 });

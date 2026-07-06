@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -175,6 +175,12 @@
       "fix Windows CLI preflight so update and persistent install detect npm via npm.cmd in SSH and non-interactive sessions",
       "keep protected-prefix checks intact while avoiding false 'npm not found' failures on Windows hosts",
       "add regression coverage for Windows update/install paths that resolve npm through the cmd wrapper"
+    ],
+    "0.3.13": [
+      "release 0.3.13",
+      "fix Windows persistent install so it packs the current llmproxy build before uninstalling the old global copy",
+      "prevent install:persistent from deleting its own package source on Windows during global reinstall",
+      "keep the npm.cmd compatibility path introduced in 0.3.12 for update and service bootstrap"
     ]
   },
   "dependencies": {

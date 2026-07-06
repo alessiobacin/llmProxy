@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.08",
+  "version": "0.3.09",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -151,6 +151,12 @@
       "make llmproxy test fail when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings",
       "align the quick provider test with the real Claude Code inference gate for the mandatory llm-stats key",
       "keep provider health probing intact while preventing false positive 'ok' results for inference-ready validation"
+    ],
+    "0.3.09": [
+      "release 0.3.09",
+      "fix self-update and persistent install on Unix so they repair and preserve both llmproxy and llmp wrappers",
+      "remove stale llmp aliases during uninstall to avoid shadowing an updated global installation",
+      "prevent old user-local llmp shims from surviving updates and masking the system-wide CLI on Linux servers"
     ]
   },
   "dependencies": {

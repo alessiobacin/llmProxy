@@ -3946,15 +3946,20 @@ test("update runs the package manager command for the latest llmproxy release", 
   const scriptText = executed.at(-1)[1][1];
   assert.match(scriptText, /original_npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /original_global_bin_path="\$original_npm_prefix\/bin\/llmproxy"/);
+  assert.match(scriptText, /original_global_short_bin_path="\$original_npm_prefix\/bin\/llmp"/);
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /current_short_bin=\$\(command -v llmp 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /npm install -g --force "\$package_file"/);
-  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$global_bin_path" "\$original_global_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /ensure_global_short_bin >\/dev\/null 2>&1 \|\| true/);
+  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$current_short_bin" "\$global_bin_path" "\$global_short_bin_path" "\$original_global_bin_path" "\$original_global_short_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" "\/usr\/bin\/llmp" "\/usr\/local\/bin\/llmp" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /for preserved_bin in \$preserved_bin_paths; do/);
   assert.match(scriptText, /ensure_wrapper_path "\$preserved_bin" >\/dev\/null 2>&1 \|\| true/);
   assert.match(scriptText, /done/);
   assert.match(scriptText, /if \[ -n "\$installed_bin" \] && \[ "\$installed_bin" != "\$new_bin" \] && ! is_preserved_bin_path "\$installed_bin"; then/);
   assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \] && \[ "\$current_bin" != "\$global_bin_path" \]; then/);
+  assert.match(scriptText, /if \[ -n "\$current_short_bin" \] && \[ "\$current_short_bin" != "\$new_bin" \] && \[ "\$current_short_bin" != "\$global_short_bin_path" \]; then/);
   assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" > "\$current_bin"/);
+  assert.match(scriptText, /printf "%s\\n" "\$current_short_wrapper_payload" > "\$current_short_bin"/);
   assert.match(scriptText, /exec \\"\$new_bin\\" \\"\\\$@\\"" \)/);
   assert.match(stdout.toString(), /Aggiornamento completato/);
   assert.match(stdout.toString(), /Versione corrente: 0\.1\.0/);
@@ -4060,9 +4065,11 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   const scriptText = executed[0][1][1];
   assert.equal(typeof runSelfUpdate, "function");
   assert.match(scriptText, /current_bin=\$\(command -v llmproxy 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /current_short_bin=\$\(command -v llmp 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /current_version=\$\(llmproxy version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /used_sudo=0/);
   assert.match(scriptText, /original_npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| true\)/);
+  assert.match(scriptText, /original_global_short_bin_path="\$original_npm_prefix\/bin\/llmp"/);
   assert.match(scriptText, /rollback_manifest="\$tmpdir\/rollback-manifest\.txt"/);
   assert.match(scriptText, /backup_install_dir\(\) \{/);
   assert.match(scriptText, /restore_backups\(\) \{/);
@@ -4073,6 +4080,7 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /install_dir="\$npm_prefix\/lib\/node_modules\/llmproxy"/);
   assert.match(scriptText, /package_cli="\$install_dir\/bin\/llmproxy\.js"/);
   assert.match(scriptText, /global_bin_path="\$npm_prefix\/bin\/llmproxy"/);
+  assert.match(scriptText, /global_short_bin_path="\$npm_prefix\/bin\/llmp"/);
   assert.match(scriptText, /run_new_llmproxy\(\) \{/);
   assert.match(scriptText, /elif \[ -f "\$package_cli" \]; then\n\s+node "\$package_cli" "\$@"/);
   assert.match(scriptText, /build_wrapper_payload\(\) \{/);
@@ -4085,18 +4093,24 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -x "\$global_bin_path" \]; then/);
   assert.match(scriptText, /new_bin_mode="node"/);
   assert.match(scriptText, /sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR=.*DBUS_SESSION_BUS_ADDRESS=.*node "\$new_bin" service:restart/);
-  assert.match(scriptText, /resolved_bins=\$\(which -a llmproxy 2>\/dev\/null \| awk '!seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /resolved_bins=\$\( \(which -a llmproxy 2>\/dev\/null; which -a llmp 2>\/dev\/null\) \| awk '!seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -x "\$global_bin_path" \]; then/);
   assert.match(scriptText, /global_bin_version=\$\(\"\$global_bin_path\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /candidate_version=\$\(\"\$candidate_bin\" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /ensure_global_bin >\/dev\/null 2>&1 \|\| true/);
-  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$global_bin_path" "\$original_global_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
+  assert.match(scriptText, /ensure_global_short_bin >\/dev\/null 2>&1 \|\| true/);
+  assert.match(scriptText, /preserved_bin_paths=\$\(printf "%s\\n" "\$current_bin" "\$current_short_bin" "\$global_bin_path" "\$global_short_bin_path" "\$original_global_bin_path" "\$original_global_short_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" "\/usr\/bin\/llmp" "\/usr\/local\/bin\/llmp" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /is_preserved_bin_path\(\) \{/);
   assert.match(scriptText, /if \[ -n "\$current_bin" \] && \[ "\$current_bin" != "\$new_bin" \] && \[ "\$current_bin" != "\$global_bin_path" \]; then/);
+  assert.match(scriptText, /if \[ -n "\$current_short_bin" \] && \[ "\$current_short_bin" != "\$new_bin" \] && \[ "\$current_short_bin" != "\$global_short_bin_path" \]; then/);
   assert.match(scriptText, /current_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec node \\"\$new_bin\\" \\"\\\$@\\"" \)/);
   assert.match(scriptText, /current_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec \\"\$new_bin\\" \\"\\\$@\\"" \)/);
   assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" > "\$current_bin"/);
+  assert.match(scriptText, /current_short_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec node \\"\$new_bin\\" \\"\\\$@\\"" \)/);
+  assert.match(scriptText, /current_short_wrapper_payload=\$\(printf '%s\\n' '#!\/bin\/sh' "exec \\"\$new_bin\\" \\"\\\$@\\"" \)/);
+  assert.match(scriptText, /printf "%s\\n" "\$current_short_wrapper_payload" > "\$current_short_bin"/);
   assert.match(scriptText, /printf "%s\\n" "\$current_wrapper_payload" \| sudo tee "\$current_bin" >\/dev\/null/);
+  assert.match(scriptText, /printf "%s\\n" "\$current_short_wrapper_payload" \| sudo tee "\$current_short_bin" >\/dev\/null/);
   assert.match(scriptText, /sudo rm -f \"\$installed_bin\"/);
   assert.match(scriptText, /cleanup_global_service_port "\$\{PORT:-7045\}"/);
   assert.match(scriptText, /post_update_check\(\) \{/);
@@ -4152,6 +4166,19 @@ test("one-line installer reaps the global service port before starting llmproxy"
   const installer = fs.readFileSync(path.join(__dirname, "..", "scripts", "install.sh"), "utf8");
   assert.match(installer, /cleanup_global_service_port\(\) \{/);
   assert.match(installer, /cleanup_global_service_port "\$\{PORT:-7045\}"/);
+});
+
+test("persistent install script also cleans and preserves the llmp alias", () => {
+  const script = buildPersistentInstallScript({
+    packageRoot: "/tmp/pkg",
+    locale: "en",
+    platform: "linux",
+  });
+  assert.match(script, /for candidate in \$\( \(which -a llmproxy 2>\/dev\/null; which -a llmp 2>\/dev\/null\) \| awk '!seen\[\$0\]\+\+'\); do/);
+  assert.match(script, /existing_bins=\$\( \(which -a llmproxy 2>\/dev\/null; which -a llmp 2>\/dev\/null\) \| awk '!seen\[\$0\]\+\+'\)/);
+  assert.match(script, /rm -f "\$pnpm_home\/bin\/llmp"/);
+  assert.match(script, /global_short_bin="\$npm_prefix\/bin\/llmp"/);
+  assert.match(script, /if \[ -n "\$installed_bin" \] && \[ "\$installed_bin" != "\$global_bin" \] && \[ "\$installed_bin" != "\$global_short_bin" \]; then/);
 });
 
 test("update keeps success when package install succeeds but service restart fails", async () => {
@@ -4528,6 +4555,8 @@ test("uninstall stops service, removes service file, data dir, and npm/pnpm glob
   assert.ok(bashCall, "bash uninstall script should run");
   assert.match(bashCall[1][1], /npm uninstall -g llmproxy/);
   assert.match(bashCall[1][1], /pnpm remove -g llmproxy/);
+  assert.match(bashCall[1][1], /rm -f "\$npm_prefix\/bin\/llmp"/);
+  assert.match(bashCall[1][1], /rm -f "\$pnpm_home\/bin\/llmp"/);
   assert.match(stdout.toString(), /Disinstallazione completata/);
 });
 

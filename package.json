@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.21",
+  "version": "0.3.22",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -229,6 +229,12 @@
       "fix Windows self-update over SSH by routing git, npm, and post-install CLI commands through a quiet Start-Process helper",
       "prevent PowerShell NativeCommandError noise from aborting llmproxy update when git clone or npm emit progress on stderr",
       "keep the 0.3.20 direct-node nssm startup while making the updater resilient in non-interactive remote sessions"
+    ],
+    "0.3.22": [
+      "release 0.3.22",
+      "fix Windows service status detection on localized hosts by recognizing numeric sc state codes such as STATO : 4 RUNNING",
+      "make llmproxy status report Service active: yes when the native service is running on non-English Windows installations",
+      "keep the 0.3.21 SSH-safe updater and 0.3.20 direct-node nssm startup unchanged"
     ]
   },
   "dependencies": {

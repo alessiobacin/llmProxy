@@ -234,6 +234,20 @@ test("windows status reports active when sc query shows running", () => {
   assert.equal(status.active, true);
 });
 
+test("windows status reports active for localized sc output", () => {
+  const manager = createWindowsServiceManager({
+    execSc(args) {
+      if (args[0] === "query") return { status: 0, stdout: "STATO              : 4  RUNNING", stderr: "" };
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const status = manager.status();
+
+  assert.equal(status.ok, true);
+  assert.equal(status.active, true);
+});
+
 test("windows status falls back to inactive when sc query is stopped", () => {
   const manager = createWindowsServiceManager({
     execSc(args) {

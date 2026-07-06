@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.22",
+  "version": "0.3.23",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -235,6 +235,12 @@
       "fix Windows service status detection on localized hosts by recognizing numeric sc state codes such as STATO : 4 RUNNING",
       "make llmproxy status report Service active: yes when the native service is running on non-English Windows installations",
       "keep the 0.3.21 SSH-safe updater and 0.3.20 direct-node nssm startup unchanged"
+    ],
+    "0.3.23": [
+      "release 0.3.23",
+      "fix Windows update and persistent install by stopping the native service before replacing the global npm package",
+      "prevent EBUSY rename failures when npm install -g touches a live llmproxy directory owned by the running service",
+      "keep the localized Windows status fix from 0.3.22 and the SSH-safe updater from 0.3.21 intact"
     ]
   },
   "dependencies": {

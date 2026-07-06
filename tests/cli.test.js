@@ -2871,6 +2871,7 @@ test("windows persistent install script resolves the global cmd wrapper explicit
     platform: "win32",
   });
   assert.match(script, /\$tmpdir = Join-Path/);
+  assert.match(script, /& llmproxy service:stop 2>\$null \| Out-Null/);
   assert.match(script, /npm pack \$packageRoot --pack-destination \$tmpdir/);
   assert.match(script, /\$packageFile = Get-ChildItem \(Join-Path \$tmpdir '\*\.tgz'\)/);
   assert.match(script, /npm install -g \$packageFile 2>&1/);
@@ -2888,6 +2889,7 @@ test("runSelfUpdateWindows resolves the global cmd wrapper explicitly", () => {
   const windowsScriptText = executed[0][1][2];
   assert.match(windowsScriptText, /\$PSNativeCommandUseErrorActionPreference = \$false/);
   assert.match(windowsScriptText, /function Invoke-QuietNative\(\[string\]\$FilePath, \[string\[\]\]\$ArgumentList\)/);
+  assert.match(windowsScriptText, /& llmproxy service:stop 2>\$null \| Out-Null/);
   assert.match(windowsScriptText, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
   assert.match(windowsScriptText, /Join-Path \$Prefix "llmproxy\.cmd"/);
   assert.match(windowsScriptText, /\$newBin = Resolve-LlmproxyGlobalBin \$npmPrefix/);

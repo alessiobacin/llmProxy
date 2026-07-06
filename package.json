@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.06",
+  "version": "0.3.07",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -139,6 +139,12 @@
       "migrate legacy Claude settings from both the current project and the global ~/.claude/settings.json during config migration and self-update",
       "run config migration even when update is launched outside a project directory",
       "remove stale LLMPROXY_SMART_* and legacy key aliases from real on-disk Claude settings, not only from the effective runtime view"
+    ],
+    "0.3.07": [
+      "release 0.3.07",
+      "add a timeout to the remote package version probe used by llmproxy update",
+      "prevent llmproxy update from appearing stuck before installation when the latest-version check hangs on a slow or broken network",
+      "keep the global/project Claude settings migration introduced in 0.3.06"
     ]
   },
   "dependencies": {

@@ -1749,7 +1749,7 @@ test("update bypasses the REST wrapper even when the local service is reachable"
       if (command === "sudo") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
       return {
         status: 0,
-        stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.06\n__LLMPROXY_RELEASE_NOTES_START__\nChangelog 0.3.06:\n- release 0.3.06\n__LLMPROXY_RELEASE_NOTES_END__\n",
+        stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.07\n__LLMPROXY_RELEASE_NOTES_START__\nChangelog 0.3.07:\n- release 0.3.07\n__LLMPROXY_RELEASE_NOTES_END__\n",
         stderr: "",
       };
     },
@@ -1758,7 +1758,7 @@ test("update bypasses the REST wrapper even when the local service is reachable"
   assert.equal(exitCode, 0);
   assert.deepEqual(requests, []);
   assert.equal(commandCalls.some(([command]) => command === "bash"), true);
-  assert.match(stdout.toString(), /Versione corrente: 0\.3\.06/);
+  assert.match(stdout.toString(), /Versione corrente: 0\.3\.07/);
 });
 
 test("models:list prints a numbered list of available models", async () => {
@@ -3931,6 +3931,35 @@ test("update stops early and reports missing base prerequisites", async () => {
   assert.match(stderr.toString(), /Git \(`git`\) non trovato/i);
   assert.doesNotMatch(stderr.toString(), /pnpm non trovato/i);
   assert.equal(executed.some(([command]) => command === "bash"), false);
+});
+
+test("update keeps going when the remote version probe times out", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-version-timeout-"));
+  const stdout = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    remoteVersionTimeoutMs: 10,
+    fetchFn: async () => new Promise(() => {}),
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      if (command === "git") return { status: 0, stdout: "git version 2.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: "/tmp/npm-prefix\n", stderr: "" };
+      if (command === "sudo") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
+      return {
+        status: 0,
+        stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.07\n__LLMPROXY_RELEASE_NOTES_START__\nChangelog 0.3.07:\n- release 0.3.07\n__LLMPROXY_RELEASE_NOTES_END__\n",
+        stderr: "",
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(executed.some(([command]) => command === "bash"), true);
+  assert.match(stdout.toString(), /Versione corrente: 0\.3\.07/);
 });
 
 test("update reports Docker prerequisites when the service runtime uses Docker", async () => {

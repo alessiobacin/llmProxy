@@ -49,6 +49,7 @@ test("windows wrapper content includes env vars and paths", () => {
   assert.match(wrapper, /node/);
   assert.match(wrapper, /server\.js/);
   assert.match(wrapper, /service\.out\.log/);
+  assert.doesNotMatch(wrapper, /\/opt\/homebrew\/bin/);
 });
 
 test("windows install creates wrapper, registers service, configures auto-restart, and starts", () => {
@@ -96,6 +97,39 @@ test("windows install creates wrapper, registers service, configures auto-restar
   assert.ok(scCalls.some((args) => args[0] === "failure"), "sc.exe failure was called");
   const startCall = scCalls.find((args) => args[0] === "start");
   assert.ok(startCall, "sc.exe start was called");
+});
+
+test("windows install prefers nssm when available", () => {
+  const nssmCalls = [];
+  const manager = createWindowsServiceManager({
+    label: "llmproxy",
+    packageRoot: TMP,
+    nodeExecutable: process.execPath,
+    entryFile: path.join(TMP, "server.js"),
+    wrapperPath: path.join(TMP, "nssm-test-runner.cmd"),
+    stdoutPath: path.join(TMP, "nssm-service.out.log"),
+    stderrPath: path.join(TMP, "nssm-service.err.log"),
+    environment: { PORT: "7045", LLMPROXY_HOME: TMP, PATH: "/opt/homebrew/bin:/usr/bin" },
+    execSc(args) {
+      if (args[0] === "query") return { status: 1, stdout: "", stderr: "does not exist" };
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    execNssm(args) {
+      nssmCalls.push(args);
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const result = manager.install();
+
+  assert.equal(result.ok, true);
+  assert.ok(nssmCalls.some((args) => args[0] === "version"));
+  assert.ok(nssmCalls.some((args) => args[0] === "install" && args[1] === "llmproxy"));
+  assert.ok(nssmCalls.some((args) => args[0] === "set" && args[2] === "AppEnvironmentExtra"));
+  const envCall = nssmCalls.find((args) => args[0] === "set" && args[2] === "AppEnvironmentExtra");
+  assert.ok(envCall);
+  assert.ok(envCall.includes(`PORT=7045`));
+  assert.ok(!envCall.some((arg) => String(arg).includes("/opt/homebrew/bin")));
 });
 
 test("windows install handles already existing service by deleting it first", () => {
@@ -181,26 +215,8 @@ test("windows stop returns failure on unexpected error", () => {
   assert.equal(result.ok, false);
 });
 
-test("windows status uses PowerShell and reports active when running", () => {
+test("windows status reports active when sc query shows running", () => {
   const manager = createWindowsServiceManager({
-    execPowershell(args) {
-      const cmd = args.join(" ");
-      if (cmd.includes("Get-Service")) return { status: 0, stdout: "Running", stderr: "" };
-      return { status: 0, stdout: "", stderr: "" };
-    },
-  });
-
-  const status = manager.status();
-
-  assert.equal(status.ok, true);
-  assert.equal(status.active, true);
-});
-
-test("windows status falls back to sc query when PowerShell fails", () => {
-  const manager = createWindowsServiceManager({
-    execPowershell() {
-      return { status: 1, stdout: "", stderr: "error" };
-    },
     execSc(args) {
       if (args[0] === "query") return { status: 0, stdout: "RUNNING", stderr: "" };
       return { status: 0, stdout: "", stderr: "" };
@@ -213,11 +229,22 @@ test("windows status falls back to sc query when PowerShell fails", () => {
   assert.equal(status.active, true);
 });
 
+test("windows status falls back to inactive when sc query is stopped", () => {
+  const manager = createWindowsServiceManager({
+    execSc(args) {
+      if (args[0] === "query") return { status: 0, stdout: "STOPPED", stderr: "" };
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  const status = manager.status();
+
+  assert.equal(status.ok, true);
+  assert.equal(status.active, false);
+});
+
 test("windows status handles missing service gracefully", () => {
   const manager = createWindowsServiceManager({
-    execPowershell() {
-      return { status: 1, stdout: "", stderr: "error" };
-    },
     execSc(args) {
       if (args[0] === "query") return { status: 1060, stdout: "", stderr: "The specified service does not exist as an installed service" };
       return { status: 0, stdout: "", stderr: "" };

@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -181,6 +181,12 @@
       "fix Windows persistent install so it packs the current llmproxy build before uninstalling the old global copy",
       "prevent install:persistent from deleting its own package source on Windows during global reinstall",
       "keep the npm.cmd compatibility path introduced in 0.3.12 for update and service bootstrap"
+    ],
+    "0.3.14": [
+      "release 0.3.14",
+      "fix Windows native service management by using nssm.exe when available instead of registering a raw .cmd wrapper with sc.exe",
+      "make Windows persistent install silence npm notice output and fail if the registered service is not actually active after startup",
+      "stop leaking the caller PATH into the generated Windows service wrapper and keep only the required Node runtime path"
     ]
   },
   "dependencies": {

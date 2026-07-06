@@ -578,10 +578,10 @@ x-project-path: /assoluto/percorso/del/progetto
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
-| `llmproxy config:list [--project\|--service]` | `GET /api/config` |
-| `llmproxy config:get <key> [--project\|--service]` | `GET /api/config/{key}` |
-| `llmproxy config:set <key> <value> [--project\|--service]` | `POST /api/config/{key}` |
-| `llmproxy config:unset <key> [--project\|--service]` | `DELETE /api/config/{key}` |
+| `llmproxy config:list [--scope <project\|global\|service>]` | `GET /api/config` |
+| `llmproxy config:get <key> [--scope <project\|global\|service>]` | `GET /api/config/{key}` |
+| `llmproxy config:set <key> <value> [--scope <project\|global\|service>]` | `POST /api/config/{key}` |
+| `llmproxy config:unset <key> [--scope <project\|global\|service>]` | `DELETE /api/config/{key}` |
 | `llmproxy update` | `POST /api/update` |
 | `llmproxy uninstall` | `POST /api/uninstall` |
 
@@ -864,7 +864,8 @@ Prima di confermare il successo esegue ora uno smoke test sul CLI appena install
 Se questa verifica fallisce, `llmproxy update` ripristina automaticamente il package globale precedente e riavvia il servizio gestito dalla versione ripristinata.
 Durante l'update viene mantenuta una sola installazione globale attiva e vengono rimossi eventuali wrapper globali duplicati di `pnpm`.
 La reinstallazione è forzata anche quando la stringa di versione del package non cambia, così anche build di manutenzione con la stessa versione sostituiscono davvero i file installati.
-Come parte dell'update, llmProxy migra anche i file di configurazione gestiti allo schema corrente: chiavi legacy come `LLM_STATS_API_KEY`, `SENDGRID_*`, `LLMPROXY_SMART_*`, `LLMPROXY_METERING_SINK` e le vecchie variabili MongoDB separate vengono rimosse o riscritte nei nomi supportati.
+Come parte dell'update, llmProxy migra anche i file di configurazione gestiti allo schema corrente: chiavi legacy come `LLM_STATS_API_KEY`, le vecchie `SENDGRID_*` senza prefisso, `LLMPROXY_SMART_*` e le vecchie variabili MongoDB separate vengono rimosse o riscritte nei nomi supportati come `LLMPROXY_LLM_STATS_API_KEY`, `LLMPROXY_SENDGRID_*` e `LLMPROXY_MONGODB_CONNECTION_STRING`.
+Prima di reinstallare, l'update ora killa preventivamente tutto cio` che ascolta sulla porta `7045`, prova a disinstallare copie npm/pnpm precedenti, rimuove wrapper globali obsoleti e ripulisce le directory legacy scoperte nei path globali piu` comuni. Questo rende piu` robusti gli upgrade da `0.2.77` e precedenti anche su macchine che hanno accumulato installazioni storiche.
 
 Su sistemi Linux dove npm globale è sotto `/usr/local` (di proprietà di root), il comando rileva automaticamente l'errore di permessi e ritenta con `sudo`. Non è necessario lanciare manualmente `sudo llmproxy update`.
 
@@ -1003,20 +1004,21 @@ Tutte le variabili, indipendentemente dallo scope, possono essere sovrascritte t
 
 [.env.example](/Users/alessiobacin/Development/llmProxy/.env.example) e` il catalogo canonico di tutte le variabili supportate. Parti da li` se vuoi una lista completa quando cloni la repo da zero.
 
-Regola importante per i booleani in `.claude/settings.json`:
+Regole importanti per i valori progetto:
 
-- se una variabile booleana non e` presente in `.claude/settings.json`, il valore effettivo di progetto e` `0` / `false`
-- non eredita automaticamente il valore globale del container o del processo
-- questo vale in particolare per `LLMPROXY_SHORT_ANSWER`, `LLMPROXY_METERING_INLINE` e `LLMPROXY_INFERENCE_INFO_INLINE`
+- se una variabile project-scope non e` presente in `.claude/settings.json`, llmProxy prova prima a ereditarla da `~/.claude/settings.json`
+- se manca sia nel progetto sia nel file globale Claude, viene usato il default effettivo di llmProxy
+- questo vale anche per i booleani come `LLMPROXY_SHORT_ANSWER`, `LLMPROXY_METERING_INLINE` e `LLMPROXY_INFERENCE_INFO_INLINE`
 
 Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, senza restart del proxy. Vengono lette da `.claude/settings.json` a ogni richiesta.
 
 ```bash
-llmproxy config:list                        # elenca le variabili disponibili
-llmproxy config:get ANTHROPIC_BASE_URL      # legge una variabile
-llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --project   # imposta una variabile di progetto
-llmproxy config:set LLMPROXY_LLM_STATS_API_KEY your-free-key --project   # imposta la chiave stats per Claude Code
-llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
+llmproxy config:list                                      # mostra i valori effettivi project + global + service
+llmproxy config:list --scope global                       # mostra solo i default gestiti in ~/.claude/settings.json
+llmproxy config:get ANTHROPIC_BASE_URL                    # legge una variabile dal suo scope effettivo
+llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --scope project
+llmproxy config:set LLMPROXY_LLM_STATS_API_KEY your-free-key --scope global
+llmproxy config:unset ANTHROPIC_DEFAULT_MODEL --scope project
 ```
 
 | Variable | Default | Valori Disponibili | Descrizione |

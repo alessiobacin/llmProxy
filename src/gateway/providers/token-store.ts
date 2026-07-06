@@ -83,6 +83,24 @@ function normalizeProviderId(providerId: unknown): string {
   return String(providerId ?? "").trim();
 }
 
+function resolveLegacyAccessToken(provider: Record<string, unknown> | null | undefined): string {
+  const directToken = String(provider?.access_token ?? "").trim();
+  if (directToken) return directToken;
+
+  const legacyApiKey = String(provider?.api_key ?? "").trim();
+  if (legacyApiKey) return legacyApiKey;
+
+  const credentials = provider?.credentials;
+  if (credentials && typeof credentials === "object") {
+    const nestedToken = String((credentials as Record<string, unknown>).access_token ?? "").trim();
+    if (nestedToken) return nestedToken;
+    const nestedApiKey = String((credentials as Record<string, unknown>).api_key ?? "").trim();
+    if (nestedApiKey) return nestedApiKey;
+  }
+
+  return "";
+}
+
 function normalizeProvider(provider: Record<string, unknown> | null | undefined, index?: number): ProviderToken {
   const idx = index ?? 0;
   const id = normalizeProviderId(provider?.id) || `${DEFAULT_PROVIDER_ID}-${idx + 1}`;
@@ -93,7 +111,7 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
     name: String(provider?.name ?? (id === DEFAULT_PROVIDER_ID ? DEFAULT_PROVIDER_NAME : id)),
     provider: providerKind,
     auth_type: authType,
-    access_token: String(provider?.access_token ?? ""),
+    access_token: resolveLegacyAccessToken(provider),
     token_type: String(provider?.token_type ?? (authType === "api_key" ? "api_key" : "bearer")),
     scope: String(provider?.scope ?? "read:user"),
     default_model: provider?.default_model ? String(provider.default_model).trim() : "",

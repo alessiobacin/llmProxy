@@ -23,6 +23,7 @@ const {
   setScopeValue,
   getScopeValue,
   unsetScopeValue,
+  getGlobalClaudeSettingsFile,
 } = require("../lib/configuration");
 
 const tmpDir = path.join(os.tmpdir(), `llmproxy-config-test-${Date.now()}`);
@@ -271,6 +272,45 @@ test("listGlobalProjectValues exposes the user-level Claude defaults separately"
   assert.equal(statsKey.scope, "global");
   assert.equal(statsKey.value, "sk-global-demo");
   assert.equal(statsKey.source, "global");
+});
+
+test("setScopeValue writes global project-scope variables to the user's global Claude settings", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-global-set-"));
+  const homeDir = path.join(root, "home");
+  fs.mkdirSync(homeDir, { recursive: true });
+
+  const result = setScopeValue({
+    key: "LLMPROXY_LLM_STATS_API_KEY",
+    value: "sk-global-demo",
+    scope: "global",
+    env: { ...process.env, HOME: homeDir },
+  });
+
+  assert.equal(result.scope, "global");
+  const raw = JSON.parse(fs.readFileSync(getGlobalClaudeSettingsFile({ ...process.env, HOME: homeDir }), "utf8"));
+  assert.equal(raw.env.LLMPROXY_LLM_STATS_API_KEY, "sk-global-demo");
+});
+
+test("unsetScopeValue removes global project-scope variables from the user's global Claude settings", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-global-unset-"));
+  const homeDir = path.join(root, "home");
+  const globalFile = getGlobalClaudeSettingsFile({ ...process.env, HOME: homeDir });
+  fs.mkdirSync(path.dirname(globalFile), { recursive: true });
+  fs.writeFileSync(globalFile, JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-global-demo",
+    },
+  }, null, 2));
+
+  const result = unsetScopeValue({
+    key: "LLMPROXY_LLM_STATS_API_KEY",
+    scope: "global",
+    env: { ...process.env, HOME: homeDir },
+  });
+
+  assert.equal(result.scope, "global");
+  const raw = JSON.parse(fs.readFileSync(globalFile, "utf8"));
+  assert.equal("LLMPROXY_LLM_STATS_API_KEY" in (raw.env || {}), false);
 });
 
 test("getProjectDefaultValues returns llmproxy project defaults", () => {

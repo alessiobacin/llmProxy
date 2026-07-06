@@ -2423,6 +2423,90 @@ test("config:set/get/unset manages service-scoped variables in the persistent se
   assert.equal("LLMPROXY_MODE" in nextServiceConfig.env, false);
 });
 
+test("config:set/get/unset manages global Claude variables with --scope global", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-global-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(projectRoot, { recursive: true });
+
+  let exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_LLM_STATS_API_KEY", "sk-global-demo", "--scope", "global"], {
+    cwd: projectRoot,
+    stdout: createWritableBuffer(),
+    env: { ...process.env, HOME: homeDir },
+  });
+  assert.equal(exitCode, 0);
+
+  const getStdout = createWritableBuffer();
+  exitCode = await runCli(["node", "llmproxy", "config:get", "LLMPROXY_LLM_STATS_API_KEY", "--scope", "global"], {
+    cwd: projectRoot,
+    stdout: getStdout,
+    env: { ...process.env, HOME: homeDir },
+  });
+  assert.equal(exitCode, 0);
+  assert.match(getStdout.toString(), /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+
+  const listStdout = createWritableBuffer();
+  exitCode = await runCli(["node", "llmproxy", "config:list", "--scope", "global"], {
+    cwd: projectRoot,
+    stdout: listStdout,
+    env: { ...process.env, HOME: homeDir },
+  });
+  assert.equal(exitCode, 0);
+  assert.match(listStdout.toString(), /Global Claude configuration:/);
+  assert.match(listStdout.toString(), /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+  assert.doesNotMatch(listStdout.toString(), /Project configuration:/);
+  assert.doesNotMatch(listStdout.toString(), /Service configuration:/);
+
+  exitCode = await runCli(["node", "llmproxy", "config:unset", "LLMPROXY_LLM_STATS_API_KEY", "--scope", "global"], {
+    cwd: projectRoot,
+    stdout: createWritableBuffer(),
+    env: { ...process.env, HOME: homeDir },
+  });
+  assert.equal(exitCode, 0);
+
+  const globalSettings = JSON.parse(fs.readFileSync(path.join(homeDir, ".claude", "settings.json"), "utf8"));
+  assert.equal("LLMPROXY_LLM_STATS_API_KEY" in (globalSettings.env || {}), false);
+});
+
+test("config scope precedence is project over global over service", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-scope-precedence-"));
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+
+  const projectStdout = createWritableBuffer();
+  let exitCode = await runCli([
+    "node", "llmproxy", "config:set", "LLMPROXY_SHORT_ANSWER", "1",
+    "--scope", "global",
+    "--service",
+    "--project",
+  ], {
+    cwd: projectRoot,
+    stdout: projectStdout,
+    env: { ...process.env, HOME: homeDir },
+  });
+  assert.equal(exitCode, 0);
+  assert.match(projectStdout.toString(), /Configurazione aggiornata: project\.LLMPROXY_SHORT_ANSWER=1/);
+
+  const projectSettings = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
+  assert.equal(projectSettings.env.LLMPROXY_SHORT_ANSWER, "1");
+
+  const globalStdout = createWritableBuffer();
+  exitCode = await runCli([
+    "node", "llmproxy", "config:set", "LLMPROXY_LLM_STATS_API_KEY", "sk-global-demo",
+    "--scope", "global",
+    "--service",
+  ], {
+    cwd: projectRoot,
+    stdout: globalStdout,
+    env: { ...process.env, HOME: homeDir },
+  });
+  assert.equal(exitCode, 0);
+  assert.match(globalStdout.toString(), /Configurazione aggiornata: global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+});
+
 test("config:set rejects switching to platform mode when db-layer or event-bus are unavailable", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-platform-validation-"));
   const stderr = createWritableBuffer();
@@ -4108,7 +4192,14 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /backup_install_dir\(\) \{/);
   assert.match(scriptText, /restore_backups\(\) \{/);
   assert.match(scriptText, /rollback_and_exit\(\) \{/);
+  assert.match(scriptText, /safe_remove_path\(\) \{/);
+  assert.match(scriptText, /purge_installation_targets\(\) \{/);
+  assert.match(scriptText, /purge_existing_wrappers\(\) \{/);
+  assert.match(scriptText, /ensure_runtime_home_permissions\(\) \{/);
   assert.match(scriptText, /target_version=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
+  assert.match(scriptText, /cleanup_global_service_port "\$\{PORT:-7045\}"\nnpm uninstall -g llmproxy >\/dev\/null 2>&1 \|\| true/);
+  assert.match(scriptText, /if command -v sudo >\/dev\/null 2>&1; then\n\s+sudo npm uninstall -g llmproxy >\/dev\/null 2>&1 \|\| true\nfi/);
+  assert.match(scriptText, /pnpm remove -g llmproxy >\/dev\/null 2>&1 \|\| true\npurge_installation_targets\npurge_existing_wrappers/);
   assert.match(scriptText, /if sudo npm install -g --force "\$package_file" 2>\/dev\/null; then\n\s+used_sudo=1/);
   assert.match(scriptText, /if \[ "\$used_sudo" -eq 1 \]; then\n\s+npm_prefix=\$\(sudo npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nelse\n\s+npm_prefix=\$\(npm prefix -g 2>\/dev\/null \|\| echo "\/usr\/local"\)\nfi/);
   assert.match(scriptText, /install_dir="\$npm_prefix\/lib\/node_modules\/llmproxy"/);
@@ -4121,7 +4212,14 @@ test("runSelfUpdate resolves the refreshed llmproxy binary by matching the targe
   assert.match(scriptText, /ensure_wrapper_path\(\) \{/);
   assert.match(scriptText, /ensure_global_bin\(\) \{/);
   assert.match(scriptText, /cleanup_global_service_port\(\) \{/);
+  assert.match(scriptText, /collect_install_target "\/usr\/lib\/node_modules\/llmproxy"/);
+  assert.match(scriptText, /collect_install_target "\/usr\/local\/lib\/node_modules\/llmproxy"/);
+  assert.match(scriptText, /collect_install_target "\/opt\/homebrew\/lib\/node_modules\/llmproxy"/);
+  assert.match(scriptText, /wrapper_targets=\$\(printf "%s\\n" "\$current_bin" "\$current_short_bin" "\$original_global_bin_path" "\$original_global_short_bin_path" "\/usr\/bin\/llmproxy" "\/usr\/local\/bin\/llmproxy" "\/opt\/homebrew\/bin\/llmproxy" "\/usr\/bin\/llmp" "\/usr\/local\/bin\/llmp" "\/opt\/homebrew\/bin\/llmp" \$existing_bins \| awk 'NF && !seen\[\$0\]\+\+'\)/);
   assert.match(scriptText, /run_new_llmproxy config:migrate >\/dev\/null 2>&1 \|\| true/);
+  assert.match(scriptText, /touch "\$runtime_home\/logs\/service\.out\.log" "\$runtime_home\/logs\/service\.err\.log" "\$runtime_home\/logs\/metering\.jsonl"/);
+  assert.match(scriptText, /sudo chown -R "\$runtime_owner":"\$runtime_owner" "\$runtime_home" >\/dev\/null 2>&1 \|\| true/);
+  assert.match(scriptText, /ensure_runtime_home_permissions "\$LLMPROXY_HOME" "\$runtime_owner"/);
   assert.match(scriptText, /if \[ -f "\$package_cli" \]; then/);
   assert.match(scriptText, /package_cli_version=\$\(node "\$package_cli" version 2>\/dev\/null \|\| true\)/);
   assert.match(scriptText, /if \[ "\$version_output" != "\$target_version" \] && \[ -x "\$global_bin_path" \]; then/);
@@ -4165,7 +4263,11 @@ test("buildPersistentInstallScript includes sudo-to-user D-Bus delegation on Lin
   assert.match(installScript, /if sudo npm install -g/);
   assert.match(installScript, /used_sudo=1/);
   assert.match(installScript, /cleanup_global_service_port\(\) \{/);
+  assert.match(installScript, /ensure_runtime_home_permissions\(\) \{/);
   assert.match(installScript, /cleanup_global_service_port "\$\{PORT:-7045\}"/);
+  assert.match(installScript, /touch "\$runtime_home\/logs\/service\.out\.log" "\$runtime_home\/logs\/service\.err\.log" "\$runtime_home\/logs\/metering\.jsonl"/);
+  assert.match(installScript, /sudo chown -R "\$runtime_owner":"\$runtime_owner" "\$runtime_home" >\/dev\/null 2>&1 \|\| true/);
+  assert.match(installScript, /ensure_runtime_home_permissions "\$LLMPROXY_HOME" "\$runtime_owner"/);
   assert.match(installScript, /if \[ "\$used_sudo" -eq 1 \] && \[ "\$platform" = "linux" \] && \[ -n "\$\{SUDO_USER:-\}" \] && command -v sudo >\/dev\/null 2>&1; then\n\s+sudo -u "\$SUDO_USER" XDG_RUNTIME_DIR="\/run\/user\/\$\(id -u "\$SUDO_USER"\)" DBUS_SESSION_BUS_ADDRESS="unix:path=\/run\/user\/\$\(id -u "\$SUDO_USER"\)\/bus" LLMPROXY_MODE="standalone" LLMPROXY_SERVICE_RUNTIME="native" "\$global_bin" service:start/);
   assert.match(installScript, /else\n\s+LLMPROXY_MODE="standalone" LLMPROXY_SERVICE_RUNTIME="native" "\$global_bin" service:start\nfi/);
 });

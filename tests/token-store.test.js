@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const { createTokenStore } = require("../lib/token-store");
 
-test("token store migrates legacy single-token data into an ordered provider registry", () => {
+test("token store migrates legacy single-token data into an ordered provider registry", { concurrency: false }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-legacy-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");
 
@@ -26,7 +26,7 @@ test("token store migrates legacy single-token data into an ordered provider reg
   assert.equal(store.getAccessToken(), "legacy-token");
 });
 
-test("token store persists multiple providers and fallback order", () => {
+test("token store persists multiple providers and fallback order", { concurrency: false }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-multi-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");
   const store = createTokenStore({ filePath: tokenFile });
@@ -51,7 +51,7 @@ test("token store persists multiple providers and fallback order", () => {
   assert.equal(reloaded.getProvider("primary").name, "Primary Copilot");
 });
 
-test("token store persists free_model flags for provider/model instances", () => {
+test("token store persists free_model flags for provider/model instances", { concurrency: false }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-free-model-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");
   const store = createTokenStore({ filePath: tokenFile });
@@ -70,7 +70,7 @@ test("token store persists free_model flags for provider/model instances", () =>
   assert.equal(reloaded.getProvider("opencode").free_model, true);
 });
 
-test("token store keeps provider order stable when updating an existing provider", () => {
+test("token store keeps provider order stable when updating an existing provider", { concurrency: false }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-update-order-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");
   const store = createTokenStore({ filePath: tokenFile });
@@ -106,7 +106,7 @@ test("token store keeps provider order stable when updating an existing provider
   assert.equal(store.getProvider("qwen").access_token, "token-qwen-updated");
 });
 
-test("token store loads legacy api-key providers saved without access_token", () => {
+test("token store loads legacy api-key providers saved without access_token", { concurrency: false }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-legacy-apikey-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");
 

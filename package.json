@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.10",
+  "version": "0.3.11",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -163,6 +163,12 @@
       "make project-scoped config values inherit from the user's global ~/.claude/settings.json when local overrides are absent",
       "show the effective project values together with a dedicated Global Claude configuration section in config:list",
       "keep service configuration separate from Claude user defaults while making global fallbacks visible and testable"
+    ],
+    "0.3.11": [
+      "release 0.3.11",
+      "harden request logging so unwritable JSONL files no longer crash /v1/messages and provider tests",
+      "repair LLMPROXY_HOME ownership and writable runtime files automatically during persistent install and self-update",
+      "prevent legacy sudo-based upgrades from leaving root-owned runtime logs that break subsequent native service requests"
     ]
   },
   "dependencies": {

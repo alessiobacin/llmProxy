@@ -13,6 +13,7 @@ const {
   listScopeValues,
   setScopeValue,
   unsetScopeValue,
+  getGlobalClaudeSettingsFile,
 } = require("../lib/configuration");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -22,12 +23,16 @@ const serviceDir = path.join(tmpRoot, "service");
 const serviceConfigFile = path.join(serviceDir, "config.json");
 const claudeDir = path.join(tmpRoot, ".claude");
 const claudeSettingsFile = path.join(claudeDir, "settings.json");
+const homeDir = path.join(tmpRoot, "home");
+const globalClaudeSettingsFile = getGlobalClaudeSettingsFile({ ...process.env, HOME: homeDir });
 
 function makeApp() {
   fs.mkdirSync(serviceDir, { recursive: true });
   fs.mkdirSync(claudeDir, { recursive: true });
+  fs.mkdirSync(path.dirname(globalClaudeSettingsFile), { recursive: true });
   fs.writeFileSync(serviceConfigFile, JSON.stringify({ env: {} }));
   fs.writeFileSync(claudeSettingsFile, JSON.stringify({}));
+  fs.writeFileSync(globalClaudeSettingsFile, JSON.stringify({}));
 
   const app = express();
   app.use(express.json());
@@ -237,6 +242,26 @@ test("POST /api/config/ANTHROPIC_BASE_URL writes to project settings", async () 
 
   const raw = JSON.parse(fs.readFileSync(claudeSettingsFile, "utf8"));
   assert.equal(raw.env.ANTHROPIC_BASE_URL, "http://localhost:7045");
+});
+
+test("POST /api/config/LLMPROXY_LLM_STATS_API_KEY with scope=global writes to global Claude settings", async () => {
+  const app = makeApp();
+  const originalHome = process.env.HOME;
+  process.env.HOME = homeDir;
+  try {
+    const { status, body } = await fetchFromApp(app, "POST", "/api/config/LLMPROXY_LLM_STATS_API_KEY", {
+      value: "sk-global-demo",
+      scope: "global",
+    });
+    assert.equal(status, 200);
+    assert.equal(body.success, true);
+    assert.equal(body.restarting, false);
+
+    const raw = JSON.parse(fs.readFileSync(globalClaudeSettingsFile, "utf8"));
+    assert.equal(raw.env.LLMPROXY_LLM_STATS_API_KEY, "sk-global-demo");
+  } finally {
+    process.env.HOME = originalHome;
+  }
 });
 
 // ─── Scope enforcement ────────────────────────────────────────────────────────

@@ -3723,6 +3723,65 @@ test("model:set and config endpoints are exposed via REST", async () => {
   assert.equal("LLMPROXY_PRICE_PERFORMANCE_ROUTING" in settings.env, false);
 });
 
+test("REST config endpoints support the global Claude scope", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-config-global-api-"));
+  const projectRoot = path.join(tempRoot, "project-global");
+  const homeDir = path.join(tempRoot, "home");
+  fs.mkdirSync(projectRoot, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+
+  const originalHome = process.env.HOME;
+  process.env.HOME = homeDir;
+  try {
+    const app = createApp({
+      dataRoot: tempRoot,
+      fetchFn: async () => ({
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true };
+        },
+      }),
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const configSetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_LLM_STATS_API_KEY`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectPath: projectRoot, scope: "global", value: "sk-global-demo" }),
+      });
+      const configSetPayload = await configSetResponse.json();
+      assert.equal(configSetResponse.status, 200);
+      assert.equal(configSetPayload.success, true);
+      assert.match(configSetPayload.data.output, /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+
+      const configGetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_LLM_STATS_API_KEY?scope=global&projectPath=${encodeURIComponent(projectRoot)}`);
+      const configGetPayload = await configGetResponse.json();
+      assert.equal(configGetResponse.status, 200);
+      assert.equal(configGetPayload.success, true);
+      assert.match(configGetPayload.data.output, /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+
+      const configListResponse = await fetch(`${baseUrl}/api/config?scope=global&projectPath=${encodeURIComponent(projectRoot)}`);
+      const configListPayload = await configListResponse.json();
+      assert.equal(configListResponse.status, 200);
+      assert.equal(configListPayload.success, true);
+      assert.match(configListPayload.data.output, /Global Claude configuration:/);
+      assert.match(configListPayload.data.output, /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+
+      const configUnsetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_LLM_STATS_API_KEY`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectPath: projectRoot, scope: "global" }),
+      });
+      const configUnsetPayload = await configUnsetResponse.json();
+      assert.equal(configUnsetResponse.status, 200);
+      assert.equal(configUnsetPayload.success, true);
+    });
+  } finally {
+    process.env.HOME = originalHome;
+  }
+});
+
 test("REST surface covers the CLI command families that are meant to have HTTP equivalents", () => {
   const appSource = fs.readFileSync(path.join(__dirname, "..", "lib", "app.js"), "utf8");
   const requiredRoutes = [

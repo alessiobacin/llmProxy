@@ -112,8 +112,9 @@ Endpoint non equivalenti alla CLI (solo API runtime/platform):
 - `GET /auth/status` now reports `authenticated=true` when at least one provider is configured, including API-key providers. It is no longer Copilot-only.
 - Le risposte LLM riuscite tramite llmProxy aggiungono una riga iniziale con provider/modello effettivamente usati e un footer finale con le statistiche token della richiesta. La collection lo verifica su `POST /v1/messages`.
 - La request `POST /v1/messages` puo` includere `shortAnswer: true` per chiedere una risposta piu` concisa; in alternativa puoi renderlo il default del progetto con `LLMPROXY_SHORT_ANSWER=1` in `.claude/settings.json`.
-- Per testare la configurazione progetto via REST, imposta ad esempio `configScope=project`, `configKey=LLMPROXY_LLM_STATS_API_KEY`, `configValue=your-free-key`, poi ripeti la request `POST /api/config/:key`.
+- Per testare la configurazione via REST, imposta `configScope` a `project`, `global` oppure `service`. Esempio: `configScope=global`, `configKey=LLMPROXY_LLM_STATS_API_KEY`, `configValue=your-free-key`, poi ripeti la request `POST /api/config/:key`.
 - Per testare le notifiche progetto, prova `configKey=LLMPROXY_SENDGRID_TO_MESSAGE_TYPE` e `configValue=service_unreachable,provider_error`.
+- `scope=global` scrive e legge i default utente in `~/.claude/settings.json`; `scope=project` lavora nel `.claude/settings.json` del progetto corrente; `scope=service` agisce sulla configurazione persistente del servizio.
 - La request `POST /api/claude/setup` usa un indice numerico (`claudeSetupModelIndex`) coerente con la CLI attuale, non il nome raw del modello.
 - Le request `GET /api/config` e `GET /api/config/:key` restituiscono i valori effettivi della configurazione, quindi includono anche i default risolti da llmProxy quando una chiave non e` stata persistita esplicitamente.
 - La request `POST /v1/llm/providers` salva automaticamente l'id in `providerEntryId` per la request di delete successiva.

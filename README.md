@@ -865,10 +865,10 @@ x-project-path: /absolute/path/to/project
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
-| `llmproxy config:list [--project\|--service]` | `GET /api/config` |
-| `llmproxy config:get <key> [--project\|--service]` | `GET /api/config/{key}` |
-| `llmproxy config:set <key> <value> [--project\|--service]` | `POST /api/config/{key}` |
-| `llmproxy config:unset <key> [--project\|--service]` | `DELETE /api/config/{key}` |
+| `llmproxy config:list [--scope <project\|global\|service>]` | `GET /api/config` |
+| `llmproxy config:get <key> [--scope <project\|global\|service>]` | `GET /api/config/{key}` |
+| `llmproxy config:set <key> <value> [--scope <project\|global\|service>]` | `POST /api/config/{key}` |
+| `llmproxy config:unset <key> [--scope <project\|global\|service>]` | `DELETE /api/config/{key}` |
 | `llmproxy update` | `POST /api/update` |
 | `llmproxy uninstall` | `POST /api/uninstall` |
 
@@ -1154,9 +1154,11 @@ Supports `--model <index>` to show the selected default model in CLI output whil
 
 These commands expose the full supported configuration surface both from CLI and REST.
 
-- `--project` writes only variables that belong in `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_PRICE_PERFORMANCE_ROUTING`, and `LLMPROXY_SHORT_ANSWER`.
-- `--service` writes only variables that govern the runtime service, such as `PORT`, `LLMPROXY_MODE`, and `LLMPROXY_SECRET`.
-- Scope mismatches are rejected both by CLI and REST. For example, `PORT` cannot be written with `--project`.
+- `--scope project` writes project variables into the current folder's `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_PRICE_PERFORMANCE_ROUTING`, and `LLMPROXY_SHORT_ANSWER`.
+- `--scope global` writes project-scope defaults into `~/.claude/settings.json`, so they become user-level fallbacks for every Claude project on the same machine.
+- `--scope service` writes service variables into the persistent llmProxy runtime config, such as `PORT`, `LLMPROXY_MODE`, and `LLMPROXY_SECRET`.
+- Effective precedence is `project` > `global` > `service`.
+- Scope mismatches are rejected both by CLI and REST. For example, `PORT` cannot be written with `--scope project`, and `LLMPROXY_MODE` cannot be written with `--scope global`.
 
 ### Price/Performance Routing
 
@@ -1218,7 +1220,8 @@ Before confirming success, it now runs a smoke test on the freshly installed CLI
 If that verification fails, `llmproxy update` automatically restores the previously installed global package and restarts the managed service from the restored version.
 During the update, only one active global installation is kept, and any duplicate `pnpm` wrappers are removed.
 The reinstall is forced even when the package version string is unchanged, so same-version maintenance builds still replace the installed files.
-As part of the update, llmProxy also migrates managed configuration files to the current schema: legacy keys such as `LLM_STATS_API_KEY`, `SENDGRID_*`, `LLMPROXY_SMART_*`, `LLMPROXY_METERING_SINK`, and the old split MongoDB variables are removed or rewritten to the supported names.
+As part of the update, llmProxy also migrates managed configuration files to the current schema: legacy keys such as `LLM_STATS_API_KEY`, unprefixed `SENDGRID_*`, `LLMPROXY_SMART_*`, and the old split MongoDB variables are removed or rewritten to the supported names such as `LLMPROXY_LLM_STATS_API_KEY`, `LLMPROXY_SENDGRID_*`, and `LLMPROXY_MONGODB_CONNECTION_STRING`.
+Before reinstalling, the updater now proactively kills anything listening on port `7045`, removes stale global wrappers, best-effort uninstalls previous npm/pnpm copies, and purges legacy install directories discovered in common global locations. This is meant to make upgrades from `0.2.77` and older resilient even on machines with multiple historical installs.
 
 On Linux systems where npm global is under `/usr/local` (owned by root), the command automatically detects the permission error and retries with `sudo`. There is no need to manually run `sudo llmproxy update`.
 
@@ -1343,32 +1346,34 @@ Inside the data root, the following files are created:
 
 ## Environment Variables
 
-### Due modi di configurare
+### Two Configuration Paths
 
-| Metodo | Cosa configuri | Effetto | File |
-|--------|---------------|--------|------|
-| **CLI** `llmproxy config:set` | variabili **project-scope** | **immediato** (senza restart) | `.claude/settings.json` → `env` |
-| **.env** | variabili **service-scope** | dopo **restart** del servizio | `.env` |
+| Method | What you configure | Effect | File |
+|--------|--------------------|--------|------|
+| **CLI** `llmproxy config:set` | **project-scope** variables | immediate, no restart | `.claude/settings.json` → `env` |
+| **.env** | **service-scope** variables | after service restart | `.env` |
 
-Tutte le variabili, indipendentemente dallo scope, possono essere sovrascritte tramite il campo `env` di `.claude/settings.json` (impostabile anche con Claude Code `/statusline` o manualmente). Questo è il metodo raccomandato per configurare Claude Code.
+Any supported variable can still be overridden through the `env` block inside `.claude/settings.json` when Claude Code is the client. That is the recommended configuration path for Claude Code projects.
 
-### Project-Scope (CLI — effetto immediato)
+### Project Scope (CLI, Immediate Effect)
 
 [.env.example](/Users/alessiobacin/Development/llmProxy/.env.example) is the canonical catalog of all supported variables. Start there if you need a complete list while setting up a fresh clone of the repo.
 
 Important rule for booleans in `.claude/settings.json`:
 
 - if a boolean variable is missing from `.claude/settings.json`, its effective project value is `0` / `false`
-- it does not automatically inherit the global container or process value
+- it does not automatically inherit unrelated container or process environment values
 - this applies in particular to `LLMPROXY_SHORT_ANSWER`, `LLMPROXY_METERING_INLINE`, and `LLMPROXY_INFERENCE_INFO_INLINE`
 
-Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, senza restart del proxy. Vengono lette da `.claude/settings.json` a ogni richiesta.
+These variables are managed with `llmproxy config:*`. They take effect immediately and are re-read from `.claude/settings.json` on every request.
 
 ```bash
-llmproxy config:list                        # elenca le variabili disponibili
-llmproxy config:get ANTHROPIC_BASE_URL      # legge una variabile
-llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1   # imposta una variabile
-llmproxy config:unset ANTHROPIC_DEFAULT_MODEL     # rimuove una variabile
+llmproxy config:list                                      # lists effective project + global + service values
+llmproxy config:list --scope global                       # lists only ~/.claude/settings.json managed defaults
+llmproxy config:get ANTHROPIC_BASE_URL                    # reads a variable from its effective scope
+llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --scope project
+llmproxy config:set LLMPROXY_LLM_STATS_API_KEY your-free-key --scope global
+llmproxy config:unset ANTHROPIC_DEFAULT_MODEL --scope project
 ```
 
 | Variable | Default | Available Values | Description |

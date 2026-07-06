@@ -239,3 +239,42 @@ test("request logger computes today and week token totals from successful summar
     weekTokens: 7,
   });
 });
+
+test("request logger does not throw when request JSONL is not writable", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-logs-eacces-"));
+  const logger = createRequestLogger({
+    logsDir: root,
+    retentionDays: 7,
+    nowFn: () => new Date("2026-07-06T10:00:00.000Z").getTime(),
+  });
+  const originalAppendFileSync = fs.appendFileSync;
+  let warningCount = 0;
+  const originalConsoleError = console.error;
+
+  fs.appendFileSync = () => {
+    const error = new Error("EACCES: permission denied");
+    error.code = "EACCES";
+    throw error;
+  };
+  console.error = () => {
+    warningCount += 1;
+  };
+
+  try {
+    assert.doesNotThrow(() => {
+      logger.logIncomingRequest({
+        requestId: "req_eacces",
+        requestedModel: "gpt-5.4",
+      });
+      logger.logProviderAttempt({
+        requestId: "req_eacces",
+        provider: "openrouter",
+        endpoint: "chat",
+      });
+    });
+    assert.equal(warningCount, 1);
+  } finally {
+    fs.appendFileSync = originalAppendFileSync;
+    console.error = originalConsoleError;
+  }
+});

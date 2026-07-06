@@ -2811,7 +2811,10 @@ test("install:persistent-it succeeds on Windows", async () => {
     stderr,
     commandRunner(command, args) {
       commandCalls.push({ command, args });
-      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+      if ((command === "npm" || command === "npm.cmd") && args[0] === "--version") {
+        return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      }
+      if ((command === "npm" || command === "npm.cmd") && args[0] === "prefix" && args[1] === "-g") {
         return { status: 0, stdout: `${packageRoot}`, stderr: "" };
       }
       if (command === "powershell.exe") {
@@ -2842,7 +2845,10 @@ test("install:persistent-en succeeds on Windows in English", async () => {
     stderr,
     commandRunner(command, args) {
       commandCalls.push({ command, args });
-      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+      if ((command === "npm" || command === "npm.cmd") && args[0] === "--version") {
+        return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      }
+      if ((command === "npm" || command === "npm.cmd") && args[0] === "prefix" && args[1] === "-g") {
         return { status: 0, stdout: `${packageRoot}`, stderr: "" };
       }
       if (command === "powershell.exe") {
@@ -3071,7 +3077,10 @@ test("install alias succeeds on Windows in English", async () => {
     stderr,
     commandRunner(command, args) {
       commandCalls.push({ command, args });
-      if (command === "npm" && args[0] === "prefix" && args[1] === "-g") {
+      if ((command === "npm" || command === "npm.cmd") && args[0] === "--version") {
+        return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      }
+      if ((command === "npm" || command === "npm.cmd") && args[0] === "prefix" && args[1] === "-g") {
         return { status: 0, stdout: `${packageRoot}`, stderr: "" };
       }
       if (command === "powershell.exe") {
@@ -4216,6 +4225,32 @@ test("update keeps going when the remote version probe times out", async () => {
   assert.equal(exitCode, 0);
   assert.equal(executed.some(([command]) => command === "bash"), true);
   assert.match(stdout.toString(), /Versione corrente: 0\.3\.07/);
+});
+
+test("update on Windows accepts npm.cmd during preflight", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-win-npmcmd-"));
+  const stdout = createWritableBuffer();
+  const executed = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    platform: "win32",
+    stdout,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
+    commandRunner(command, args) {
+      executed.push([command, args]);
+      if (command === "git") return { status: 0, stdout: "git version 2.0.0\n", stderr: "" };
+      if (command === "npm") return { status: 1, stdout: "", stderr: "'npm' is not recognized" };
+      if (command === "npm.cmd" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "npm.cmd" && args[0] === "prefix") return { status: 0, stdout: "C:\\Users\\test\\AppData\\Roaming\\npm\n", stderr: "" };
+      return { status: 0, stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.11\n", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(executed.some(([command]) => command === "npm.cmd"), true);
+  assert.equal(executed.some(([command]) => command === "powershell.exe"), true);
+  assert.match(stdout.toString(), /Versione corrente: 0\.3\.11/);
 });
 
 test("update reports Docker prerequisites when the service runtime uses Docker", async () => {

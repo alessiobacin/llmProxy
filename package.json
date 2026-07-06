@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.05",
+  "version": "0.3.06",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -133,6 +133,12 @@
       "fix llmproxy update and uninstall so the CLI bypasses the local REST wrapper and runs directly in the invoking shell",
       "avoid self-update deadlocks when a managed llmProxy service is already running on the same machine",
       "keep automatic config migration and port-7045 cleanup from 0.3.04 intact"
+    ],
+    "0.3.06": [
+      "release 0.3.06",
+      "migrate legacy Claude settings from both the current project and the global ~/.claude/settings.json during config migration and self-update",
+      "run config migration even when update is launched outside a project directory",
+      "remove stale LLMPROXY_SMART_* and legacy key aliases from real on-disk Claude settings, not only from the effective runtime view"
     ]
   },
   "dependencies": {

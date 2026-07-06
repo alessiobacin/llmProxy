@@ -1749,7 +1749,7 @@ test("update bypasses the REST wrapper even when the local service is reachable"
       if (command === "sudo") return { status: 0, stdout: "sudo 1.0\n", stderr: "" };
       return {
         status: 0,
-        stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.05\n__LLMPROXY_RELEASE_NOTES_START__\nChangelog 0.3.05:\n- release 0.3.05\n__LLMPROXY_RELEASE_NOTES_END__\n",
+        stdout: "changed 1 package\n__LLMPROXY_VERSION__=0.3.06\n__LLMPROXY_RELEASE_NOTES_START__\nChangelog 0.3.06:\n- release 0.3.06\n__LLMPROXY_RELEASE_NOTES_END__\n",
         stderr: "",
       };
     },
@@ -1758,7 +1758,7 @@ test("update bypasses the REST wrapper even when the local service is reachable"
   assert.equal(exitCode, 0);
   assert.deepEqual(requests, []);
   assert.equal(commandCalls.some(([command]) => command === "bash"), true);
-  assert.match(stdout.toString(), /Versione corrente: 0\.3\.05/);
+  assert.match(stdout.toString(), /Versione corrente: 0\.3\.06/);
 });
 
 test("models:list prints a numbered list of available models", async () => {
@@ -4104,14 +4104,23 @@ test("update keeps success when package install succeeds but service restart fai
 test("config:migrate rewrites legacy project and service variables to the current schema", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-migrate-"));
   const projectRoot = path.join(runtimeRoot, "workspace");
+  const homeDir = path.join(runtimeRoot, "home");
   const stdout = createWritableBuffer();
   fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
   fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
     model: "llmProxy",
     env: {
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       LLM_STATS_API_KEY: "sk-legacy",
       LLMPROXY_SMART_ROUTE: "hybrid",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      LLM_STATS_API_KEY: "sk-global-legacy",
+      LLMPROXY_SMART_PREFERENCE: "balanced",
     },
   }, null, 2));
   fs.mkdirSync(path.join(runtimeRoot, "service"), { recursive: true });
@@ -4125,19 +4134,54 @@ test("config:migrate rewrites legacy project and service variables to the curren
   const exitCode = await runCli(["node", "llmproxy", "config:migrate"], {
     cwd: projectRoot,
     dataRoot: runtimeRoot,
+    env: { ...process.env, HOME: homeDir },
     stdout,
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /Config migration completed: project, service/);
+  assert.match(stdout.toString(), /Config migration completed: project, global, service/);
 
   const projectPayload = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
+  const globalPayload = JSON.parse(fs.readFileSync(path.join(homeDir, ".claude", "settings.json"), "utf8"));
   const servicePayload = JSON.parse(fs.readFileSync(path.join(runtimeRoot, "service", "config.json"), "utf8"));
   assert.equal(projectPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-legacy");
   assert.equal("LLM_STATS_API_KEY" in projectPayload.env, false);
   assert.equal("LLMPROXY_SMART_ROUTE" in projectPayload.env, false);
+  assert.equal(globalPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-global-legacy");
+  assert.equal("LLMPROXY_SMART_PREFERENCE" in globalPayload.env, false);
   assert.equal(servicePayload.env.LLMPROXY_MONGODB_CONNECTION_STRING, "mongodb://mongo:27017/llmProxy");
   assert.equal("LLMPROXY_METERING_SINK" in servicePayload.env, false);
+});
+
+test("config:migrate rewrites the global Claude settings even when cwd has no local .claude folder", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-migrate-global-"));
+  const homeDir = path.join(runtimeRoot, "home");
+  const cwd = path.join(runtimeRoot, "plain-dir");
+  const stdout = createWritableBuffer();
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.mkdirSync(cwd, { recursive: true });
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      LLM_STATS_API_KEY: "sk-global-only",
+      LLMPROXY_SMART_ROUTE: "hybrid",
+    },
+  }, null, 2));
+
+  const exitCode = await runCli(["node", "llmproxy", "config:migrate"], {
+    cwd,
+    dataRoot: runtimeRoot,
+    env: { ...process.env, HOME: homeDir },
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Config migration completed: global/);
+
+  const globalPayload = JSON.parse(fs.readFileSync(path.join(homeDir, ".claude", "settings.json"), "utf8"));
+  assert.equal(globalPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-global-only");
+  assert.equal("LLM_STATS_API_KEY" in globalPayload.env, false);
+  assert.equal("LLMPROXY_SMART_ROUTE" in globalPayload.env, false);
 });
 
 test("update reports rollback details when the installed build fails post-update verification", async () => {

@@ -288,8 +288,10 @@ test("normalizeServiceConfigPayload removes legacy service variables and migrate
 test("migrateManagedConfig rewrites legacy project and service config in place", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-config-migrate-"));
   const projectRoot = path.join(root, "workspace");
+  const homeDir = path.join(root, "home");
   const serviceConfigFile = path.join(root, "service", "config.json");
   fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
   fs.mkdirSync(path.dirname(serviceConfigFile), { recursive: true });
   fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
     model: "llmProxy",
@@ -297,6 +299,13 @@ test("migrateManagedConfig rewrites legacy project and service config in place",
       ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
       LLM_STATS_API_KEY: "sk-legacy",
       LLMPROXY_SMART_ROUTE: "hybrid",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      LLM_STATS_API_KEY: "sk-global-legacy",
+      LLMPROXY_SMART_PREFERENCE: "balanced",
     },
   }, null, 2));
   fs.writeFileSync(serviceConfigFile, JSON.stringify({
@@ -309,16 +318,20 @@ test("migrateManagedConfig rewrites legacy project and service config in place",
   const migrated = migrateManagedConfig({
     cwd: projectRoot,
     serviceConfigFile,
+    env: { ...process.env, HOME: homeDir },
     packageRoot: path.join(__dirname, ".."),
     dataRoot: root,
   });
 
-  assert.deepEqual(migrated, { project: true, service: true });
+  assert.deepEqual(migrated, { project: true, global: true, service: true });
 
   const projectPayload = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
+  const globalPayload = JSON.parse(fs.readFileSync(path.join(homeDir, ".claude", "settings.json"), "utf8"));
   const servicePayload = JSON.parse(fs.readFileSync(serviceConfigFile, "utf8"));
   assert.equal(projectPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-legacy");
   assert.equal("LLMPROXY_SMART_ROUTE" in projectPayload.env, false);
+  assert.equal(globalPayload.env.LLMPROXY_LLM_STATS_API_KEY, "sk-global-legacy");
+  assert.equal("LLMPROXY_SMART_PREFERENCE" in globalPayload.env, false);
   assert.equal(servicePayload.env.LLMPROXY_MONGODB_CONNECTION_STRING, "mongodb://mongo:27017/llmProxy");
   assert.equal("LLMPROXY_METERING_SINK" in servicePayload.env, false);
 });

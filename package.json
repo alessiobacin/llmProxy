@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.29",
+  "version": "0.3.30",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -277,6 +277,12 @@
       "fix update preflight so llmp up exits cleanly when the local CLI is already newer than the online version probe result",
       "isolate config-list API tests from the developer's real global Claude settings on macOS and other local environments",
       "keep the 0.3.28 macOS update validation release intact while removing a false-positive self-update path on symlinked dev installs"
+    ],
+    "0.3.30": [
+      "release 0.3.30",
+      "fix provider:add so only copilot uses the GitHub device-flow login and custom API-key provider instance ids stay on the API-key path",
+      "allow distinct custom provider instance ids to coexist even when they point to the same provider kind and default model",
+      "fix auto-escalation for free-model fallback chains so repeated failures can still promote across all-free candidates without leaking into paid providers"
     ]
   },
   "dependencies": {

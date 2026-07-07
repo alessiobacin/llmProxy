@@ -945,6 +945,86 @@ test("provider:add stores free_model when requested", async () => {
   assert.match(stdout.toString(), /free: true/);
 });
 
+test("provider:add treats custom opencode instance ids with api-key as api-key providers", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-opencode-instance-"));
+  const stdout = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:add", "opencode-bacin", "--api-key", "sk-zen-test", "--model", "deepseek-v4-flash-free", "--vision", "false", "--free-model"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const provider = tokenStore.getProvider("opencode-bacin");
+
+  assert.equal(exitCode, 0);
+  assert.ok(provider);
+  assert.equal(provider.provider, "opencode");
+  assert.equal(provider.auth_type, "api_key");
+  assert.equal(provider.vision, false);
+  assert.equal(provider.free_model, true);
+  assert.match(stdout.toString(), /Provider configurato con API key: opencode-bacin/);
+  assert.doesNotMatch(stdout.toString(), /Apri https:\/\/github\.com\/login\/device/);
+});
+
+test("provider:add keeps separate custom instance ids even when provider and model are identical", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-opencode-duplicate-instance-"));
+  const stdout1 = createWritableBuffer();
+  const stdout2 = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
+
+  const exitCode1 = await runCli(["node", "llmproxy", "provider:add", "opencode-bacin", "--api-key", "sk-zen-test-1", "--model", "deepseek-v4-flash-free", "--vision", "false", "--free-model"], {
+    dataRoot: runtimeRoot,
+    stdout: stdout1,
+    fetchFn,
+  });
+  const exitCode2 = await runCli(["node", "llmproxy", "provider:add", "opencode-alessio", "--api-key", "sk-zen-test-2", "--model", "deepseek-v4-flash-free", "--vision", "false", "--free-model"], {
+    dataRoot: runtimeRoot,
+    stdout: stdout2,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const allProviders = tokenStore.listProviders();
+  const ids = allProviders.map((provider) => provider.id).sort();
+
+  assert.equal(exitCode1, 0);
+  assert.equal(exitCode2, 0);
+  assert.equal(allProviders.length, 2);
+  assert.deepEqual(ids, ["opencode-alessio", "opencode-bacin"]);
+  assert.match(stdout1.toString(), /Provider configurato con API key: opencode-bacin/);
+  assert.match(stdout2.toString(), /Provider configurato con API key: opencode-alessio/);
+});
+
+test("provider:list shows vision and free flags for custom api-key provider instances", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-opencode-instance-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("opencode-alessio", {
+    access_token: "sk-zen-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    vision: false,
+    free_model: true,
+  }, { name: "opencode-alessio" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; }, async text() { return "not found"; } }),
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /opencode-alessio/);
+  assert.match(stdout.toString(), /vision=false free=true/);
+});
+
 test("provider:add rejects invalid qwen plan values", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-invalid-plan-"));
   const stderr = createWritableBuffer();

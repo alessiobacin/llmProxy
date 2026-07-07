@@ -48,6 +48,8 @@ interface LocalProviderEntry {
   endpoint_variant?: string;
   vision?: boolean;
   free_model?: boolean;
+  proxy_url?: string;
+  proxy_api_key?: string;
   name?: string;
 }
 
@@ -136,6 +138,8 @@ function resolveProviderSelection({
           endpoint_variant: String(exactLocalProvider.endpoint_variant || ""),
           ...(exactLocalProvider.vision === true || exactLocalProvider.vision === false ? { vision: exactLocalProvider.vision } : {}),
           ...(exactLocalProvider.free_model === true || exactLocalProvider.free_model === false ? { free_model: exactLocalProvider.free_model } : {}),
+          ...(exactLocalProvider.proxy_url ? { proxy_url: String(exactLocalProvider.proxy_url) } : {}),
+          ...(exactLocalProvider.proxy_api_key ? { proxy_api_key: String(exactLocalProvider.proxy_api_key) } : {}),
         }],
       };
     }
@@ -205,6 +209,8 @@ function resolveProviderSelection({
           endpoint_variant: entry.metadata?.endpoint_variant ? String(entry.metadata.endpoint_variant) : "",
           ...(entry.metadata?.vision === true || entry.metadata?.vision === false ? { vision: entry.metadata.vision } : {}),
           ...(entry.metadata?.free_model === true || entry.metadata?.free_model === false ? { free_model: entry.metadata.free_model } : {}),
+          ...(entry.metadata?.proxy_url ? { proxy_url: String(entry.metadata.proxy_url) } : {}),
+          ...(entry.metadata?.proxy_api_key ? { proxy_api_key: String(entry.metadata.proxy_api_key) } : {}),
         };
       }),
     };

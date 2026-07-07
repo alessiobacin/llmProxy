@@ -193,6 +193,45 @@ test("resolveClaudeProjectSettings reads LLMPROXY_INFERENCE_INFO_INLINE from Cla
   assert.equal(result.inlineInferenceInfo, true);
 });
 
+test("resolveClaudeProjectSettings reads LLMPROXY_PROVIDER_CREDIT_INLINE from Claude env", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-credit-inline-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      LLMPROXY_PROVIDER_CREDIT_INLINE: "1",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.creditInline, true);
+});
+
+test("resolveClaudeProjectSettings defaults creditInline to false when not set", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-credit-inline-default-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.creditInline, false);
+});
+
 test("resolveClaudeProjectSettings reads LLMPROXY_LLM_STATS_API_KEY from Claude env", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-llm-stats-key-"));
   const projectRoot = path.join(root, "workspace");

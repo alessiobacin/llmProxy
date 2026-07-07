@@ -12,6 +12,8 @@ const {
   isContextLimitError,
   trimOldestNonSystemMessage,
   hasImageInOpenAiMessages,
+  hasImageInLastUserMessage,
+  buildSelectionReason,
   API_KEY_PROVIDER_CONFIGS,
   getApiKeyProviderRequestUrls,
   probeApiKeyProviderModel,
@@ -368,6 +370,53 @@ test("hasImageInOpenAiMessages detects image_url blocks", () => {
   assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "text", text: "hello" }] }]), false);
   assert.equal(hasImageInOpenAiMessages([{ role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] }]), true);
   assert.equal(hasImageInOpenAiMessages(null), false);
+});
+
+test("hasImageInLastUserMessage checks only the last user message for images", () => {
+  assert.equal(hasImageInLastUserMessage([]), false);
+  assert.equal(hasImageInLastUserMessage(null), false);
+  // last message is user with no image
+  assert.equal(hasImageInLastUserMessage([
+    { role: "user", content: [{ type: "text", text: "hello" }] },
+  ]), false);
+  // last message is user with an image
+  assert.equal(hasImageInLastUserMessage([
+    { role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] },
+  ]), true);
+  // image in conversation history but NOT in last user message
+  assert.equal(hasImageInLastUserMessage([
+    { role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/img.png" } }] },
+    { role: "assistant", content: [{ type: "text", text: "that's a cat" }] },
+    { role: "user", content: [{ type: "text", text: "tell me more" }] },
+  ]), false);
+  // last message is assistant (should not happen in practice)
+  assert.equal(hasImageInLastUserMessage([
+    { role: "user", content: [{ type: "text", text: "hi" }] },
+    { role: "assistant", content: [{ type: "text", text: "hello" }] },
+  ]), false);
+});
+
+test("buildSelectionReason adds WITH VISION when hasImages is true and no failures occurred", () => {
+  const r1 = buildSelectionReason([], "copilot", "gpt-4", null, false);
+  assert.match(r1, /First in order from provider list$/);
+  assert.equal(r1.includes("WITH VISION"), false);
+
+  const r2 = buildSelectionReason([], "copilot", "gpt-4", null, true);
+  assert.match(r2, /First in order from provider list WITH VISION$/);
+});
+
+test("buildSelectionReason preserves preferredReason even with hasImages", () => {
+  const r = buildSelectionReason([], "copilot", "gpt-4", "Smart router selected provider/model", true);
+  assert.equal(r, "Smart router selected provider/model");
+});
+
+test("buildSelectionReason returns ordinal reason when there are real failures", () => {
+  const attempts = [
+    { provider: "groq", effective_model: "llama", success: false, status: 429 },
+  ];
+  const r = buildSelectionReason(attempts, "openai", "gpt-4", null, true);
+  assert.equal(r.includes("Second in order"), true);
+  assert.equal(r.includes("WITH VISION"), false);
 });
 
 test("consumeMinimaxToolCallBuffer extracts tool calls from minimax markup", () => {

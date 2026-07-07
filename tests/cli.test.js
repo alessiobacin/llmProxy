@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate, runSelfUpdateWindows, buildPersistentInstallScript } = require("../lib/cli");
+const { runCli, resolveServiceEnvironment, resolveServiceEntryFile, resolveCliServiceManagerOptions, runSelfUpdate, runSelfUpdateWindows, buildPersistentInstallScript, buildProxyAgentUrl } = require("../lib/cli");
 const { deriveUserScopedPort } = require("../lib/runtime-env");
 
 function createWritableBuffer() {
@@ -146,6 +146,18 @@ test("resolveCliServiceManagerOptions uses native server entrypoint on Linux in 
   assert.equal(options.environment.HOST, "127.0.0.1");
   assert.equal(options.environment.LLMPROXY_GLOBAL_SERVICE, "1");
   assert.equal("LLMPROXY_SHARED_PROVIDER_REGISTRY" in options.environment, false);
+});
+
+test("buildProxyAgentUrl preserves an explicit host:port proxy target", () => {
+  assert.equal(buildProxyAgentUrl("135.181.79.118:7064", ""), "http://135.181.79.118:7064");
+});
+
+test("buildProxyAgentUrl defaults to port 7064 when only the host is provided", () => {
+  assert.equal(buildProxyAgentUrl("135.181.79.118", ""), "http://135.181.79.118:7064");
+});
+
+test("buildProxyAgentUrl embeds proxy auth without duplicating the port", () => {
+  assert.equal(buildProxyAgentUrl("135.181.79.118:7064", "secret"), "http://proxy:secret@135.181.79.118:7064");
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -670,6 +682,7 @@ test("provider:list shows residual credit plus current and best provider pricing
 
   const exitCode = await runCli(["node", "llmproxy", "provider:list"], {
     dataRoot: runtimeRoot,
+    cwd: runtimeRoot,
     stdout,
     tokenStore,
     fetchFn,
@@ -750,6 +763,34 @@ test("provider:add supports api-key providers like nvidia", async () => {
   assert.equal(provider.auth_type, "api_key");
   assert.equal(provider.provider, "nvidia");
   assert.equal(provider.default_model, "z-ai/glm-5.2");
+  assert.match(stdout.toString(), /Provider configurato con API key/);
+});
+
+test("provider:add allows multiple instances of same provider/model with different --name", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-duplicate-name-"));
+  const stdout = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
+
+  const exitCode1 = await runCli(["node", "llmproxy", "provider:add", "opencode", "--name", "Opencode Primary", "--api-key", "sk-opencode-primary", "--model", "opencode-large", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const exitCode2 = await runCli(["node", "llmproxy", "provider:add", "opencode", "--name", "Opencode Backup", "--api-key", "sk-opencode-backup", "--model", "opencode-large", "--vision", "false"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const providers = tokenStore.listProviders();
+
+  assert.equal(exitCode1, 0);
+  assert.equal(exitCode2, 0);
+  assert.equal(providers.length, 2);
+  assert.equal(providers[0].access_token, "sk-opencode-primary");
+  assert.equal(providers[1].access_token, "sk-opencode-backup");
   assert.match(stdout.toString(), /Provider configurato con API key/);
 });
 
@@ -4882,7 +4923,7 @@ test("update exits early when the installed version already matches the online v
 
   const exitCode = await runCli(["node", "llmproxy", "update"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/Users/alessiobacin/Development/llmProxy",
+    packageRoot: path.join(__dirname, ".."),
     stdout,
     fetchFn: async (url) => {
       assert.match(String(url), /raw\.githubusercontent\.com\/alessiobacin\/llmProxy\/main\/package\.json/);
@@ -4913,7 +4954,7 @@ test("update exits early when the installed version is newer than the online ver
 
   const exitCode = await runCli(["node", "llmproxy", "update"], {
     dataRoot: runtimeRoot,
-    packageRoot: "/Users/alessiobacin/Development/llmProxy",
+    packageRoot: path.join(__dirname, ".."),
     stdout,
     fetchFn: async () => ({
       ok: true,

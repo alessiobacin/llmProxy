@@ -4269,6 +4269,38 @@ test("update on Windows accepts npm.cmd during preflight", async () => {
   assert.match(stdout.toString(), /Versione corrente: 0\.3\.11/);
 });
 
+test("update on Windows stops early with admin guidance when the llmproxy service is active", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-win-service-admin-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    platform: "win32",
+    stdout,
+    stderr,
+    fetchFn: async () => ({ ok: true, status: 200, async json() { return { version: "9.9.9" }; } }),
+    commandRunner(command, args) {
+      if (command === "git") return { status: 0, stdout: "git version 2.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "--version") return { status: 0, stdout: "10.0.0\n", stderr: "" };
+      if (command === "npm" && args[0] === "prefix") return { status: 0, stdout: "C:\\Users\\test\\AppData\\Roaming\\npm\n", stderr: "" };
+      if (command === "sc.exe" && args[0] === "query" && args[1] === "llmproxy") {
+        return { status: 0, stdout: "STATE              : 4  RUNNING\n", stderr: "" };
+      }
+      if (command === "powershell.exe" && args.includes("WindowsBuiltInRole")) {
+        return { status: 0, stdout: "0\n", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(stdout.toString(), "");
+  assert.match(stderr.toString(), /PowerShell.*Amministratore/i);
+  assert.match(stderr.toString(), /llmp up/);
+  assert.match(stderr.toString(), /llmp service:stop/);
+});
+
 test("update reports Docker prerequisites when the service runtime uses Docker", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-preflight-docker-"));
   const npmPrefix = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-prefix-docker-"));

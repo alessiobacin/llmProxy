@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.24",
+  "version": "0.3.25",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -247,6 +247,12 @@
       "fix Windows self-update so Start-Process routes npm.cmd and other script-style entrypoints through the correct host executable",
       "prevent local llmp update from failing with '%1 is not a valid Win32 application' when the updater hits cmd, PowerShell, or Node wrappers",
       "keep the Windows service-stop protection from 0.3.23 while hardening the updater's launcher resolution"
+    ],
+    "0.3.25": [
+      "release 0.3.25",
+      "make Windows update fail early with explicit Administrator guidance when the native llmproxy service is still active in a non-elevated session",
+      "surface the real Windows service stop error instead of a generic failure message, so access-denied cases are diagnosable immediately",
+      "keep the 0.3.24 launcher fix for npm.cmd, PowerShell wrappers, and Node entrypoints intact"
     ]
   },
   "dependencies": {

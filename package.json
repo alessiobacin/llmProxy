@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.23",
+  "version": "0.3.24",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -241,6 +241,12 @@
       "fix Windows update and persistent install by stopping the native service before replacing the global npm package",
       "prevent EBUSY rename failures when npm install -g touches a live llmproxy directory owned by the running service",
       "keep the localized Windows status fix from 0.3.22 and the SSH-safe updater from 0.3.21 intact"
+    ],
+    "0.3.24": [
+      "release 0.3.24",
+      "fix Windows self-update so Start-Process routes npm.cmd and other script-style entrypoints through the correct host executable",
+      "prevent local llmp update from failing with '%1 is not a valid Win32 application' when the updater hits cmd, PowerShell, or Node wrappers",
+      "keep the Windows service-stop protection from 0.3.23 while hardening the updater's launcher resolution"
     ]
   },
   "dependencies": {

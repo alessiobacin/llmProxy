@@ -2888,7 +2888,13 @@ test("runSelfUpdateWindows resolves the global cmd wrapper explicitly", () => {
   });
   const windowsScriptText = executed[0][1][2];
   assert.match(windowsScriptText, /\$PSNativeCommandUseErrorActionPreference = \$false/);
+  assert.match(windowsScriptText, /function Quote-CmdArgument\(\[string\]\$Value\)/);
   assert.match(windowsScriptText, /function Invoke-QuietNative\(\[string\]\$FilePath, \[string\[\]\]\$ArgumentList\)/);
+  assert.match(windowsScriptText, /\$resolvedFilePath = "cmd\.exe"/);
+  assert.match(windowsScriptText, /\$resolvedArguments = @\("\/d", "\/s", "\/c", \$cmdLine\)/);
+  assert.match(windowsScriptText, /\$resolvedFilePath = "powershell\.exe"/);
+  assert.match(windowsScriptText, /\$resolvedArguments = @\("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", \$FilePath\) \+ @\(\$ArgumentList\)/);
+  assert.match(windowsScriptText, /\$resolvedFilePath = "node\.exe"/);
   assert.match(windowsScriptText, /& llmproxy service:stop 2>\$null \| Out-Null/);
   assert.match(windowsScriptText, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
   assert.match(windowsScriptText, /Join-Path \$Prefix "llmproxy\.cmd"/);

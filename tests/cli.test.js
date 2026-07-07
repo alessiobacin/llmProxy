@@ -4825,6 +4825,34 @@ test("update exits early when the installed version already matches the online v
   assert.equal(stdout.toString(), `Gia' aggiornato. Versione corrente: ${currentVersion}\n`);
 });
 
+test("update exits early when the installed version is newer than the online version", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-update-ahead-of-remote-"));
+  const stdout = createWritableBuffer();
+  const currentVersion = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")).version;
+  let commandRunnerCalled = false;
+
+  const exitCode = await runCli(["node", "llmproxy", "update"], {
+    dataRoot: runtimeRoot,
+    packageRoot: "/Users/alessiobacin/Development/llmProxy",
+    stdout,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { version: "0.0.1" };
+      },
+    }),
+    commandRunner() {
+      commandRunnerCalled = true;
+      return { status: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(commandRunnerCalled, false);
+  assert.equal(stdout.toString(), `Gia' aggiornato. Versione corrente: ${currentVersion}\n`);
+});
+
 test("release-notes prints changelog notes for release 0.2.58", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-release-notes-0258-"));
   const stdout = createWritableBuffer();

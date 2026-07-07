@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -271,6 +271,12 @@
       "validate the macOS self-update path end-to-end against the current persistent installation and Docker-backed service runtime",
       "keep the 0.3.27 local config-scope fixes and LLMPROXY_LLM_STATS_API_KEY resolution behavior intact",
       "ship a no-behavior-change release used to verify local llmp up reliability on macOS"
+    ],
+    "0.3.29": [
+      "release 0.3.29",
+      "fix update preflight so llmp up exits cleanly when the local CLI is already newer than the online version probe result",
+      "isolate config-list API tests from the developer's real global Claude settings on macOS and other local environments",
+      "keep the 0.3.28 macOS update validation release intact while removing a false-positive self-update path on symlinked dev installs"
     ]
   },
   "dependencies": {

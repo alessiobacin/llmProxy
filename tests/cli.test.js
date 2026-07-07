@@ -4433,7 +4433,7 @@ test("update on Windows stops early with admin guidance when the llmproxy servic
   assert.equal(stdout.toString(), "");
   assert.match(stderr.toString(), /PowerShell.*Amministratore/i);
   assert.match(stderr.toString(), /llmp up/);
-  assert.match(stderr.toString(), /llmp service:stop/);
+  assert.match(stderr.toString(), /arresta prima il servizio con privilegi amministrativi/i);
 });
 
 test("update reports Docker prerequisites when the service runtime uses Docker", async () => {

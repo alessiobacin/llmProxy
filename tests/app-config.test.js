@@ -39,7 +39,7 @@ function makeApp() {
 
   // GET /api/config — list all variables
   app.get("/api/config", (_req, res) => {
-    const values = listScopeValues({ cwd: tmpRoot, serviceConfigFile });
+    const values = listScopeValues({ cwd: tmpRoot, serviceConfigFile, env: { ...process.env, HOME: homeDir } });
     res.json({ success: true, variables: values });
   });
 
@@ -69,6 +69,7 @@ function makeApp() {
         scope: effectiveScope,
         cwd: tmpRoot,
         serviceConfigFile,
+        env: { ...process.env, HOME: homeDir },
       });
     } catch (err) {
       return res.status(400).json({

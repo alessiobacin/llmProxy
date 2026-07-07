@@ -1761,6 +1761,28 @@ test("update bypasses the REST wrapper even when the local service is reachable"
   assert.match(stdout.toString(), /Versione corrente: 0\.3\.07/);
 });
 
+test("version bypasses the REST wrapper even when the local service is reachable", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-version-rest-bypass-"));
+  const stdout = createWritableBuffer();
+  const requests = [];
+
+  const exitCode = await runCli(["node", "llmproxy", "version"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    restFetchFn: async (url) => {
+      requests.push(String(url));
+      if (String(url).endsWith("/health")) {
+        return { ok: true, async json() { return { ok: true }; } };
+      }
+      throw new Error(`unexpected REST call: ${url}`);
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requests, []);
+  assert.equal(stdout.toString().trim(), require("../package.json").version);
+});
+
 test("models:list prints a numbered list of available models", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-list-"));
   const stdout = createWritableBuffer();

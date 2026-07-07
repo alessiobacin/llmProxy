@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -253,6 +253,12 @@
       "make Windows update fail early with explicit Administrator guidance when the native llmproxy service is still active in a non-elevated session",
       "surface the real Windows service stop error instead of a generic failure message, so access-denied cases are diagnosable immediately",
       "keep the 0.3.24 launcher fix for npm.cmd, PowerShell wrappers, and Node entrypoints intact"
+    ],
+    "0.3.26": [
+      "release 0.3.26",
+      "bypass the local REST wrapper for version, status, and service-management commands so self-diagnostics use the invoking CLI binary directly",
+      "prevent local update debugging on Windows from accidentally reading version or service responses from an older already-running service instance",
+      "keep the 0.3.25 Administrator preflight for active Windows services intact"
     ]
   },
   "dependencies": {

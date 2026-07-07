@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.26",
+  "version": "0.3.27",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -259,6 +259,12 @@
       "bypass the local REST wrapper for version, status, and service-management commands so self-diagnostics use the invoking CLI binary directly",
       "prevent local update debugging on Windows from accidentally reading version or service responses from an older already-running service instance",
       "keep the 0.3.25 Administrator preflight for active Windows services intact"
+    ],
+    "0.3.27": [
+      "release 0.3.27",
+      "fix local config commands so config:set/get/list/unset no longer proxy through the running service and accidentally use the service account Claude home",
+      "make llmproxy test read the effective LLMPROXY_LLM_STATS_API_KEY from configuration scopes instead of requiring Claude proxy markers in the project settings file",
+      "keep the 0.3.26 local self-diagnostics bypass intact while restoring correct global Claude key handling on Windows"
     ]
   },
   "dependencies": {

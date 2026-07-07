@@ -1783,6 +1783,57 @@ test("version bypasses the REST wrapper even when the local service is reachable
   assert.equal(stdout.toString().trim(), require("../package.json").version);
 });
 
+test("config commands bypass the REST wrapper even when the local service is reachable", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-config-rest-bypass-"));
+  const runtimeRoot = path.join(root, "runtime");
+  const homeDir = path.join(root, "home");
+  const projectRoot = path.join(root, "workspace");
+  const requests = [];
+
+  fs.mkdirSync(runtimeRoot, { recursive: true });
+  fs.mkdirSync(homeDir, { recursive: true });
+  fs.mkdirSync(projectRoot, { recursive: true });
+
+  const setStdout = createWritableBuffer();
+  let exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_LLM_STATS_API_KEY", "sk-global-demo", "--scope", "global"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    stdout: setStdout,
+    env: { ...process.env, HOME: homeDir },
+    restFetchFn: async (url) => {
+      requests.push(String(url));
+      if (String(url).endsWith("/health")) {
+        return { ok: true, async json() { return { ok: true }; } };
+      }
+      throw new Error(`unexpected REST call: ${url}`);
+    },
+  });
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requests, []);
+  assert.match(setStdout.toString(), /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+
+  const globalSettings = JSON.parse(fs.readFileSync(path.join(homeDir, ".claude", "settings.json"), "utf8"));
+  assert.equal(globalSettings.env.LLMPROXY_LLM_STATS_API_KEY, "sk-global-demo");
+
+  const getStdout = createWritableBuffer();
+  exitCode = await runCli(["node", "llmproxy", "config:get", "LLMPROXY_LLM_STATS_API_KEY", "--scope", "global"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    stdout: getStdout,
+    env: { ...process.env, HOME: homeDir },
+    restFetchFn: async (url) => {
+      requests.push(String(url));
+      if (String(url).endsWith("/health")) {
+        return { ok: true, async json() { return { ok: true }; } };
+      }
+      throw new Error(`unexpected REST call: ${url}`);
+    },
+  });
+  assert.equal(exitCode, 0);
+  assert.deepEqual(requests, []);
+  assert.match(getStdout.toString(), /global\.LLMPROXY_LLM_STATS_API_KEY=sk-global-demo/);
+});
+
 test("models:list prints a numbered list of available models", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-list-"));
   const stdout = createWritableBuffer();
@@ -1886,6 +1937,68 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
   assert.equal(body.messages[0].content[0].text, "Rispondi solo: llmproxy-test-auto");
   assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\)/);
   assert.doesNotMatch(stdout.toString(), /ciao creatore/);
+});
+
+test("test accepts a project-scoped LLMPROXY_LLM_STATS_API_KEY even when Claude proxy markers are absent", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-test-project-stats-key-"));
+  const projectRoot = path.join(runtimeRoot, "workspace");
+  const homeDir = path.join(runtimeRoot, "home");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const requests = [];
+  const { createTokenStore } = require("../lib/token-store");
+  const tokenStore = createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("auto", { access_token: "token-auto", token_type: "bearer", scope: "read:user", provider: "copilot", default_model: "claude-sonnet-4.5" }, { name: "auto" });
+  fs.mkdirSync(path.join(projectRoot, ".claude"), { recursive: true });
+  fs.mkdirSync(path.join(homeDir, ".claude"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, ".claude", "settings.json"), JSON.stringify({
+    env: {
+      LLMPROXY_LLM_STATS_API_KEY: "sk-project-only",
+    },
+  }, null, 2));
+  fs.writeFileSync(path.join(homeDir, ".claude", "settings.json"), JSON.stringify({ env: {} }, null, 2));
+
+  const fetchFn = async (url, options = {}) => {
+    requests.push({ url, options });
+    if (String(url).endsWith("/v1/llm/health")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true, manifest_version: "v11" };
+        },
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4.5",
+          content: [{ type: "text", text: "ciao creatore" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "test"], {
+    cwd: projectRoot,
+    dataRoot: runtimeRoot,
+    env: { ...process.env, HOME: homeDir },
+    stdout,
+    stderr,
+    fetchFn,
+    tokenStore,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.toString(), "");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, "http://127.0.0.1:5045/v1/llm/health");
+  assert.equal(requests[1].url, "http://127.0.0.1:5045/v1/messages");
+  assert.match(stdout.toString(), /auto: ok \(claude-sonnet-4\.5\)/);
 });
 
 test("test fails when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings", async () => {

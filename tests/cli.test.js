@@ -2367,7 +2367,7 @@ test("test hides llmproxy metadata lines from the printed assistant reply", asyn
           role: "assistant",
           content: [{
             type: "text",
-            text: "llmproxy-test-qwen\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 256 (in 20, out 236) | provider today 256 week 256 | model today 256 week 256",
+            text: "llmproxy-test-qwen\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 256 (in 20, out 236) | oggi: qwen3.7-max 256 (in 20, out 236) | settimana: qwen3.7-max 256 (in 20, out 236) | `llmproxy stats` per la tabella completa",
           }],
         };
       },
@@ -3828,7 +3828,7 @@ test("test -i treats metadata-only inline output as a successful inference when 
           model: "kimi-k2.7-code",
           content: [{
             type: "text",
-            text: "[llmproxy] provider: kimi | model: kimi-k2.7-code\n\n[llmproxy] tokens: req 357 (in 101, out 256) | provider today 2196 week 3422 | model today 2196 week 3422",
+            text: "[llmproxy] provider: kimi | model: kimi-k2.7-code\n\n[llmproxy] tokens: req 357 (in 101, out 256) | oggi: kimi-k2.7-code 357 (in 101, out 256) | settimana: kimi-k2.7-code 357 (in 101, out 256) | `llmproxy stats` per la tabella completa",
           }],
         };
       },

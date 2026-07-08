@@ -44,7 +44,7 @@ function withInferenceMetadata(text, providerId, modelUsed, promptTokens = 0, co
   }
   parts.push(text);
   if (footer) {
-    parts.push(`[llmproxy] tokens: req ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | provider today ${requestTokens} week ${requestTokens} | model today ${requestTokens} week ${requestTokens}`);
+    parts.push(`[llmproxy] tokens: req ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | oggi: ${modelUsed} ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | settimana: ${modelUsed} ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | \`llmproxy stats\` per la tabella completa`);
   }
   return parts.join("\n\n");
 }

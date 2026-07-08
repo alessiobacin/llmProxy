@@ -15,14 +15,14 @@ This file is the canonical architectural and behavioral guide for the V11 platfo
 
 ## 2. Mandatory Spec Files (with paths)
 Refer to these files directly in the codebase for detailed architectural authority. Do not guess behavior:
-- **Core vision & structure:** [vision](file:///home/aqdas/Modules-Platform/v11/02%20-%20README.md)
-- **Architecture mapping:** [architecture](file:///home/aqdas/Modules-Platform/v11/03%20-%20ARCHITECTURE.md)
-- **High-level summary:** [summary](file:///home/aqdas/Modules-Platform/v11/04%20-%20ARCHITECTURE-SUMMARY.md)
-- **Deployment and port mapping:** [numbering](file:///home/aqdas/Modules-Platform/v11/06%20-%20MODULE-NUMBERING.md)
-- **Startup sequence:** [bootstrap](file:///home/aqdas/Modules-Platform/v11/08%20-%20BOOTSTRAP-ORDER.md)
-- **Tenancy and scope:** [multi-tenancy](file:///home/aqdas/Modules-Platform/v11/16%20-%20MULTI-TENANCY.md)
-- **Identity and JWT conventions:** [security](file:///home/aqdas/Modules-Platform/v11/18%20-%20SECURITY-AUTH.md)
-- **Tech stack mandates:** [stack](file:///home/aqdas/Modules-Platform/v11/21%20-%20DEVELOPMENT-STACK.md)
+- **Core vision & structure:** [vision](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/02%20-%20README.md)
+- **Architecture mapping:** [architecture](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/03%20-%20ARCHITECTURE.md)
+- **High-level summary:** [summary](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/04%20-%20ARCHITECTURE-SUMMARY.md)
+- **Deployment and port mapping:** [numbering](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/06%20-%20MODULE-NUMBERING.md)
+- **Startup sequence:** [bootstrap](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/08%20-%20BOOTSTRAP-ORDER.md)
+- **Tenancy and scope:** [multi-tenancy](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/16%20-%20MULTI-TENANCY.md)
+- **Identity and JWT conventions:** [security](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/18%20-%20SECURITY-AUTH.md)
+- **Tech stack mandates:** [stack](file://Users/alessiobacin/Documents/Claude/Projects/Modules Platform/v11/21%20-%20DEVELOPMENT-STACK.md)
 
 ---
 

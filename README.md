@@ -1434,8 +1434,8 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_MONGODB_CONNECTION_STRING` | unset | full MongoDB connection string | standalone persistence target for metering/log storage; when unset, standalone mode falls back to local JSONL storage. Ignored when `LLMPROXY_MODE=platform` |
 | `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | if `1`, appends inline token/metering stats at the end of the inference; if absent in `.claude/settings.json`, the project value is `0` |
 | `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | if `1`, prepends inline provider/model info at the start of the inference; if absent in `.claude/settings.json`, the project value is `0` |
-| `DBLAYER_URL` | auto | full URL | optional explicit db-layer override. If absent, llmProxy derives `5001` dev, `6001` staging, `7001` production |
-| `EVENTBUS_URL` | auto | full URL | optional explicit event-bus override. If absent, llmProxy derives `5048` dev, `6048` staging, `7048` production |
+| `DBLAYER_URL` | auto | full URL | optional explicit db-layer override. If absent, llmProxy derives `5001` dev, `6001` staging, `7001` production. The port is automatically corrected by `resolveServiceUrlForProfile` to match the runtime profile port prefix (5/6/7), so a dev URL with port `6001` would be overwritten to `5001` when running in development profile |
+| `EVENTBUS_URL` | auto | full URL | optional explicit event-bus override. If absent, llmProxy derives `5048` dev, `6048` staging, `7048` production. Same automatic port correction as `DBLAYER_URL`: port must match the active runtime profile prefix |
 | `LLMPROXY_SECRET` | unset | arbitrary string | optional HMAC secret for internal token signing |
 | `LLMPROXY_SERVICE_RUNTIME` | auto | `native`, `docker` | persistent service runtime: `native` (LaunchAgent/systemd) or `docker` (Docker Compose) |
 | `LLMPROXY_DOCKER_COMPOSE_FILE` | auto | file path | Docker Compose file for docker runtime |
@@ -1605,3 +1605,9 @@ Existing tests:
 - JSONL logger
 - launchd service rendering
 - HTTP runtime `/health`, `/auth/status`, and `/v1/messages`
+
+### Notable internal changes
+
+**`lib/runtime-env.js`**: `loadRuntimeEnv` now passes `DBLAYER_URL` and `EVENTBUS_URL` through `resolveServiceUrlForProfile(url, expectedPort)`. This function validates that each URL's port matches the profile-appropriate port prefix (5/6/7 for dev/staging/production) and corrects it if a mismatch is detected. This prevents services like event-bus from being contacted on the wrong port when the runtime profile changes (e.g., running on 7045 but connecting to event-bus on 5048 — now correctly forced to 7048).
+
+**`lib/copilot-proxy.js`**: Fixed a fallthrough bug in the inference flow control. Network errors and provider API errors were not properly isolated with `else` branches, causing execution to fall through after an error was already handled. Both paths now terminate with explicit `else` instead of falling through to subsequent logic. This avoids spurious second error reports for the same failed request.

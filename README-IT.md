@@ -323,6 +323,23 @@ llmproxy provider:list
 - `LLMPROXY_SHORT_ANSWER`
   Opzionale. Default: disattivato se non impostato. Impostalo a `1`, `true`, `yes` o `on` per chiedere a llmProxy di iniettare una istruzione di risposta concisa su ogni inferenza proxata di quel progetto.
 
+### Statistiche inline (footer inferenza)
+
+Quando `LLMPROXY_METERING_INLINE=1`, llmProxy aggiunge in fondo a ogni risposta un footer con le statistiche di utilizzo token. Il formato include:
+
+- **Token della richiesta corrente**: totale, input e output
+- **Breakdown per modello (oggi)**: token totali, input e output per ogni modello usato oggi
+- **Breakdown per modello (settimana)**: token totali, input e output per ogni modello usato nella settimana corrente
+- **Credito provider** (opzionale): se `LLMPROXY_PROVIDER_CREDIT_INLINE=1`, mostra il credito residuo del provider (DeepSeek, Kimi, OpenRouter)
+
+Esempio di footer completo:
+
+```
+[llmproxy] req 123 (in 100, out 23) | oggi: deepseek-v4-flash 5000 (in 4000, out 1000) | settimana: deepseek-v4-flash 20000 (in 16000, out 4000) | credito: USD 12.34
+```
+
+Il credito provider viene fetchato dalle API ufficiali (DeepSeek, Kimi, OpenRouter) e cachato per 5 minuti per evitare chiamate ripetute.
+
 ### Differenze rispetto ad altre configurazioni locali
 
 Se stavi gia` usando un proxy locale o una configurazione precedente di Claude Code, qui ci sono le differenze importanti:
@@ -1062,6 +1079,7 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_MONGODB_CONNECTION_STRING` | unset | stringa completa MongoDB | destinazione standalone per persistenza metering/log; se assente usa JSONL locale. Ignorata se `LLMPROXY_MODE=platform` |
 | `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | se `1`, aggiunge in fondo all'inferenza le statistiche token/metering inline; se assente in `.claude/settings.json`, il valore di progetto e` `0` |
 | `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | se `1`, aggiunge all'inizio dell'inferenza provider e modello usati; se assente in `.claude/settings.json`, il valore di progetto e` `0` |
+| `LLMPROXY_PROVIDER_CREDIT_INLINE` | unset | `0`, `1` | se `1`, aggiunge nel footer inline il credito residuo del provider (DeepSeek, Kimi, OpenRouter); richiede `LLMPROXY_METERING_INLINE=1` |
 | `DBLAYER_URL` | auto | URL completo | override esplicito opzionale del db-layer. Se assente, llmProxy deriva `5001` dev, `6001` staging, `7001` production |
 | `EVENTBUS_URL` | auto | URL completo | override esplicito opzionale dell'event-bus. Se assente, llmProxy deriva `5048` dev, `6048` staging, `7048` production |
 | `LLMPROXY_SECRET` | unset | stringa arbitraria | secret HMAC opzionale per la firma di token interni |

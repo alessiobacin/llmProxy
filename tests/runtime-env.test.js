@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const { loadRuntimeEnv, resolveProxyHostPort } = require("../lib/runtime-env");
+const { loadRuntimeEnv, resolveProxyHostPort, resolveServiceUrlForProfile } = require("../lib/runtime-env");
 
 test("loadRuntimeEnv keeps local checkout defaults from .env in development", () => {
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-runtime-local-"));
@@ -97,4 +97,61 @@ test("resolveProxyHostPort keeps the shared production port across different use
 
   assert.deepEqual(aliceBinding, { host: "127.0.0.1", port: "7045" });
   assert.deepEqual(bobBinding, { host: "127.0.0.1", port: "7045" });
+});
+
+test("resolveServiceUrlForProfile passes through URL with matching port", () => {
+  const result = resolveServiceUrlForProfile("http://localhost:7048", "7048");
+  assert.equal(result, "http://localhost:7048");
+});
+
+test("resolveServiceUrlForProfile corrects URL with wrong port", () => {
+  const result = resolveServiceUrlForProfile("http://localhost:5048", "7048");
+  assert.equal(result, "http://localhost:7048");
+});
+
+test("resolveServiceUrlForProfile preserves path when correcting port", () => {
+  const result = resolveServiceUrlForProfile("http://localhost:5048/api/v1/events", "7048");
+  assert.equal(result, "http://localhost:7048/api/v1/events");
+});
+
+test("resolveServiceUrlForProfile passes through URL without port", () => {
+  const result = resolveServiceUrlForProfile("http://event-bus.internal", "7048");
+  assert.equal(result, "http://event-bus.internal");
+});
+
+test("resolveServiceUrlForProfile passes through invalid URL", () => {
+  const result = resolveServiceUrlForProfile("not-a-url", "7048");
+  assert.equal(result, "not-a-url");
+});
+
+test("loadRuntimeEnv auto-corrects EVENTBUS_URL to match profile in production", () => {
+  const packageRoot = require("node:path").join(
+    require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "llmproxy-runtime-prod-eventbus-")),
+    "node_modules", "llmproxy",
+  );
+  require("node:fs").mkdirSync(packageRoot, { recursive: true });
+
+  const env = loadRuntimeEnv({
+    env: { LLMPROXY_RUNTIME_PROFILE: "production", EVENTBUS_URL: "http://localhost:5048" },
+    packageRoot,
+    dataRoot: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "llmproxy-runtime-prod-eventbus-data-")),
+  });
+
+  assert.equal(env.EVENTBUS_URL, "http://localhost:7048");
+});
+
+test("loadRuntimeEnv auto-corrects DBLAYER_URL to match profile in production", () => {
+  const packageRoot = require("node:path").join(
+    require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "llmproxy-runtime-prod-dblayer-")),
+    "node_modules", "llmproxy",
+  );
+  require("node:fs").mkdirSync(packageRoot, { recursive: true });
+
+  const env = loadRuntimeEnv({
+    env: { LLMPROXY_RUNTIME_PROFILE: "production", DBLAYER_URL: "http://localhost:5001" },
+    packageRoot,
+    dataRoot: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "llmproxy-runtime-prod-dblayer-data-")),
+  });
+
+  assert.equal(env.DBLAYER_URL, "http://localhost:7001");
 });

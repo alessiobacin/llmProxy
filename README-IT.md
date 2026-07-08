@@ -822,7 +822,7 @@ Esempio `.claude/settings.json`:
   "model": "llmProxy",
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
-    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",ƒ
+    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
     "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "power"
   }
 }

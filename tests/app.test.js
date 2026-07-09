@@ -6,6 +6,7 @@ const path = require("node:path");
 
 process.env.LLMPROXY_METERING_INLINE = "true";
 process.env.LLMPROXY_INFERENCE_INFO_INLINE = "true";
+process.env.LLMPROXY_PRICE_PERFORMANCE_ROUTING = "false";
 const TEST_HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-home-"));
 fs.mkdirSync(path.join(TEST_HOME_DIR, ".claude"), { recursive: true });
 fs.writeFileSync(path.join(TEST_HOME_DIR, ".claude", "settings.json"), JSON.stringify({
@@ -44,7 +45,7 @@ function withInferenceMetadata(text, providerId, modelUsed, promptTokens = 0, co
   }
   parts.push(text);
   if (footer) {
-    parts.push(`[llmproxy] tokens: req ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | oggi: ${modelUsed} ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | settimana: ${modelUsed} ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | \`llmproxy stats\` per la tabella completa`);
+    parts.push(`[llmproxy] req ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | oggi: ${modelUsed} ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | settimana: ${modelUsed} ${requestTokens} (in ${promptTokens}, out ${completionTokens}) | \`llmproxy stats\` per la tabella completa`);
   }
   return parts.join("\n\n");
 }
@@ -1103,7 +1104,7 @@ test("messages endpoint preserves inline provider and metering metadata for non-
     assert.match(payload.content[0].text, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
     assert.equal(payload.content[1].type, "tool_use");
     assert.equal(payload.content.at(-1).type, "text");
-    assert.match(payload.content.at(-1).text, /\[llmproxy\] tokens: req 16 \(in 11, out 5\)/);
+    assert.match(payload.content.at(-1).text, /\[llmproxy\] req 16 \(in 11, out 5\)/);
     assert.equal(meteringSink.records.length, 1);
     assert.equal(meteringSink.records[0].provider, "default");
   });
@@ -1175,7 +1176,7 @@ test("messages endpoint preserves inline provider and metering metadata for stre
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
-    assert.match(payload, /\[llmproxy\] tokens: req 10 \(in 7, out 3\)/);
+    assert.match(payload, /\[llmproxy\] req 10 \(in 7, out 3\)/);
     assert.match(payload, /"type":"tool_use"/);
     assert.match(payload, /"stop_reason":"tool_use"/);
     assert.equal(meteringSink.records.length, 1);
@@ -1268,7 +1269,7 @@ test("messages endpoint preserves inline provider and metering metadata for anth
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /\[llmproxy\] provider: opencode-go \| model: minimax-m3/);
-    assert.match(payload, /\[llmproxy\] tokens: req 6 \(in 4, out 2\)/);
+    assert.match(payload, /\[llmproxy\] req 6 \(in 4, out 2\)/);
     assert.match(payload, /"type":"tool_use"/);
     assert.match(payload, /"stop_reason":"tool_use"/);
     assert.equal(meteringSink.records.length, 1);
@@ -1328,7 +1329,7 @@ test("messages endpoint counts tokens from a usage-only final streaming chunk", 
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /pong stream/);
-    assert.match(payload, /\[llmproxy\] tokens: req 256 \(in 20, out 236\)/);
+    assert.match(payload, /\[llmproxy\] req 256 \(in 20, out 236\)/);
   });
 });
 
@@ -1346,7 +1347,7 @@ test("messages endpoint rewrites provider metadata once when upstream response a
         choices: [
           {
             message: {
-              content: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 0 (in 0, out 0) | today 980728 | week 1196086",
+              content: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] req 0 (in 0, out 0) | today 980728 | week 1196086",
             },
             finish_reason: "stop",
           },
@@ -1400,7 +1401,7 @@ test("messages endpoint strips llmproxy metadata from streaming provider deltas 
           model: "claude-sonnet-4.5",
           choices: [{
             delta: {
-              content: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 0 (in 0, out 0) | today 980728 | week 1196086",
+              content: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] req 0 (in 0, out 0) | today 980728 | week 1196086",
             },
           }],
         })}\n\n`));
@@ -1583,7 +1584,7 @@ test("messages endpoint strips llmproxy metadata from prior conversation turns b
         messages: [
           {
             role: "assistant",
-            content: [{ type: "text", text: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] tokens: req 0 (in 0, out 0) | today 980728 | week 1196086" }],
+            content: [{ type: "text", text: "build ok\n\n[llmproxy] provider: qwen | model: qwen3.7-max\n[llmproxy] req 0 (in 0, out 0) | today 980728 | week 1196086" }],
           },
           {
             role: "user",
@@ -2210,7 +2211,7 @@ test("messages endpoint can fall back to every configurable API-key provider", a
           `^\\[llmproxy\\] provider: ${providerId} \\| model: ${expectedModel}` +
           ` : Second in order because .+ \\(copilot\\) is returning: 400\\n\\n` +
           `served by ${providerId}\\n\\n` +
-          `\\[llmproxy\\] tokens: req 5 \\(in 3, out 2\\).+`;
+          `\\[llmproxy\\] req 5 \\(in 3, out 2\\).+`;
         assert.match(payload.content[0].text, new RegExp(fullPat));
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);

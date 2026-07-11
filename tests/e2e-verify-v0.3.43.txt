@@ -1,0 +1,30 @@
+E2E Verification — v0.3.43  (2026-07-11)
+========================================
+
+1. resolveBenchmarkMinutes(null, {LLMPROXY_PROVIDER_BENCHMARK_MINUTES: 5}) = 5 ✅
+   → Il parametro envSource opzionale funziona, override da runtimeEnv
+
+2. benchmark probe con durationMs > 0:
+   probeFn ok → stored con ok=true ✅
+   Il probeFn misura il tempo reale (Date.now - startedAt)
+
+3. llmp p:l output:
+   1. my-provider (My Provider) [$10.00]
+      model=gpt-4 coding=A+ vision=true free=false
+      credit=$10.00
+      price=$0.01/1K
+      best=openai ($0.005/1K)
+      proxy=http://127.0.0.1:8080   ✅ proxy= visibile
+      bench=23 ms                    ✅ bench= visibile
+
+4. Email system context:
+   host=DESKTOP-RLE36PF            ✅
+   ip=192.168.1.185                 ✅
+   dir=C:\Users\...\llmProxy        ✅
+   pid=15940                        ✅
+
+5. loadRuntimeEnv include claude global env:
+   LLMPROXY_PROVIDER_BENCHMARK_MINUTES presente ✅
+   LLMPROXY_SENDGRID_API_KEY presente           ✅
+
+VERSION: 0.3.43 (committed + pushed)

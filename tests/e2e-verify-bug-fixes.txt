@@ -1,0 +1,39 @@
+E2E Verification — Bug Fixes 2026-07-11
+========================================
+
+BUG #1: effectiveInlineMetering separato da creditInline
+  file: lib/project-context.js (riga 212)
+  ✅ Test A: metering=1, credit=0 => inlineMetering=true,  creditInline=false  (got: inlineMetering=true, creditInline=false)
+  ✅ Test B: metering=0, credit=1 => inlineMetering=false, creditInline=true   (got: inlineMetering=false, creditInline=true) — BUG FIXED
+  ✅ Test C: metering=0, credit=0 => inlineMetering=false, creditInline=false  (got: inlineMetering=false, creditInline=false)
+  ✅ Test D: metering=1, credit=1 => inlineMetering=true,  creditInline=true   (got: inlineMetering=true, creditInline=true)
+  Risultato: OK ✅
+
+BUG #2: buildInferenceFooter chiamata con oggetto opts (positional fix)
+  file: lib/copilot-proxy.js (righe 1387, 1755)
+  Chiamate cambiate da posizionale a {usageStats, smartRouteInfo, inlineMetering, creditInfo, ...}
+  Caricamento modulo: OK ✅
+
+METERING_INLINE formato compatto
+  file: lib/copilot-proxy.js buildInferenceFooter (righe 1164-1189)
+  formatCompactModels + formatWeekDelta unificate in formatModelStats
+  Output: provider/modello (in: X/d, out Y/d - in: Z/w, out Z/w)
+  Caricamento modulo: OK ✅
+
+Provider Benchmark probe reale
+  file: lib/app.js (righe 1297-1317), lib/provider-benchmark.js
+  probeFn sostituito: chiamata POST a endpoint inferenza con max_tokens=1
+  Test probe su 2 provider fittizi: ok=true
+  Risultato: OK ✅
+
+Server Health
+  GET /health => 200 (ok=true)
+  GET /v1/llm/health => 200 (ok=true)
+  Risultato: OK ✅
+
+========================================
+ALL E2E CHECKS: PASSED ✅
+========================================
+
+Test eseguito il: 2026-07-11
+Ambiente: Windows 11 Pro, Node.js 22 LTS+

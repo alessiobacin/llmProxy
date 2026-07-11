@@ -42,6 +42,7 @@ interface TokenStore {
   moveProvider: (providerId: string, position: number) => ProviderToken[];
   clearProvider: (providerId: string) => ProviderToken[] | null;
   renameProvider: (providerId: string, nextName: string) => ProviderToken;
+  updateProvider: (providerId: string, patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model">>) => ProviderToken;
   getAccessToken: (providerId?: string) => string | null;
 }
 
@@ -287,6 +288,55 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
     return saveProvider(targetId, existing as unknown as Record<string, unknown>, { name: normalizedName });
   }
 
+  function updateProvider(
+    providerId: string,
+    patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model">>,
+  ): ProviderToken {
+    const targetId = normalizeProviderId(providerId);
+    if (!targetId) throw new Error("Provider id richiesto");
+    const existing = getProvider(targetId);
+    if (!existing) throw new Error(`Provider non trovato: ${targetId}`);
+
+    const normalizedPatch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model">> = {};
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "name")) {
+      const newName = String(patch.name ?? "").trim();
+      if (!newName) throw new Error("Provider name non valido");
+      normalizedPatch.name = newName;
+    }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "vision")) {
+      if (patch.vision !== true && patch.vision !== false) {
+        throw new Error("--vision deve essere true oppure false");
+      }
+      normalizedPatch.vision = patch.vision;
+    }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "free_model")) {
+      if (patch.free_model !== true && patch.free_model !== false) {
+        throw new Error("--free-model deve essere true oppure false");
+      }
+      normalizedPatch.free_model = patch.free_model;
+    }
+
+    if (Object.keys(normalizedPatch).length === 0) {
+      return existing;
+    }
+
+    const registry = loadRegistry();
+    const idx = registry.providers.findIndex((p) => p.id === targetId);
+    if (idx >= 0) {
+      const merged: ProviderToken = { ...registry.providers[idx]! };
+      if (normalizedPatch.vision !== undefined) merged.vision = normalizedPatch.vision;
+      if (normalizedPatch.free_model !== undefined) merged.free_model = normalizedPatch.free_model;
+      if (normalizedPatch.name) merged.name = normalizedPatch.name;
+      registry.providers[idx] = merged;
+      persistRegistry(registry);
+      return registry.providers[idx]!;
+    }
+
+    return saveProvider(targetId, existing as unknown as Record<string, unknown>, {
+      name: normalizedPatch.name || existing.name,
+    });
+  }
+
   function getAccessToken(providerId?: string): string | null {
     if (providerId) return getProvider(providerId)?.access_token || null;
     return listProviders()[0]?.access_token || null;
@@ -304,6 +354,7 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
     moveProvider,
     clearProvider,
     renameProvider,
+    updateProvider,
     getAccessToken,
   };
 }

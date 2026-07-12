@@ -87,15 +87,12 @@ interface GatewayRequestParams {
   configuredModel: string | null;
   inlineMetering?: boolean | null;
   inlineInferenceInfo?: boolean | null;
-  pricePerformanceRouting?: boolean | null;
-  pricePerformanceTieBreaker?: string | null;
   tokenStore: unknown;
   logger: unknown;
   fetchFn: typeof fetch;
   endpointPreferences: unknown;
   availableModels: string[];
   providerCandidates?: Record<string, unknown>[] | null;
-  smartRouteInfo?: Record<string, unknown> | null;
 }
 
 // ---------- provider selection ----------
@@ -254,15 +251,12 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
     configuredModel: params.configuredModel,
     inlineMetering: params.inlineMetering,
     inlineInferenceInfo: params.inlineInferenceInfo,
-    pricePerformanceRouting: params.pricePerformanceRouting,
-    pricePerformanceTieBreaker: params.pricePerformanceTieBreaker,
     tokenStore: params.tokenStore,
     logger: params.logger,
     fetchFn: params.fetchFn,
     endpointPreferences: params.endpointPreferences,
     availableModels: params.availableModels,
     providerCandidates: params.providerCandidates,
-    smartRouteInfo: params.smartRouteInfo,
   });
 }
 

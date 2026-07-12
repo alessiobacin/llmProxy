@@ -272,89 +272,38 @@ If you prefer manual configuration, set both the top-level `model` field and the
 
 ### Optional concise answers with `shortAnswer`
 
-## Routing Controls
+### `LLMPROXY_REORDERING`
 
-`llmProxy` now has two separate routing controls:
+Service-scoped variable (read from the running proxy's own environment, not per-project `.claude/settings.json`).
 
-### `LLMPROXY_PRICE_PERFORMANCE_ROUTING`
-
-Project-scoped variable stored in `.claude/settings.json`.
-
-Supported values:
-
-- `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`
-- `LLMPROXY_PRICE_PERFORMANCE_ROUTING=true`
+Supported values: an ordered, `-`-separated list of criteria, most important first. Valid tokens: `price`, `power`, `speed`. Any subset is allowed (e.g. just `price`).
 
 Related variable:
 
-- `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER=power|speed`
+- `LLMPROXY_REORDERING_MINUTES=<n>` — how often the reordering cycle runs (default `5` when `LLMPROXY_REORDERING` is set)
 
 What it does:
 
-- reorders the provider list before the first request attempt
-- always prefers `free_model=true` providers over paid ones
-- if multiple providers have the same effective cost, it breaks ties by:
-  - `power`: prefer the strongest model tier
-  - `speed`: prefer the fastest model tier
+- every `LLMPROXY_REORDERING_MINUTES` minutes, ranks all registered providers using live data and persists the result as the new provider fallback order
+- `price`: real cost from the CloudPrice pricing API (`free_model=true` providers count as cost `0`)
+- `power`: real `coding_index` benchmark score from the CloudPrice benchmarks API
+- `speed`: real inference-latency probe (a minimal `max_tokens: 1` request to each provider)
+- providers missing data for a given criterion rank last on that criterion only — ranking still proceeds using the remaining criteria
+- the persisted order is the single source of truth: it's what `llmproxy provider:list` shows, what `/v1/messages` fallback uses, and what a manual `llmproxy provider:order` sets until the next automatic cycle
 
 Important:
 
-- this does not replace `LLMPROXY_AUTO_ESCALATE`
-- this does not analyze the request content
-- this is a static provider-order optimization layer
-- it applies before the normal fallback loop starts
+- if `LLMPROXY_REORDERING` is unset or empty, no automatic reordering happens — the order stays whatever was last set manually
+- run `llmproxy provider:reorder` to force an immediate cycle without waiting for the timer
 
-### `LLMPROXY_AUTO_ESCALATE`
+### Example service `.env`
 
-Service/runtime variable.
-
-What it does:
-
-- watches for repeated identical user requests in the same project/thread
-- after the configured threshold, promotes the next provider in fallback order
-
-Important:
-
-- it is runtime recovery logic
-- it does not rank by cost
-
-### Interaction Rules When Multiple Features Are Enabled
-
-Precedence order:
-
-1. Explicit project model/provider configuration
-2. `LLMPROXY_PRICE_PERFORMANCE_ROUTING`
-3. Manual provider order
-4. `LLMPROXY_AUTO_ESCALATE` on repeated identical requests
-
-Concrete behavior:
-
-- if `PRICE_PERFORMANCE_ROUTING` is enabled, the request uses the cheapest/free-first provider order
-- `AUTO_ESCALATE` can still reshuffle later retries after repeated identical requests
-
-Recommended usage:
-
-- use `PRICE_PERFORMANCE_ROUTING` when several providers expose equivalent models and you want cost control
-- use `AUTO_ESCALATE` when you want repeated identical requests to move to the next fallback automatically
-
-### Example `.claude/settings.json`
-
-```json
-{
-  "model": "llmProxy",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
-    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
-    "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "speed"
-  }
-}
+```
+LLMPROXY_REORDERING=price-speed-power
+LLMPROXY_REORDERING_MINUTES=5
 ```
 
-In this configuration:
-
-- free providers are preferred first
-- if more than one provider is free, the fastest one is preferred
-- if fallback is needed afterward, the remaining chain still follows the cost-aware order
+In this configuration, every 5 minutes the proxy re-ranks providers: cheapest (free) first; among equal-cost providers, fastest measured latency next; among equal-cost-and-speed providers, highest coding benchmark score last.
 
 If you want to reduce completion length and save output tokens, you can enable a concise-answer mode.
 
@@ -862,6 +811,7 @@ x-project-path: /absolute/path/to/project
 | `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
+| `llmproxy provider:reorder` | `POST /api/providers/reorder` |
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
@@ -1077,6 +1027,10 @@ Shows the active provider and the ordered list of providers with the current fal
 ### `llmproxy provider:order <id> <position>`
 
 Moves a provider to the requested fallback position.
+
+### `llmproxy provider:reorder`
+
+Forces an immediate automatic reordering cycle (price/power/speed, per `LLMPROXY_REORDERING`) without waiting for the timer. Prints the criteria used, the resulting order, and the raw score for each provider. Does nothing (and says so) if `LLMPROXY_REORDERING` is unset.
 
 ### `llmproxy provider:rename <id> <name>`
 

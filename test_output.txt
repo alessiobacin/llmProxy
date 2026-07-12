@@ -1,0 +1,2655 @@
+✖ GET /api/config returns all variables (119.9125ms)
+✔ POST /api/config/:key with unknown variable returns 400 (43.8276ms)
+✔ POST /api/config/DBLAYER_URL returns restarting:false (18.8996ms)
+✔ POST /api/config/EVENTBUS_URL returns restarting:false (14.4307ms)
+✔ POST /api/config/LLMPROXY_SENDGRID_API_KEY returns restarting:false (14.2008ms)
+✔ POST /api/config/PORT returns restarting:true (18.3312ms)
+✔ POST /api/config/LLMPROXY_ENV returns restarting:true (22.2882ms)
+✔ POST /api/config/ANTHROPIC_BASE_URL writes to project settings (20.5628ms)
+✔ POST /api/config/LLMPROXY_LLM_STATS_API_KEY with scope=global writes to global Claude settings (21.111ms)
+✔ POST /api/config/:key with wrong scope returns error (15.0166ms)
+✔ POST /api/config/API_TIMEOUT_MS persists number-as-string (19.4282ms)
+✔ /v1/llm/health returns mode and manifest_version (90.5488ms)
+✔ /v1/llm/messages requires HierarchyContext in platform mode (41.3641ms)
+✔ /v1/llm/messages succeeds when HierarchyContext is supplied (72.8893ms)
+✔ /v1/llm/messages rejects HierarchyContext missing billing identifiers (12.3049ms)
+✔ /v1/llm/messages emits metering record with hierarchy attribution (25.4131ms)
+✔ /v1/llm/messages emits v10-ready metering record (agent/mansione/task_id mapping) (19.6319ms)
+✔ /v1/messages keeps backward compatibility without HierarchyContext (18.6226ms)
+✔ /v1/messages can resolve a shared user-scoped provider from the local auth token (15.0214ms)
+✔ POST /v1/llm/providers requires admin or owner role in platform mode (35.6837ms)
+✔ /v1/chat/completions returns OpenAI-shaped response without HierarchyContext (16.4843ms)
+✔ /v1/llm/chat/completions requires HierarchyContext in platform mode (9.6307ms)
+✔ /v1/llm/chat/completions succeeds with complete billing hierarchy context (16.023ms)
+✔ /v1/llm/messages with body.provider=openrouter requires a configured provider credential (9.48ms)
+✔ GET /v1/llm/metering returns 404 in standalone mode (7.4041ms)
+✔ GET /v1/llm/metering/stats returns 404 in standalone mode (6.8829ms)
+✔ GET /v1/llm/metering returns paginated records in platform mode (9.2875ms)
+✔ GET /v1/llm/metering filters by project_id (5.9469ms)
+✔ GET /v1/llm/metering filters by success=false (5.9288ms)
+✔ GET /v1/llm/metering returns 400 for invalid limit (7.2516ms)
+✔ GET /v1/llm/metering returns 400 for invalid success param (6.1566ms)
+✔ GET /v1/llm/metering/stats returns aggregate object in platform mode (6.6689ms)
+✔ health and auth status endpoints reflect standalone runtime state (107.6126ms)
+✔ auth status is true when only API-key providers are configured (28.3871ms)
+✔ auth status endpoint is also available in platform mode (33.5065ms)
+✔ messages endpoint returns a static non-stream response when project LLMPROXY_LLM_STATS_API_KEY is missing (38.2285ms)
+✔ messages endpoint returns a static streaming response when project LLMPROXY_LLM_STATS_API_KEY is missing (14.9488ms)
+✔ messages endpoint accepts the global Claude LLMPROXY_LLM_STATS_API_KEY when the project key is absent (25.8729ms)
+✔ messages endpoint blocks inference when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings (11.4935ms)
+✖ messages endpoint proxies a non-stream Copilot response into Anthropic format (17.93ms)
+✔ messages endpoint follows the order persisted by an LLMPROXY_REORDERING price cycle (24.8953ms)
+✖ messages endpoint honors LLMPROXY_METERING_INLINE from Claude project settings (19.0227ms)
+✖ messages endpoint honors LLMPROXY_INFERENCE_INFO_INLINE from Claude project settings (18.6112ms)
+✖ messages endpoint does not inherit inline flags from process env when Claude settings omit them (19.1222ms)
+✔ messages endpoint appends provider and model footer to streaming responses (17.067ms)
+✖ messages endpoint preserves inline provider and metering metadata for non-stream tool_use replies (14.9438ms)
+✖ messages endpoint preserves inline provider and metering metadata for streaming tool_use replies (15.977ms)
+✖ messages endpoint preserves inline provider and metering metadata for anthropic tool_use streams (13.7056ms)
+✖ messages endpoint counts tokens from a usage-only final streaming chunk (14.0271ms)
+✖ messages endpoint rewrites provider metadata once when upstream response already contains llmproxy lines (18.4692ms)
+✔ messages endpoint strips llmproxy metadata from streaming provider deltas before appending its own (18.5303ms)
+✖ messages endpoint falls back to the next Copilot provider when the first one fails (13.5541ms)
+✔ messages endpoint strips llmproxy metadata from prior conversation turns before proxying (14.3087ms)
+✖ messages endpoint truncates oversized Copilot tool lists and records the adjustment in logs (10.6392ms)
+✖ messages endpoint trims oldest messages and retries when Copilot rejects prompt token count (18.3875ms)
+✖ messages endpoint retries transient socket-close errors before failing (226.6842ms)
+✖ messages endpoint falls back to the next Copilot provider when the first one is blocked by safety policy (35.7369ms)
+✔ messages endpoint falls back to a supported Copilot model when the client sends an unsupported model (18.4237ms)
+✖ messages endpoint falls back from Copilot to Z.ai for GLM models (15.4995ms)
+▶ messages endpoint can fall back to every configurable API-key provider
+  ✖ openrouter (16.1749ms)
+  ✖ zai (15.1079ms)
+  ✖ kimi (15.7559ms)
+  ✖ qwen (15.9144ms)
+  ✖ opencode (14.5199ms)
+  ✖ opencode-go (16.5465ms)
+  ✖ openai (19.6025ms)
+  ✖ anthropic (17.3019ms)
+  ✖ deepseek (15.8073ms)
+  ✖ groq (16.5048ms)
+  ✖ mistral (14.1928ms)
+  ✖ xai (13.9465ms)
+  ✖ perplexity (35.3951ms)
+  ✖ together (15.4956ms)
+  ✖ fireworks (14.5238ms)
+  ✖ commandcode (14.2828ms)
+  ✖ nvidia (16.0526ms)
+✖ messages endpoint can fall back to every configurable API-key provider (289.3807ms)
+✖ messages endpoint still tries providers in configured order when request contains images (14.6155ms)
+✖ messages endpoint routes qwen token-plan keys to the token-plan endpoint (13.5098ms)
+✖ messages endpoint honors an explicit local provider variant id (13.0454ms)
+✖ messages endpoint tries a provider default model before moving to the next provider (14.9822ms)
+✖ messages endpoint honors provider/model fallback lists from Claude settings (15.5418ms)
+✖ messages endpoint keeps deepseek model names intact from Claude settings (14.1469ms)
+✖ messages endpoint uses default models for providers not listed in Claude settings (20.3748ms)
+✖ messages endpoint falls back when DeepSeek returns 402 insufficient balance (17.5258ms)
+✖ messages endpoint ignores llmProxy UI labels when project settings are unavailable (13.9891ms)
+✖ messages endpoint ignores llm-proxy UI labels when project settings are unavailable (13.4682ms)
+✖ messages endpoint ignores sticky Claude models when project settings delegate model routing to llm-proxy (17.6165ms)
+✔ messages endpoint prefers the Claude project-configured model over the incoming requested model (15.0091ms)
+✖ messages endpoint ignores sticky Claude models when project settings delegate model routing to llmproxy (16.4055ms)
+✔ messages endpoint injects a short-answer system instruction from Claude project settings (14.2712ms)
+✔ messages endpoint defaults LLMPROXY_SHORT_ANSWER to off when unset (11.6285ms)
+✔ messages endpoint lets a request disable project shortAnswer with shortAnswer false (13.2305ms)
+✔ messages endpoint preserves a cached dynamic Copilot model (12.3961ms)
+✔ runtime CLI commands are exposed via REST endpoints (250.2724ms)
+✔ claude setup is exposed via REST endpoint (22.1039ms)
+✖ model:set and config endpoints are exposed via REST (11.7555ms)
+✔ REST config endpoints support the global Claude scope (42.3825ms)
+✔ REST surface covers the CLI command families that are meant to have HTTP equivalents (0.6502ms)
+✔ logs stream endpoint exposes live logs over SSE (10.9349ms)
+✔ resolveServiceEnvironment aligns service ports with the CLI runtime env (6.8481ms)
+✖ resolveServiceEntryFile uses native server entrypoint by default even in production (1.5933ms)
+✖ resolveServiceEntryFile uses native server entrypoint on Linux in production (0.4361ms)
+✖ resolveServiceEntryFile uses Docker entrypoint only when explicitly set (0.315ms)
+✖ resolveServiceEntryFile uses the native server entrypoint in local development (0.218ms)
+✖ resolveServiceEntryFile allows forcing the native server runtime (0.2781ms)
+✖ resolveCliServiceManagerOptions uses native server entrypoint for installed production runtime (0.5019ms)
+✖ resolveCliServiceManagerOptions uses native server entrypoint on Linux in production (0.4326ms)
+✔ buildProxyAgentUrl preserves an explicit host:port proxy target (0.6438ms)
+✔ buildProxyAgentUrl defaults to port 7064 when only the host is provided (0.4366ms)
+✔ buildProxyAgentUrl embeds proxy auth without duplicating the port (0.1913ms)
+✖ claude:setup creates .claude/settings.json for the current project (72.9371ms)
+✔ claude:setup merges env settings without overwriting unrelated project settings (20.4813ms)
+✔ claude:setup loads HOST and PORT from the llmproxy package .env file (20.3005ms)
+✔ claude:setup uses the production service port 7045 when the installed CLI profile is active (33.4756ms)
+✔ provider:add performs a dedicated Copilot login and provider:list shows fallback order (22.7761ms)
+✔ provider:list shows the effective project fallback chain when Claude settings override the model routing (12.8398ms)
+✔ provider:list keeps provider default models when the project sets a global override model (11.1424ms)
+✔ provider:list shows residual credit plus current and best provider pricing (12.0853ms)
+✔ provider:available shows supported providers with aliases and auth type (6.7264ms)
+✔ provider:add supports api-key providers like openrouter (7.6396ms)
+✔ provider:add supports api-key providers like nvidia (5.6287ms)
+✔ provider:add allows multiple instances of same provider/model with different --name (11.1763ms)
+✔ provider:list loads legacy nvidia api-key entries saved without access_token (5.5916ms)
+✔ provider:add supports api-key providers like qwen (5.4375ms)
+✔ provider:add supports qwen subscription plan explicitly (6.4947ms)
+✔ provider:add supports anthropic-style API-key providers like opencode-go (5.6476ms)
+✔ provider:key routes qwen token-plan keys to the token-plan endpoint (8.5047ms)
+✔ provider:add stores free_model when requested (6.1441ms)
+✔ provider:add treats custom opencode instance ids with api-key as api-key providers (5.7836ms)
+✔ provider:add keeps separate custom instance ids even when provider and model are identical (12.7764ms)
+✖ provider:list shows vision and free flags for custom api-key provider instances (7.2018ms)
+✔ provider:add rejects invalid qwen plan values (4.4407ms)
+✔ provider:add requires --vision flag for api-key providers (4.0766ms)
+✔ provider:add rejects invalid --vision values (4.2537ms)
+✔ provider:add rejects api-key providers when the default model probe fails (4.2611ms)
+✔ provider:test treats NVIDIA HTTP 429 as a reachable provider (4.2459ms)
+✔ provider:add requires a default model for api-key providers (4.6161ms)
+✔ provider:key updates api key for an existing provider (6.8525ms)
+✔ provider:order moves providers to the requested fallback position (8.4723ms)
+✔ provider:reorder reports 'not configured' when LLMPROXY_REORDERING is unset (4.9923ms)
+✔ provider:reorder ranks by price and persists the new order (9.0558ms)
+✔ provider:rename updates the provider display name (7.5157ms)
+✔ provider:status shows ordered providers and identifies the active one (9.4136ms)
+✔ status shows configured fallback provider order (7.4738ms)
+✔ logs prints structured request logs when service stdout and stderr are empty (8.548ms)
+✔ service:start returns an error when the service manager install fails (2.8623ms)
+✔ service:start verifies Docker runtime and proxy health on production installs (6.3326ms)
+✔ service:start falls back to legacy docker-compose when the plugin is unavailable (5.8954ms)
+✔ service:restart on launchd reinstalls the agent directly (4.9141ms)
+✔ service:restart on launchd falls back to start when install is unavailable (5.0676ms)
+✔ service:restart on windows reinstalls the service directly (5.0175ms)
+✔ service:restart recovers the Docker runtime when the managed container is not running (6.9624ms)
+✖ service:runtime docker removes native artifacts and starts the docker runtime (5.8258ms)
+✔ service:runtime native stops the docker runtime and installs the native service (7.3837ms)
+✔ status reports Docker runtime activity when the service runtime is docker (7.6373ms)
+✔ windows status reports inactive cleanly when the service is not installed (4.2693ms)
+✔ runCli uses the REST wrapper when the local service is reachable (2.8185ms)
+✖ update bypasses the REST wrapper even when the local service is reachable (5.3985ms)
+✔ version bypasses the REST wrapper even when the local service is reachable (3.7328ms)
+✔ config commands bypass the REST wrapper even when the local service is reachable (13.51ms)
+✔ models:list prints a numbered list of available models (8.0188ms)
+✔ models:list uses the live Copilot model catalog when authenticated (5.7785ms)
+✔ test sends a fixed inference prompt to the local proxy and prints the assistant reply (10.2161ms)
+✔ test accepts a project-scoped LLMPROXY_LLM_STATS_API_KEY even when Claude proxy markers are absent (10.9555ms)
+✔ test fails when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings (8.3335ms)
+✔ test uses a deterministic per-user port when no explicit PORT is configured (8.0653ms)
+✔ test uses the production service port 7045 when the installed CLI profile is active (6.5164ms)
+✔ development runtime uses the fixed local proxy port 5045 (0.9441ms)
+✔ test probes only the active provider by default (8.9231ms)
+✔ test prints provider HTTP error details when the quick inference probe fails (6.5107ms)
+✔ test hides llmproxy metadata lines from the printed assistant reply (6.5602ms)
+✔ test retries once after a transient local fetch failure (7.5636ms)
+✔ claude:setup accepts a model index from the numbered model list (10.5783ms)
+✔ model:set updates the Claude project model with a raw provider-prefixed value (33.0565ms)
+✔ model:set rewrites ANTHROPIC_BASE_URL to the production service port 7045 for installed CLI profile (31.1749ms)
+✔ model:set rejects an empty model value (13.4504ms)
+✖ config:set/get/unset manages project-scoped variables in Claude settings (2.8434ms)
+✖ config:list shows effective llmproxy project defaults when values are unset (5.1301ms)
+✔ config:list inherits the global Claude defaults when the project has no local override (8.3753ms)
+✔ config:list outside a project shows only service configuration (4.0126ms)
+✔ config:set/get/unset manages service-scoped variables in the persistent service config (17.3754ms)
+✔ config:set/get/unset manages global Claude variables with --scope global (21.1039ms)
+✔ config scope precedence is project over global over service (10.8797ms)
+✔ config:set rejects switching to platform mode when db-layer or event-bus are unavailable (3.2119ms)
+✔ config:set rejects scope mismatches (5.5971ms)
+✔ claude:setup resolves model indexes from the live Copilot catalog (9.4831ms)
+✔ install:persistent-it installs the current package globally and starts the persistent macOS service in Italian (10.0524ms)
+✔ install:persistent-en installs the current package globally and starts the persistent macOS service in English (19.1934ms)
+✔ install:persistent-it prints linger guidance on Linux (13.3806ms)
+✔ install:persistent-en prints linger guidance on Linux in English (7.9969ms)
+✔ install:persistent-en best-effort enables linger during Linux bootstrap (7.2104ms)
+✔ service:start returns an error when the service manager install fails (2.4919ms)
+✔ install:persistent-it succeeds on Windows (4.8563ms)
+✔ install:persistent-en succeeds on Windows in English (4.8341ms)
+✔ windows persistent install script resolves the global cmd wrapper explicitly (0.2492ms)
+✔ runSelfUpdateWindows resolves the global cmd wrapper explicitly (0.2096ms)
+✔ install:persistent-it fails with prerequisite guidance when Docker is missing on Ubuntu (4.8636ms)
+✖ install:persistent-en stops early when the global npm prefix is protected and sudo is not pre-authorized (8.2364ms)
+✔ install:persistent-it accepts legacy docker-compose during preflight (7.0066ms)
+✔ install remains an alias for install:persistent-en (5.1708ms)
+✔ install alias succeeds on Windows in English (5.493ms)
+✔ claude:setup rejects model names and requires a numeric index (8.4519ms)
+✔ version prints the current package version (3.6889ms)
+✔ help prints a short description for each command (4.2758ms)
+✖ stop terminates only the dev foreground instance on port 5045 (5.3567ms)
+✔ stop does not touch the persistent service and reports when no dev instance is running (2.5303ms)
+✔ test probes every configured provider with --all-providers (7.854ms)
+✔ test --all-providers reports ok when response has no text content but request summary shows success (8.0673ms)
+✔ test --all-providers waits for a delayed per-provider request summary before declaring empty response (17.2004ms)
+✔ test -i runs a real inference through fallback order and prints final provider plus response (9.8066ms)
+✔ test -i treats metadata-only inline output as a successful inference when the request summary is valid (10.9985ms)
+✔ test -i --all-providers prints only validated working fallbacks after the winner (15.5354ms)
+✔ test -i --all-providers skips broken remaining fallbacks and fails the command (14.4777ms)
+✖ stats prints provider and model token breakdown from local metering data (24.304ms)
+✔ help stats prints detailed guidance (4.407ms)
+✔ package scripts expose install:persistent-it and install:persistent-en (0.3333ms)
+✔ package files include the Docker runtime assets for production service mode (0.2456ms)
+✔ help <command> prints detailed guidance for a specific command (4.2108ms)
+✔ help model:set prints detailed guidance for the model switch command (3.8326ms)
+✔ help covers release-notes and provider subcommands (45.6111ms)
+✔ help install prints English guidance for the English install command (3.7497ms)
+✔ help install:persistent-en prints English guidance (4.0827ms)
+✔ help install:persistent-it prints Italian guidance (5.0355ms)
+✔ --help is an alias for help (3.7546ms)
+✔ --version is an alias for version (2.5403ms)
+✖ update runs the package manager command for the latest llmproxy release (4.3656ms)
+✔ update stops early and reports missing base prerequisites (3.6282ms)
+✖ update stops early when the global npm prefix is protected and sudo is not pre-authorized (4.0164ms)
+✖ update keeps going when the remote version probe times out (20.0803ms)
+✔ update on Windows accepts npm.cmd during preflight (3.5612ms)
+✔ update on Windows stops early with admin guidance when the llmproxy service is active (3.6547ms)
+✔ update reports Docker prerequisites when the service runtime uses Docker (3.1953ms)
+✔ runSelfUpdate resolves the refreshed llmproxy binary by matching the target version (1.0718ms)
+✔ buildPersistentInstallScript includes sudo-to-user D-Bus delegation on Linux (0.2301ms)
+✔ buildPersistentInstallScript includes used_sudo path for update service:restart after sudo install (0.0961ms)
+✔ buildPersistentInstallScript persists home-local npm bins in login shell profiles (0.0969ms)
+✔ one-line installer reaps the global service port before starting llmproxy (0.461ms)
+✔ persistent install script also cleans and preserves the llmp alias (0.1804ms)
+✔ update keeps success when package install succeeds but service restart fails (3.1223ms)
+✔ config:migrate rewrites legacy project and service variables to the current schema (11.7799ms)
+✔ config:migrate rewrites the global Claude settings even when cwd has no local .claude folder (9.7932ms)
+✔ update reports rollback details when the installed build fails post-update verification (3.1943ms)
+✔ update prints changelog notes for known versions (3.0232ms)
+✔ update prints changelog notes for release 0.2.57 (3.4705ms)
+✔ update exits early when the installed version already matches the online version (3.0013ms)
+✔ update exits early when the installed version is newer than the online version (2.8098ms)
+✔ release-notes prints changelog notes for release 0.2.58 (6.4567ms)
+✔ release-notes formats notes from a commit message when provided (4.1018ms)
+(node:55428) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✔ release-notes reads embedded package notes when commit message is unavailable (3.8636ms)
+✔ update prefers release notes emitted by the newly installed binary (3.2756ms)
+✔ update prints changelog in English when LLMPROXY_LOCALE=en (2.9428ms)
+✔ update prints fallback changelog line when release notes are missing (2.9686ms)
+✔ uninstall stops service, removes service file, data dir, and npm/pnpm global installs (6.1069ms)
+✔ uninstall removes docker containers when docker managed runtime (4.655ms)
+✔ uninstall on linux stops systemd service and removes unit file (4.4228ms)
+✔ uninstall on windows removes the service and all npm wrappers (32.984ms)
+✔ provider:add allows multiple entries of the same provider with different models (12.3798ms)
+✔ normalizeCloudPriceModelCandidates strips date and -free suffixes (1.6943ms)
+✔ normalizeCloudPriceModelCandidates returns empty array for blank model (1.3807ms)
+✔ extractBenchmarkCodingScore finds coding_index metric across sources (0.4474ms)
+✔ extractBenchmarkCodingScore returns null when no coding_index present (0.1921ms)
+✔ fetchCodingScore fetches from cloudprice.net and caches by model (2.7792ms)
+✔ fetchCodingScore returns null when all candidates 404 (0.3848ms)
+✔ mapProviderToCloudPriceIds maps known provider kinds (0.4506ms)
+✔ fetchModelPricing returns payload.data when options or result present (0.6441ms)
+✔ pickCurrentPricingOption filters by provider id and standard tier, sorts by total_cost (0.398ms)
+✔ pickCurrentPricingOption returns null when no match (0.3746ms)
+✔ CONFIG_SPECS includes all expected variables (1.8033ms)
+✔ getConfigSpec returns full metadata for DBLAYER_URL (0.3736ms)
+✔ getConfigSpec returns full metadata for PORT (0.2442ms)
+✔ getConfigSpec returns null for unknown key (0.1864ms)
+✔ getConfigSpec for project-scope variable (0.3135ms)
+✔ getConfigSpec exposes the reordering service variables (0.2713ms)
+✔ getConfigSpec for LLMPROXY_SENDGRID_API_KEY (0.162ms)
+✔ isRestartRequired returns true for PORT (0.2322ms)
+✔ isRestartRequired returns false for DBLAYER_URL (2.2113ms)
+✔ isRestartRequired returns null for unknown key (0.2405ms)
+✔ isHotReloadable returns true for EVENTBUS_URL (0.198ms)
+✔ isHotReloadable returns false for PORT (0.1235ms)
+✔ getAllConfigSpecs returns a copy (0.3283ms)
+✔ listConfigSpecs returns all specs with metadata (0.2235ms)
+✔ setScopeValue writes service-scope variable to config.json (14.14ms)
+✔ getScopeValue reads service-scope variable (6.1847ms)
+✔ unsetScopeValue removes service-scope variable (5.3846ms)
+✔ setScopeValue writes project-scope variable to .claude/settings.json (7.226ms)
+✔ getScopeValue reads project-scope variable (7.0156ms)
+✔ listScopeValues inherits global Claude project defaults when local override is absent (22.6296ms)
+✔ getScopeValue returns the effective global Claude fallback for project-scope variables (11.848ms)
+✔ listGlobalProjectValues exposes the user-level Claude defaults separately (10.2214ms)
+✔ setScopeValue writes global project-scope variables to the user's global Claude settings (9.3659ms)
+✔ unsetScopeValue removes global project-scope variables from the user's global Claude settings (12.6859ms)
+✔ getProjectDefaultValues returns llmproxy project defaults (2.8708ms)
+✔ getServiceDefaultValues returns effective service defaults (1.283ms)
+✔ normalizeClaudeSettingsConfig removes legacy project variables and injects current llmproxy defaults (13.2804ms)
+✔ normalizeServiceConfigPayload removes legacy service variables and migrates Mongo connection string (4.3933ms)
+✔ migrateManagedConfig rewrites legacy project and service config in place (25.7105ms)
+✔ pollForToken persists access token after authorization completes (5.1927ms)
+✔ parseProviderModelPreferences keeps deepseek model names intact (4.122ms)
+✔ API_KEY_PROVIDER_CONFIGS.deepseek accepts only deepseek model family (0.4868ms)
+✔ API_KEY_PROVIDER_CONFIGS.qwen accepts only qwen model family (0.2724ms)
+✔ API_KEY_PROVIDER_CONFIGS.opencode accepts only OpenCode Zen chat-completions models (0.5092ms)
+✔ API_KEY_PROVIDER_CONFIGS.opencode-go accepts only OpenCode Go messages models (0.42ms)
+✔ getApiKeyProviderRequestUrls routes qwen token-plan keys to the token-plan endpoint first (0.4179ms)
+✔ getApiKeyProviderRequestUrls honors an explicit qwen payg plan (0.4685ms)
+✔ getApiKeyProviderRequestUrls returns the OpenCode Go messages endpoint (0.2538ms)
+✔ getApiKeyProviderRequestUrls returns the NVIDIA chat completions endpoint (0.2284ms)
+✔ probeApiKeyProviderModel retries qwen against the token-plan endpoint (0.9048ms)
+✔ parseProviderModelPreferences keeps mistral model names intact (0.2515ms)
+✔ parseProviderModelPreferences keeps mistral-small model names intact (0.2109ms)
+✔ parseProviderModelPreferences still supports zai- prefix shorthand (0.2201ms)
+✔ parseProviderModelPreferences expands nvidia glm shorthand to the provider-valid model id (0.3393ms)
+✔ sanitizeSchemaForMoonshot removes sibling keywords from $ref nodes and normalizes refs to $defs (0.6295ms)
+✔ sanitizeToolsForMoonshot sanitizes parameters of each tool (0.3353ms)
+✔ sanitizeSchemaForMoonshot hoists definitions nested away from the schema root and rewrites non-standard $ref pointers (0.3445ms)
+✔ sanitizeVisionContent replaces image_url blocks with [image] text for non-vision providers (0.5565ms)
+✔ sanitizeVisionContent keeps messages with only text unchanged (0.138ms)
+✔ sanitizeVisionContent handles message where content is only image_url (no text) (0.1944ms)
+✔ VISION_CAPABLE_PROVIDERS includes copilot and openai but not deepseek (0.1157ms)
+✔ isVisionCapableModel: qwen VL variants and qwen3.7-plus are vision, qwen3.7-max/qwen3/qwen-max are not (0.296ms)
+✔ isVisionCapableModel: copilot and openrouter are always vision (0.1553ms)
+✔ isVisionCapableModel: openai vision models detected correctly (0.2809ms)
+✔ isVisionCapableModel: non-vision providers correctly identified (0.3575ms)
+✔ isVisionCapableModel: unknown provider returns false (0.1295ms)
+✔ isContextLimitError detects Moonshot token limit errors (0.3967ms)
+✔ isContextLimitError detects Copilot max prompt token errors (0.1129ms)
+✔ shouldFallbackToNextProvider treats any provider error as fallbackable (0.2187ms)
+✔ trimOldestNonSystemMessage removes oldest non-system message (0.2381ms)
+✔ hasImageInOpenAiMessages detects image_url blocks (0.1929ms)
+✔ hasImageInLastUserMessage checks only the last user message for images (0.2331ms)
+✔ buildSelectionReason adds WITH VISION when hasImages is true and no failures occurred (0.501ms)
+✔ buildSelectionReason preserves preferredReason even with hasImages (0.1087ms)
+✔ buildSelectionReason returns ordinal reason when there are real failures (0.1895ms)
+✔ consumeMinimaxToolCallBuffer extracts tool calls from minimax markup (1.6647ms)
+✔ consumeMinimaxToolCallBuffer extracts tool calls from malformed minimax marker variant (0.4955ms)
+✔ handleStreaming converts minimax text tool markup into Anthropic tool_use SSE (7.0153ms)
+✔ handleStreaming converts malformed minimax marker variant into Anthropic tool_use SSE (1.6533ms)
+✔ translateOpenAiChatBodyToResponsesRequest caps tools to 128 for Copilot responses (0.9772ms)
+✔ translateOpenAiChatBodyToResponsesRequest resets named tool_choice when trimmed tool is removed (0.6878ms)
+✔ normalizeCopilotTooling caps tools to 128 for Copilot chat payloads (0.4571ms)
+✔ normalizeCopilotTooling resets named tool_choice when trimmed chat tool is removed (0.355ms)
+▶ buildEventBusHierarchyContext
+  ✔ maps tenant_id to tenantId (1.1806ms)
+  ✔ falls back to tenantId if already camelCase (0.2392ms)
+  ✔ throws when hierarchy context is null (V11: no silent fallback to 'unknown') (0.666ms)
+  ✔ maps optional fields to camelCase (0.2412ms)
+✔ buildEventBusHierarchyContext (3.9344ms)
+▶ createEventBusSink — no-op
+  ✔ returns noop sink when url is not provided (0.5237ms)
+  ✔ returns noop sink when url is empty string (0.1854ms)
+✔ createEventBusSink — no-op (1.0077ms)
+▶ createEventBusSink — publish
+  ✔ posts to /api/v1/events/publish with correct body (2.5254ms)
+  ✔ strips trailing slash from url (0.5082ms)
+  ✔ returns ok:false when event-bus returns non-2xx (0.6869ms)
+  ✔ returns ok:false on network error without throwing (0.5886ms)
+  ✔ uses custom topic and version when provided (0.4328ms)
+  ✔ returns ok:false when hierarchyContext is null (V11: no silent 'unknown' tenant) (0.2589ms)
+✔ createEventBusSink — publish (10.5819ms)
+▶ createEventBusSink — health probe
+  ✔ has isAvailable() method (0.3241ms)
+  ✔ noop sink has no health probe (no isAvailable) (0.1074ms)
+  ✔ has close() method that cleans up timer (0.2194ms)
+✔ createEventBusSink — health probe (0.8284ms)
+▶ createEventBusSink — notifier transitions
+  ✔ calls notifier on available→unavailable transition (99.07ms)
+  ✔ calls notifier on unavailable→available transition (90.3867ms)
+  ✔ noop sink close() does not throw (0.354ms)
+✔ createEventBusSink — notifier transitions (190.1915ms)
+✔ resolveProviderSelection preserves proxy settings for local providers (1.7012ms)
+✔ resolveProviderSelection preserves proxy settings for registry-backed providers (0.5425ms)
+✔ request logger writes audit entries with request and project metadata (13.8027ms)
+✔ request logger rotates JSONL logs when they exceed the configured size (33.0288ms)
+✔ request logger persists tool truncation metadata on provider attempts (4.7682ms)
+✔ request logger writes a request summary with provider sequence (5.3142ms)
+✔ request logger computes today and week token totals from successful summaries (20.5421ms)
+✔ request logger does not throw when request JSONL is not writable (4.101ms)
+✔ buildMongoFilter: empty filters returns empty query (1.4982ms)
+✔ buildMongoFilter: from/to build timestamp range (0.2332ms)
+✔ buildMongoFilter: only from (0.1587ms)
+✔ buildMongoFilter: success=true uses $or to include missing field (0.1678ms)
+✔ buildMongoFilter: success=false filters to exact false (0.1662ms)
+✔ buildMongoFilter: exact-match string fields are included (0.1257ms)
+✔ MongoDB sink: record() inserts document into collection (1.2994ms)
+✔ MongoDB sink: query() returns all records, default desc order (0.3554ms)
+✔ MongoDB sink: query() asc order returns oldest first (0.3741ms)
+✔ MongoDB sink: query() filter by project_id (0.4201ms)
+✔ MongoDB sink: query() filter by success=false (0.3095ms)
+✔ MongoDB sink: query() filter by from date (0.1908ms)
+✔ MongoDB sink: query() pagination with limit and offset (0.2667ms)
+✔ MongoDB sink: query() enforces max limit of 1000 (0.1984ms)
+✔ MongoDB sink: computeStats() returns correct totals (0.4424ms)
+✔ MongoDB sink: computeStats() filtered by project_id (0.2598ms)
+✔ MongoDB sink: computeStats() on empty set returns zeros (0.1339ms)
+✔ createMongoMeteringSink throws when uri is missing (0.5022ms)
+✔ resolveDbLayerUrl: uses DBLAYER_URL when set (2.1077ms)
+✔ resolveDbLayerUrl: strips trailing slash from DBLAYER_URL (0.4661ms)
+✔ resolveDbLayerUrl: falls back to 5046 in development (0.3454ms)
+✔ resolveDbLayerUrl: port 6046 for staging (0.379ms)
+✔ resolveDbLayerUrl: port 7046 for production (0.5312ms)
+✔ buildQueryString: empty opts returns empty string (0.3116ms)
+✔ buildQueryString: encodes from/to dates (0.3499ms)
+✔ buildQueryString: encodes success filter (0.2376ms)
+✔ buildQueryString: encodes string filter fields (0.3153ms)
+✔ buildQueryString: encodes limit/offset/order (0.6679ms)
+✔ createDbLayerSink throws when url is empty string (1.1893ms)
+✔ createDbLayerSink: isAvailable() is false before first probe (0.7655ms)
+✔ createDbLayerSink: isAvailable() is true after successful probe (24.5526ms)
+✔ createDbLayerSink: isAvailable() is false after failed probe (26.7075ms)
+✔ createDbLayerSink: isAvailable() is false when fetch throws (33.0267ms)
+✔ record: POSTs to db-layer when available (39.5573ms)
+✔ record: falls back to fallbackSink when db-layer unavailable (30.386ms)
+✔ record: falls back to fallbackSink when POST fails (29.4174ms)
+✔ query: fetches from db-layer when available (30.5917ms)
+✔ query: falls back to fallbackSink when db-layer unavailable (30.9016ms)
+✔ query: returns empty result when unavailable and no fallback (29.1407ms)
+✔ computeStats: fetches from db-layer stats endpoint when available (30.862ms)
+✔ computeStats: falls back to fallback computeStats when unavailable (30.3291ms)
+✔ notifier called on available→unavailable transition (94.9194ms)
+✔ notifier called on unavailable→available transition (89.6288ms)
+✔ notifier handles probe error gracefully (29.3503ms)
+✔ buildMeteringRecord normalizes provider attempts and totals (4.4183ms)
+✔ buildMeteringRecord emits per-level user IDs from hierarchyContext (0.3561ms)
+✔ buildMeteringRecord per-level user IDs default to null when absent (0.255ms)
+✔ createNoopMeteringSink stores records in memory for inspection (0.3933ms)
+✔ createJsonlMeteringSink writes redacted records to disk (3.999ms)
+✔ emitMetering returns METERING_SINK_FAILED when sink throws (0.4176ms)
+✔ redactObject scrubs sensitive keys recursively (0.2832ms)
+✔ readJsonlFile returns empty array when file does not exist (1.2783ms)
+✔ readJsonlFile parses valid JSONL and skips malformed lines (3.0406ms)
+✔ matchesFilters returns true when no filters applied (0.494ms)
+✔ matchesFilters applies from/to range (0.2266ms)
+✔ matchesFilters applies success filter (0.2083ms)
+✔ matchesFilters applies string equality filters (0.2574ms)
+✔ queryMeteringRecords returns all records when no filters (0.5406ms)
+✔ queryMeteringRecords desc order returns newest first (0.2191ms)
+✔ queryMeteringRecords applies limit and offset (8.2936ms)
+✔ queryMeteringRecords filters by project_id (0.2826ms)
+✔ queryMeteringRecords caps limit at 1000 (0.1668ms)
+✔ computeMeteringStats on empty array returns zeroes and nulls (0.4461ms)
+✔ computeMeteringStats aggregates token counts, latency, and breakdowns (0.347ms)
+✔ createJsonlMeteringSink.computeStats returns aggregate stats with by_model (7.1794ms)
+✔ createNoopMeteringSink.query returns paginated results (0.4815ms)
+✔ createJsonlMeteringSink.query reads and filters JSONL file (5.4025ms)
+▶ model-capabilities
+  ▶ getCapabilities
+    ✔ ritorna capabilities per un modello noto (2.3785ms)
+    ✔ ritorna null per un modello sconosciuto (0.767ms)
+    ✔ ritorna capabilities per variante con suffisso data (0.2153ms)
+    ✔ ritorna capabilities per deepseek-chat (0.2392ms)
+    ✔ normalizza nomi modello case-insensitive (0.2692ms)
+  ✔ getCapabilities (5.3827ms)
+  ▶ getTierForModel
+    ✔ ritorna economy per deepseek-chat (0.4369ms)
+    ✔ ritorna standard per claude-haiku-4.5 (0.195ms)
+    ✔ ritorna premium per claude-opus-4-6 (0.1684ms)
+    ✔ ritorna standard per modello sconosciuto (default) (0.2797ms)
+  ✔ getTierForModel (1.5494ms)
+  ▶ power/speed scores
+    ✔ assegna piu potenza ai tier premium rispetto agli economy (0.3427ms)
+    ✔ assegna piu velocita stimata ai tier economy rispetto ai premium (0.3015ms)
+  ✔ power/speed scores (0.8088ms)
+  ▶ MODEL_TIERS
+    ✔ contiene tutti i tier necessari (0.2183ms)
+    ✔ ogni modello ha capabilities definite (0.2559ms)
+  ✔ MODEL_TIERS (0.6461ms)
+✔ model-capabilities (9.5101ms)
+✔ openAIRequestToAnthropic folds system messages and converts tool calls (2.8174ms)
+✔ openAIRequestToAnthropic converts data url images into base64 image blocks (0.6206ms)
+✔ anthropicResponseToOpenAI converts tool_use blocks into OpenAI tool_calls (1.02ms)
+✔ translateRequest keeps assistant tool-call messages compatible with Copilot responses input (3.9366ms)
+✔ mapModel returns default for empty input (0.3802ms)
+✔ mapModel maps known aliases (0.2621ms)
+✔ mapModel strips date suffixes (0.1813ms)
+✔ translateRequest folds system messages (0.5609ms)
+✔ translateRequest sets stream_options when streaming (0.2682ms)
+✔ translateRequest maps tools into function definitions (0.4087ms)
+✔ translateRequest uses max_completion_tokens for gpt-5/o1/o3/o4 models (0.3028ms)
+✔ translateResponse returns empty text for missing choice (0.9751ms)
+✔ translateResponse maps tool_calls into tool_use blocks (0.4971ms)
+✔ translateResponse accepts input_tokens and output_tokens usage fields (0.7061ms)
+✔ translateResponse extracts text from structured message content arrays (0.3744ms)
+✔ parseMinimaxToolCallContent converts minimax tool markup into tool_use blocks (1.6662ms)
+✔ parseMinimaxToolCallContent converts malformed minimax marker variant into tool_use blocks (0.4197ms)
+✔ translateResponse maps minimax tool markup in plain text to tool_use (0.2882ms)
+✔ translateResponse maps malformed minimax marker variant in plain text to tool_use (0.4338ms)
+✖ getDataRoot uses a distinct per-user runtime root on macOS (3.2876ms)
+✖ createPaths keeps token and log files isolated per user runtime root (1.8465ms)
+✔ parseHierarchyContext returns null when no header or body context is provided (2.2331ms)
+✔ parseHierarchyContext parses JSON header and validates scope_type (1.3754ms)
+✔ parseHierarchyContext extracts per-level user IDs (0.3245ms)
+✔ parseHierarchyContext per-level user IDs default to null when absent (0.4224ms)
+✔ parseHierarchyContext rejects invalid scope_type (0.2791ms)
+✔ parseHierarchyContext falls back to body when header is missing (0.5972ms)
+✔ parseHierarchyContext falls back to a local shared-service user token (0.3043ms)
+✔ validateHierarchyContextForBilling accepts master_company + project_id (MC direct) (0.2983ms)
+✔ validateHierarchyContextForBilling accepts master_company + tenant_id + project_id (tenant) (0.4537ms)
+✔ validateHierarchyContextForBilling accepts full chain master_company + tenant_id + client_id + project_id (0.3966ms)
+✔ validateHierarchyContextForBilling requires master_company (1.8299ms)
+✔ validateHierarchyContextForBilling requires project_id (0.2388ms)
+✔ validateHierarchyContextForBilling accepts scenario 4 - MC direct client (master_company + client_id + project_id) (0.1559ms)
+✔ parseMeteringContext extracts caller_module and operation_id (0.2839ms)
+✔ parseMeteringContext preserves optional custom dimensions (0.2687ms)
+✔ resolveTraceId reads X-Trace-Id header (0.2936ms)
+✔ resolveMode defaults to standalone (0.2198ms)
+✔ buildHierarchyContextRequiredError shape is stable (0.2669ms)
+✔ buildHierarchyContextInvalidError shape is stable (0.1898ms)
+✔ parseLsofListeners extracts pid, command and endpoint records (2.4879ms)
+✔ listPortListeners returns empty when lsof reports no listeners (0.4613ms)
+✔ parseWindowsNetstatListeners extracts pid and endpoint records (0.6046ms)
+✔ listPortListeners parses Windows netstat output when platform is win32 (0.3014ms)
+✔ assertGlobalServicePortAccess blocks reserved service ports for non-global runtimes (0.9662ms)
+✖ reapConflictingPortListeners preserves docker listeners and terminates foreign listeners (5.327ms)
+✖ reapConflictingPortListeners escalates to SIGKILL when a listener survives SIGTERM (1.2848ms)
+✖ detectProjectContext prefers explicit header project path (9.2933ms)
+✖ detectProjectContext extracts path from system prompt when headers are missing (0.8185ms)
+✔ resolveProjectMetadata reads the nearest package.json name from the project tree (7.6035ms)
+✔ resolveClaudeProjectSettings reads the configured model from the nearest Claude settings (13.4939ms)
+✔ resolveClaudeProjectSettings prefers the top-level Claude model when present (7.2217ms)
+✔ resolveClaudeProjectSettings gives precedence to ANTHROPIC_DEFAULT_MODEL even when model is llmProxy (22.4054ms)
+✔ resolveClaudeProjectSettings treats llm-proxy as a proxy-controlled model label (9.0453ms)
+✔ resolveClaudeProjectSettings reads shortAnswer from Claude env when using local proxy (7.6699ms)
+✔ resolveClaudeProjectSettings reads LLMPROXY_METERING_INLINE from Claude env (8.4145ms)
+✔ resolveClaudeProjectSettings reads LLMPROXY_INFERENCE_INFO_INLINE from Claude env (10.0254ms)
+✔ resolveClaudeProjectSettings reads LLMPROXY_PROVIDER_CREDIT_INLINE from Claude env (7.4302ms)
+✔ resolveClaudeProjectSettings defaults creditInline to false when not set (5.5133ms)
+✔ resolveClaudeProjectSettings reads LLMPROXY_LLM_STATS_API_KEY from Claude env (5.9282ms)
+✔ resolveClaudeProjectSettings falls back to the global Claude LLMPROXY_LLM_STATS_API_KEY when the project key is absent (7.2499ms)
+✔ resolveClaudeProjectSettings lets an explicit empty project LLMPROXY_LLM_STATS_API_KEY override the global fallback (8.9495ms)
+✔ resolveClaudeProjectSettings reads SendGrid project notification settings (6.0634ms)
+✔ resolveClaudeProjectSettings defaults missing boolean flags in Claude env to false (5.0838ms)
+✔ formatCreditAmount formats with currency (1.8563ms)
+✔ readJsonResponseSafe handles valid and invalid responses (1.4128ms)
+✔ fetchProviderCreditInfo returns n/a for missing provider or token (0.5786ms)
+✔ fetchProviderCreditInfo fetches DeepSeek balance (1.3348ms)
+✔ fetchProviderCreditInfo fetches Kimi balance (0.5007ms)
+✔ fetchProviderCreditInfo fetches OpenRouter credits (0.4374ms)
+✔ fetchProviderCreditInfo returns unavailable on API error (0.3296ms)
+✔ fetchProviderCreditInfo returns unavailable on network error (0.8206ms)
+✔ fetchProviderCreditInfo caches results (0.6814ms)
+✔ createCreditCache respects TTL (0.4847ms)
+✔ fetchProviderCreditInfo returns n/a for unknown provider (0.3672ms)
+✔ upsert + list returns public view without raw credentials (9.5129ms)
+✔ upsert validates provider and scope (1.8545ms)
+✔ upsert accepts newly supported providers like kimi, qwen, opencode, and nvidia (13.6919ms)
+✔ resolve picks most specific scope (project > client > agency) (10.2819ms)
+✔ resolve respects requested provider filter (8.3325ms)
+✔ resolveCandidates deduplicates inherited providers and keeps fallback order (21.3517ms)
+✔ resolve returns null when no match for requested provider (3.5663ms)
+✔ credentials are encrypted at-rest with AES-256-GCM (4.4428ms)
+✔ remove deletes by composite id (7.2787ms)
+✖ provider registry writes files with restrictive permissions (4.0638ms)
+✔ parseReorderingCriteria returns empty array for unset/blank value (2.7393ms)
+✔ parseReorderingCriteria parses a full ordered list (0.4851ms)
+✔ parseReorderingCriteria accepts a subset (0.2248ms)
+✔ parseReorderingCriteria is case-insensitive and trims whitespace (0.2025ms)
+✔ parseReorderingCriteria throws on unknown token (0.7045ms)
+✔ parseReorderingCriteria throws on duplicate token (0.3ms)
+✔ resolveReorderingCriteria reads LLMPROXY_REORDERING from the given env source (0.2933ms)
+✔ resolveReorderingMinutes defaults to 5 when criteria are set but minutes are missing (0.279ms)
+✔ resolveReorderingMinutes uses the configured value when valid (0.2096ms)
+✔ resolveReorderingMinutes ignores LLMPROXY_REORDERING_MINUTES when criteria are absent (0.4313ms)
+✔ resolveReorderingMinutes honors a numeric override regardless of env (0.2107ms)
+✔ computeProviderScores fetches only the requested criteria (1.5951ms)
+✔ computeProviderScores: price is 0 for free_model providers without a network call (0.3054ms)
+✔ computeProviderScores: power reads coding_index from cloudprice benchmarks (0.806ms)
+✔ computeProviderScores: speed measures real probe latency in ms (12.6202ms)
+✔ computeProviderScores: missing data becomes null (worst) for that criterion only (0.6571ms)
+✔ computeProviderScores: provider with no model and no probeFn yields null speed, not a throw (0.1715ms)
+✔ rankProvidersByCriteria sorts by price ascending (cheaper wins) (0.5144ms)
+✔ rankProvidersByCriteria sorts by power descending (higher coding score wins) (0.1941ms)
+✔ rankProvidersByCriteria sorts by speed ascending (lower latency wins) (0.1667ms)
+✔ rankProvidersByCriteria breaks price ties using the second criterion (0.1616ms)
+✔ rankProvidersByCriteria falls through to a third criterion on double tie (0.1817ms)
+✔ rankProvidersByCriteria treats missing data as worst on that criterion, ranking still proceeds (0.1746ms)
+✔ rankProvidersByCriteria preserves original relative order on a full tie (stable stabilizer) (0.1447ms)
+✔ rankProvidersByCriteria returns providers unchanged when criteria list is empty (0.1764ms)
+✔ createProviderReordering.runCycle does nothing when no criteria are configured (1.6278ms)
+✔ createProviderReordering.runCycle ranks providers and persists the order into the token store (2.4174ms)
+✔ createProviderReordering.runCycle persists scores and timestamp to the JSON store file (4.7034ms)
+✔ createProviderReordering.runCycle ignores providers without an access_token (2.6686ms)
+✔ readReorderingStore returns empty defaults when the file does not exist (0.507ms)
+✔ createProviderReordering.start runs an immediate cycle then stops cleanly (10.5102ms)
+✔ createProviderReordering.start does nothing when no criteria are configured (1.6154ms)
+✔ buildDefaultProbeFn returns ok:false for a provider with no known probe endpoint (0.7427ms)
+✔ buildDefaultProbeFn issues a POST to the mapped endpoint for a known provider (0.5299ms)
+✔ loadRuntimeEnv keeps local checkout defaults from .env in development (8.5439ms)
+✔ loadRuntimeEnv ignores package .env for global installs and defaults to production ports (6.4343ms)
+✔ loadRuntimeEnv resolves staging defaults when explicitly requested (6.5055ms)
+✔ loadRuntimeEnv honors an explicit runtime profile even when the package root is the local checkout (3.7517ms)
+✔ resolveProxyHostPort uses the fixed production service port when the runtime profile is production (1.5709ms)
+✔ resolveProxyHostPort uses the fixed staging service port when the runtime profile is staging (0.2871ms)
+✔ resolveProxyHostPort keeps the shared production port across different user data roots (0.2532ms)
+✔ resolveServiceUrlForProfile passes through URL with matching port (0.2742ms)
+✔ resolveServiceUrlForProfile corrects URL with wrong port (0.3912ms)
+✔ resolveServiceUrlForProfile preserves path when correcting port (0.3891ms)
+✔ resolveServiceUrlForProfile passes through URL without port (0.3007ms)
+✔ resolveServiceUrlForProfile passes through invalid URL (0.2147ms)
+✔ loadRuntimeEnv auto-corrects EVENTBUS_URL to match profile in production (6.4749ms)
+✔ loadRuntimeEnv auto-corrects DBLAYER_URL to match profile in production (6.2703ms)
+✔ no-op when apiKey is missing (4.0836ms)
+✔ no-op when fromEmail is missing (0.4143ms)
+✔ no-op when toEmail is missing (0.3099ms)
+✔ no-op when all params empty (0.5006ms)
+✔ no-op methods do not throw (0.7026ms)
+✔ creates full notifier with all params (0.6053ms)
+✔ notifyUnreachable sends email (15.7201ms)
+✔ notifyRecovered sends email (8.0481ms)
+✔ notifyProviderError sends email (6.4432ms)
+✔ message type filter suppresses disabled notification categories (5.178ms)
+✔ dedup: second call within 5 min does not send (4.8714ms)
+✔ dedup: different services are tracked independently (10.2932ms)
+✔ recovery notification not throttled by unreachable (9.1635ms)
+✔ reconfigure with new apiKey sets on sgMail after lazy load (4.8228ms)
+✔ reconfigure updates recipient, sender, and message types (5.1632ms)
+✖ launchd service manager renders a plist with expected paths and label (3.3458ms)
+✖ launchd status reports active service when launchctl print succeeds (3.2714ms)
+✖ launchd status treats missing service as inactive without surfacing an error (0.4487ms)
+✖ launchd treats bootout 'No such process' as a missing service (1.4775ms)
+✖ launchd install surfaces bootstrap failures (1.4868ms)
+✖ launchd install retries bootstrap after transient input/output errors (1.5008ms)
+✖ launchd start surfaces kickstart failures (0.5854ms)
+✖ launchd stop treats missing service as already stopped (0.3965ms)
+✖ systemd status uses runtime dir env for user bus access (5.9194ms)
+✔ systemd install enables linger for the current user and fails when systemctl fails (5002.6609ms)
+✔ systemd install restarts an already active service so updated units take effect (5000.9635ms)
+✔ token store migrates legacy single-token data into an ordered provider registry (4.8048ms)
+✔ token store persists multiple providers and fallback order (9.3753ms)
+✔ token store persists free_model flags for provider/model instances (3.5137ms)
+✔ token store keeps provider order stable when updating an existing provider (8.453ms)
+✔ token store loads legacy api-key providers saved without access_token (3.8983ms)
+ℹ tests 611
+ℹ suites 10
+ℹ pass 529
+ℹ fail 82
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10561.6245
+
+✖ failing tests:
+
+test at tests\app-config.test.js:151:1
+✖ GET /api/config returns all variables (119.9125ms)
+  AssertionError [ERR_ASSERTION]: LLMPROXY_AUTO_ESCALATE should be listed
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app-config.test.js:163:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:317:1
+✖ messages endpoint proxies a non-stream Copilot response into Anthropic format (17.93ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n' +
+      '\n' +
+      'pong from copilot\n' +
+      '\n' +
+  +   '[llmproxy] default/claude-sonnet-4.5 (req 16, in 11, out 5) | default/claude-sonnet-4.5 (in: 11/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 16 (in 11, out 5) | oggi: claude-sonnet-4.5 16 (in 11, out 5) | settimana: claude-sonnet-4.5 16 (in 11, out 5) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:369:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:345:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\npong from copilot\n\n[llmproxy] default/claude-sonnet-4.5 (req 16, in 11, out 5) | default/claude-sonnet-4.5 (in: 11/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\npong from copilot\n\n[llmproxy] req 16 (in 11, out 5) | oggi: claude-sonnet-4.5 16 (in 11, out 5) | settimana: claude-sonnet-4.5 16 (in 11, out 5) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:453:1
+✖ messages endpoint honors LLMPROXY_METERING_INLINE from Claude project settings (19.0227ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    'pong from project inline\n' +
+      '\n' +
+  +   '[llmproxy] default/claude-sonnet-4.5 (req 13, in 9, out 4) | default/claude-sonnet-4.5 (in: 9/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 13 (in 9, out 4) | oggi: claude-sonnet-4.5 13 (in 9, out 4) | settimana: claude-sonnet-4.5 13 (in 9, out 4) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:516:14
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:499:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'pong from project inline\n\n[llmproxy] default/claude-sonnet-4.5 (req 13, in 9, out 4) | default/claude-sonnet-4.5 (in: 9/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: 'pong from project inline\n\n[llmproxy] req 13 (in 9, out 4) | oggi: claude-sonnet-4.5 13 (in 9, out 4) | settimana: claude-sonnet-4.5 13 (in 9, out 4) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:534:1
+✖ messages endpoint honors LLMPROXY_INFERENCE_INFO_INLINE from Claude project settings (18.6112ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n' +
+      '\n' +
+  +   'pong from project inline info\n' +
+  +   '\n' +
+  +   '[llmproxy] credito residuo: n/a'
+  -   'pong from project inline info'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:597:14
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:580:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\npong from project inline info\n\n[llmproxy] credito residuo: n/a',
+    expected: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\npong from project inline info',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:616:1
+✖ messages endpoint does not inherit inline flags from process env when Claude settings omit them (19.1222ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'pong without inherited inline flags\n\n[llmproxy] credito residuo: n/a'
+  - 'pong without inherited inline flags'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:678:14
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:661:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'pong without inherited inline flags\n\n[llmproxy] credito residuo: n/a',
+    expected: 'pong without inherited inline flags',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:751:1
+✖ messages endpoint preserves inline provider and metering metadata for non-stream tool_use replies (14.9438ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\[llmproxy\] req 16 \(in 11, out 5\)/. Input:
+  
+  '[llmproxy] default/claude-sonnet-4.5 (req 16, in 11, out 5) | default/claude-sonnet-4.5 (in: 11/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:817:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:798:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] default/claude-sonnet-4.5 (req 16, in 11, out 5) | default/claude-sonnet-4.5 (in: 11/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /\[llmproxy\] req 16 \(in 11, out 5\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:823:1
+✖ messages endpoint preserves inline provider and metering metadata for streaming tool_use replies (15.977ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\[llmproxy\] req 10 \(in 7, out 3\)/. Input:
+  
+  'event: message_start\n' +
+    'data: {"type":"message_start","message":{"id":"msg_mri0d6d4","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4.5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":0}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"Bash","input":{}}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":\\"pwd\\"}"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":1}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"\\n\\n[llmproxy] default/claude-sonnet-4.5 (req 10, in 7, out 3) | default/claude-sonnet-4.5 (in: 7/d, out: 3/d - in: 0/w, out: 0/w) | credito residuo: n/a"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":2}\n' +
+    '\n' +
+    'event: message_delta\n' +
+    'data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":7,"output_tokens":3}}\n' +
+    '\n' +
+    'event: message_stop\n' +
+    'data: {"type":"message_stop"}\n' +
+    '\n'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:889:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:874:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_mri0d6d4","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4.5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"Bash","input":{}}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":\\"pwd\\"}"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"\\n\\n[llmproxy] default/claude-sonnet-4.5 (req 10, in 7, out 3) | default/claude-sonnet-4.5 (in: 7/d, out: 3/d - in: 0/w, out: 0/w) | credito residuo: n/a"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":2}\n\nevent: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":7,"output_tokens":3}}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n',
+    expected: /\[llmproxy\] req 10 \(in 7, out 3\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:897:1
+✖ messages endpoint preserves inline provider and metering metadata for anthropic tool_use streams (13.7056ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\[llmproxy\] req 6 \(in 4, out 2\)/. Input:
+  
+  'event: message_start\n' +
+    'data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"minimax-m3","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[llmproxy] provider: opencode-go | model: minimax-m3 : First in order from provider list"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":0}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"Bash","input":{}}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":\\"pwd\\"}"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":1}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"\\n\\n[llmproxy] opencode-go/minimax-m3 (req 6, in 4, out 2) | opencode-go/minimax-m3 (in: 4/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":2}\n' +
+    '\n' +
+    'event: message_delta\n' +
+    'data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":4,"output_tokens":2}}\n' +
+    '\n' +
+    'event: message_stop\n' +
+    'data: {"type":"message_stop"}\n' +
+    '\n'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:982:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:966:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"minimax-m3","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[llmproxy] provider: opencode-go | model: minimax-m3 : First in order from provider list"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"Bash","input":{}}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":\\"pwd\\"}"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"\\n\\n[llmproxy] opencode-go/minimax-m3 (req 6, in 4, out 2) | opencode-go/minimax-m3 (in: 4/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":2}\n\nevent: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":4,"output_tokens":2}}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n',
+    expected: /\[llmproxy\] req 6 \(in 4, out 2\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:990:1
+✖ messages endpoint counts tokens from a usage-only final streaming chunk (14.0271ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\[llmproxy\] req 256 \(in 20, out 236\)/. Input:
+  
+  'event: message_start\n' +
+    'data: {"type":"message_start","message":{"id":"msg_mri0d6dx","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4.5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[llmproxy] provider: default | model: qwen3.7-max : First in order from provider list\\n\\n"}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"pong stream"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":0}\n' +
+    '\n' +
+    'event: content_block_start\n' +
+    'data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}\n' +
+    '\n' +
+    'event: content_block_delta\n' +
+    'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\\n\\n[llmproxy] default/qwen3.7-max (req 256, in 20, out 236) | default/qwen3.7-max (in: 20/d, out: 236/d - in: 0/w, out: 0/w) | credito residuo: n/a"}}\n' +
+    '\n' +
+    'event: content_block_stop\n' +
+    'data: {"type":"content_block_stop","index":1}\n' +
+    '\n' +
+    'event: message_delta\n' +
+    'data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":20,"output_tokens":236}}\n' +
+    '\n' +
+    'event: message_stop\n' +
+    'data: {"type":"message_stop"}\n' +
+    '\n'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1042:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1022:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_mri0d6dx","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4.5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"[llmproxy] provider: default | model: qwen3.7-max : First in order from provider list\\n\\n"}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"pong stream"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\nevent: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}\n\nevent: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"\\n\\n[llmproxy] default/qwen3.7-max (req 256, in 20, out 236) | default/qwen3.7-max (in: 20/d, out: 236/d - in: 0/w, out: 0/w) | credito residuo: n/a"}}\n\nevent: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\nevent: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":20,"output_tokens":236}}\n\nevent: message_stop\ndata: {"type":"message_stop"}\n\n',
+    expected: /\[llmproxy\] req 256 \(in 20, out 236\)/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1046:1
+✖ messages endpoint rewrites provider metadata once when upstream response already contains llmproxy lines (18.4692ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n' +
+      '\n' +
+      'build ok\n' +
+      '\n' +
+  +   '[llmproxy] default/claude-sonnet-4.5 (req 16, in 11, out 5) | default/claude-sonnet-4.5 (in: 11/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 16 (in 11, out 5) | oggi: claude-sonnet-4.5 16 (in 11, out 5) | settimana: claude-sonnet-4.5 16 (in 11, out 5) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1095:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1076:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\nbuild ok\n\n[llmproxy] default/claude-sonnet-4.5 (req 16, in 11, out 5) | default/claude-sonnet-4.5 (in: 11/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\nbuild ok\n\n[llmproxy] req 16 (in 11, out 5) | oggi: claude-sonnet-4.5 16 (in 11, out 5) | settimana: claude-sonnet-4.5 16 (in 11, out 5) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1160:1
+✖ messages endpoint falls back to the next Copilot provider when the first one fails (13.5541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: backup | model: claude-sonnet-4.5 : Second in order because claude-sonnet-4.5 (primary) is returning: 503\n' +
+      '\n' +
+      'served by backup\n' +
+      '\n' +
+  +   '[llmproxy] backup/claude-sonnet-4.5 (req 15, in 11, out 4) | backup/claude-sonnet-4.5 (in: 11/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 15 (in 11, out 4) | oggi: claude-sonnet-4.5 15 (in 11, out 4) | settimana: claude-sonnet-4.5 15 (in 11, out 4) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1243:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1221:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: backup | model: claude-sonnet-4.5 : Second in order because claude-sonnet-4.5 (primary) is returning: 503\n\nserved by backup\n\n[llmproxy] backup/claude-sonnet-4.5 (req 15, in 11, out 4) | backup/claude-sonnet-4.5 (in: 11/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: backup | model: claude-sonnet-4.5 : Second in order because claude-sonnet-4.5 (primary) is returning: 503\n\nserved by backup\n\n[llmproxy] req 15 (in 11, out 4) | oggi: claude-sonnet-4.5 15 (in 11, out 4) | settimana: claude-sonnet-4.5 15 (in 11, out 4) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1316:1
+✖ messages endpoint truncates oversized Copilot tool lists and records the adjustment in logs (10.6392ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: default | model: gpt-5.4 : First in order from provider list\n' +
+      '\n' +
+      'trim ok\n' +
+      '\n' +
+  +   '[llmproxy] default/gpt-5.4 (req 12, in 9, out 3) | default/gpt-5.4 (in: 9/d, out: 3/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 12 (in 9, out 3) | oggi: gpt-5.4 12 (in 9, out 3) | settimana: gpt-5.4 12 (in 9, out 3) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1396:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1374:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: default | model: gpt-5.4 : First in order from provider list\n\ntrim ok\n\n[llmproxy] default/gpt-5.4 (req 12, in 9, out 3) | default/gpt-5.4 (in: 9/d, out: 3/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: default | model: gpt-5.4 : First in order from provider list\n\ntrim ok\n\n[llmproxy] req 12 (in 9, out 3) | oggi: gpt-5.4 12 (in 9, out 3) | settimana: gpt-5.4 12 (in 9, out 3) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1412:1
+✖ messages endpoint trims oldest messages and retries when Copilot rejects prompt token count (18.3875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n' +
+      '\n' +
+      'context trimmed ok\n' +
+      '\n' +
+  +   '[llmproxy] default/claude-sonnet-4.5 (req 105, in 100, out 5) | default/claude-sonnet-4.5 (in: 100/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 105 (in 100, out 5) | oggi: claude-sonnet-4.5 105 (in 100, out 5) | settimana: claude-sonnet-4.5 105 (in 100, out 5) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1477:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1459:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\ncontext trimmed ok\n\n[llmproxy] default/claude-sonnet-4.5 (req 105, in 100, out 5) | default/claude-sonnet-4.5 (in: 100/d, out: 5/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\ncontext trimmed ok\n\n[llmproxy] req 105 (in 100, out 5) | oggi: claude-sonnet-4.5 105 (in 100, out 5) | settimana: claude-sonnet-4.5 105 (in 100, out 5) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1487:1
+✖ messages endpoint retries transient socket-close errors before failing (226.6842ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n' +
+      '\n' +
+      'retry success\n' +
+      '\n' +
+  +   '[llmproxy] default/claude-sonnet-4.5 (req 13, in 10, out 3) | default/claude-sonnet-4.5 (in: 10/d, out: 3/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 13 (in 10, out 3) | oggi: claude-sonnet-4.5 13 (in 10, out 3) | settimana: claude-sonnet-4.5 13 (in 10, out 3) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1543:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1522:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\nretry success\n\n[llmproxy] default/claude-sonnet-4.5 (req 13, in 10, out 3) | default/claude-sonnet-4.5 (in: 10/d, out: 3/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: default | model: claude-sonnet-4.5 : First in order from provider list\n\nretry success\n\n[llmproxy] req 13 (in 10, out 3) | oggi: claude-sonnet-4.5 13 (in 10, out 3) | settimana: claude-sonnet-4.5 13 (in 10, out 3) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1548:1
+✖ messages endpoint falls back to the next Copilot provider when the first one is blocked by safety policy (35.7369ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: backup | model: gpt-5.4 : Second in order because claude-sonnet-4.5 (primary) is returning: 400\n' +
+      '\n' +
+      'served by backup after safety block\n' +
+      '\n' +
+  +   '[llmproxy] backup/gpt-5.4 (req 15, in 11, out 4) | backup/gpt-5.4 (in: 11/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 15 (in 11, out 4) | oggi: gpt-5.4 15 (in 11, out 4) | settimana: gpt-5.4 15 (in 11, out 4) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1619:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1598:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: backup | model: gpt-5.4 : Second in order because claude-sonnet-4.5 (primary) is returning: 400\n\nserved by backup after safety block\n\n[llmproxy] backup/gpt-5.4 (req 15, in 11, out 4) | backup/gpt-5.4 (in: 11/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: backup | model: gpt-5.4 : Second in order because claude-sonnet-4.5 (primary) is returning: 400\n\nserved by backup after safety block\n\n[llmproxy] req 15 (in 11, out 4) | oggi: gpt-5.4 15 (in 11, out 4) | settimana: gpt-5.4 15 (in 11, out 4) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1716:1
+✖ messages endpoint falls back from Copilot to Z.ai for GLM models (15.4995ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: zai | model: glm-5 : Second in order because glm-5 (copilot) is returning: 400\n' +
+      '\n' +
+      'served by z.ai\n' +
+      '\n' +
+  +   '[llmproxy] zai/glm-5 (req 13, in 9, out 4) | zai/glm-5 (in: 9/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 13 (in 9, out 4) | oggi: glm-5 13 (in 9, out 4) | settimana: glm-5 13 (in 9, out 4) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1796:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1773:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: zai | model: glm-5 : Second in order because glm-5 (copilot) is returning: 400\n\nserved by z.ai\n\n[llmproxy] zai/glm-5 (req 13, in 9, out 4) | zai/glm-5 (in: 9/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: zai | model: glm-5 : Second in order because glm-5 (copilot) is returning: 400\n\nserved by z.ai\n\n[llmproxy] req 13 (in 9, out 4) | oggi: glm-5 13 (in 9, out 4) | settimana: glm-5 13 (in 9, out 4) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ openrouter (16.1749ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: openrouter \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by openrouter\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: openrouter | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by openrouter\n' +
+    '\n' +
+    '[llmproxy] openrouter/provider-native-model (req 5, in 3, out 2) | openrouter/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: openrouter | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by openrouter\n\n[llmproxy] openrouter/provider-native-model (req 5, in 3, out 2) | openrouter/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: openrouter \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by openrouter\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ zai (15.1079ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: zai \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by zai\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: zai | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by zai\n' +
+    '\n' +
+    '[llmproxy] zai/provider-native-model (req 5, in 3, out 2) | zai/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: zai | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by zai\n\n[llmproxy] zai/provider-native-model (req 5, in 3, out 2) | zai/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: zai \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by zai\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ kimi (15.7559ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: kimi \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by kimi\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: kimi | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by kimi\n' +
+    '\n' +
+    '[llmproxy] kimi/provider-native-model (req 5, in 3, out 2) | kimi/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: kimi | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by kimi\n\n[llmproxy] kimi/provider-native-model (req 5, in 3, out 2) | kimi/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: kimi \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by kimi\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ qwen (15.9144ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: qwen \| model: qwen3.7-max : Second in order because .+ \(copilot\) is returning: 400\n\nserved by qwen\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: qwen | model: qwen3.7-max : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n' +
+    '\n' +
+    'served by qwen\n' +
+    '\n' +
+    '[llmproxy] qwen/qwen3.7-max (req 5, in 3, out 2) | qwen/qwen3.7-max (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: qwen | model: qwen3.7-max : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n\nserved by qwen\n\n[llmproxy] qwen/qwen3.7-max (req 5, in 3, out 2) | qwen/qwen3.7-max (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: qwen \| model: qwen3.7-max : Second in order because .+ \(copilot\) is returning: 400\n\nserved by qwen\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ opencode (14.5199ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: opencode \| model: deepseek-v4-flash : Second in order because .+ \(copilot\) is returning: 400\n\nserved by opencode\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: opencode | model: deepseek-v4-flash : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n' +
+    '\n' +
+    'served by opencode\n' +
+    '\n' +
+    '[llmproxy] opencode/deepseek-v4-flash (req 5, in 3, out 2) | opencode/deepseek-v4-flash (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: opencode | model: deepseek-v4-flash : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n\nserved by opencode\n\n[llmproxy] opencode/deepseek-v4-flash (req 5, in 3, out 2) | opencode/deepseek-v4-flash (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: opencode \| model: deepseek-v4-flash : Second in order because .+ \(copilot\) is returning: 400\n\nserved by opencode\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ opencode-go (16.5465ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: opencode-go \| model: minimax-m3 : Second in order because .+ \(copilot\) is returning: 400\n\nserved by opencode-go\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: opencode-go | model: minimax-m3 : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n' +
+    '\n' +
+    'served by opencode-go\n' +
+    '\n' +
+    '[llmproxy] opencode-go/minimax-m3 (req 5, in 3, out 2) | opencode-go/minimax-m3 (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: opencode-go | model: minimax-m3 : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n\nserved by opencode-go\n\n[llmproxy] opencode-go/minimax-m3 (req 5, in 3, out 2) | opencode-go/minimax-m3 (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: opencode-go \| model: minimax-m3 : Second in order because .+ \(copilot\) is returning: 400\n\nserved by opencode-go\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ openai (19.6025ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: openai \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by openai\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: openai | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by openai\n' +
+    '\n' +
+    '[llmproxy] openai/provider-native-model (req 5, in 3, out 2) | openai/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: openai | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by openai\n\n[llmproxy] openai/provider-native-model (req 5, in 3, out 2) | openai/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: openai \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by openai\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ anthropic (17.3019ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: anthropic \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by anthropic\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: anthropic | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by anthropic\n' +
+    '\n' +
+    '[llmproxy] anthropic/provider-native-model (req 5, in 3, out 2) | anthropic/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: anthropic | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by anthropic\n\n[llmproxy] anthropic/provider-native-model (req 5, in 3, out 2) | anthropic/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: anthropic \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by anthropic\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ deepseek (15.8073ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: deepseek \| model: deepseek-v4-flash : Second in order because .+ \(copilot\) is returning: 400\n\nserved by deepseek\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: deepseek | model: deepseek-v4-flash : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n' +
+    '\n' +
+    'served by deepseek\n' +
+    '\n' +
+    '[llmproxy] deepseek/deepseek-v4-flash (req 5, in 3, out 2) | deepseek/deepseek-v4-flash (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: deepseek | model: deepseek-v4-flash : Second in order because claude-sonnet-4.5 (copilot) is returning: 400\n\nserved by deepseek\n\n[llmproxy] deepseek/deepseek-v4-flash (req 5, in 3, out 2) | deepseek/deepseek-v4-flash (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: deepseek \| model: deepseek-v4-flash : Second in order because .+ \(copilot\) is returning: 400\n\nserved by deepseek\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ groq (16.5048ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: groq \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by groq\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: groq | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by groq\n' +
+    '\n' +
+    '[llmproxy] groq/provider-native-model (req 5, in 3, out 2) | groq/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: groq | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by groq\n\n[llmproxy] groq/provider-native-model (req 5, in 3, out 2) | groq/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: groq \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by groq\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ mistral (14.1928ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: mistral \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by mistral\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: mistral | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by mistral\n' +
+    '\n' +
+    '[llmproxy] mistral/provider-native-model (req 5, in 3, out 2) | mistral/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: mistral | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by mistral\n\n[llmproxy] mistral/provider-native-model (req 5, in 3, out 2) | mistral/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: mistral \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by mistral\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ xai (13.9465ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: xai \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by xai\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: xai | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by xai\n' +
+    '\n' +
+    '[llmproxy] xai/provider-native-model (req 5, in 3, out 2) | xai/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: xai | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by xai\n\n[llmproxy] xai/provider-native-model (req 5, in 3, out 2) | xai/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: xai \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by xai\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ perplexity (35.3951ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: perplexity \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by perplexity\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: perplexity | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by perplexity\n' +
+    '\n' +
+    '[llmproxy] perplexity/provider-native-model (req 5, in 3, out 2) | perplexity/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: perplexity | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by perplexity\n\n[llmproxy] perplexity/provider-native-model (req 5, in 3, out 2) | perplexity/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: perplexity \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by perplexity\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ together (15.4956ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: together \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by together\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: together | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by together\n' +
+    '\n' +
+    '[llmproxy] together/provider-native-model (req 5, in 3, out 2) | together/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: together | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by together\n\n[llmproxy] together/provider-native-model (req 5, in 3, out 2) | together/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: together \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by together\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ fireworks (14.5238ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: fireworks \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by fireworks\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: fireworks | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by fireworks\n' +
+    '\n' +
+    '[llmproxy] fireworks/provider-native-model (req 5, in 3, out 2) | fireworks/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: fireworks | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by fireworks\n\n[llmproxy] fireworks/provider-native-model (req 5, in 3, out 2) | fireworks/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: fireworks \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by fireworks\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ commandcode (14.2828ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: commandcode \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by commandcode\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: commandcode | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by commandcode\n' +
+    '\n' +
+    '[llmproxy] commandcode/provider-native-model (req 5, in 3, out 2) | commandcode/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: commandcode | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by commandcode\n\n[llmproxy] commandcode/provider-native-model (req 5, in 3, out 2) | commandcode/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: commandcode \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by commandcode\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1814:13
+✖ nvidia (16.0526ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /^\[llmproxy\] provider: nvidia \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by nvidia\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/. Input:
+  
+  '[llmproxy] provider: nvidia | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n' +
+    '\n' +
+    'served by nvidia\n' +
+    '\n' +
+    '[llmproxy] nvidia/provider-native-model (req 5, in 3, out 2) | nvidia/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1925:16
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1886:7)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1814:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: nvidia | model: provider-native-model : Second in order because provider-native-model (copilot) is returning: 400\n\nserved by nvidia\n\n[llmproxy] nvidia/provider-native-model (req 5, in 3, out 2) | nvidia/provider-native-model (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: /^\[llmproxy\] provider: nvidia \| model: provider-native-model : Second in order because .+ \(copilot\) is returning: 400\n\nserved by nvidia\n\n\[llmproxy\] req 5 \(in 3, out 2\).+/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:1934:1
+✖ messages endpoint still tries providers in configured order when request contains images (14.6155ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: openai | model: gpt-4o-mini : Second in order because deepseek-v4-flash (deepseek) is returning: 400\n' +
+      '\n' +
+      'served by openai vision\n' +
+      '\n' +
+  +   '[llmproxy] openai/gpt-4o-mini (req 11, in 7, out 4) | openai/gpt-4o-mini (in: 7/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 11 (in 7, out 4) | oggi: gpt-4o-mini 11 (in 7, out 4) | settimana: gpt-4o-mini 11 (in 7, out 4) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2019:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:1989:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: openai | model: gpt-4o-mini : Second in order because deepseek-v4-flash (deepseek) is returning: 400\n\nserved by openai vision\n\n[llmproxy] openai/gpt-4o-mini (req 11, in 7, out 4) | openai/gpt-4o-mini (in: 7/d, out: 4/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: openai | model: gpt-4o-mini : Second in order because deepseek-v4-flash (deepseek) is returning: 400\n\nserved by openai vision\n\n[llmproxy] req 11 (in 7, out 4) | oggi: gpt-4o-mini 11 (in 7, out 4) | settimana: gpt-4o-mini 11 (in 7, out 4) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2029:1
+✖ messages endpoint routes qwen token-plan keys to the token-plan endpoint (13.5098ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: qwen | model: qwen3.7-max : First in order from provider list\n' +
+      '\n' +
+      'served by qwen token plan\n' +
+      '\n' +
+  +   '[llmproxy] qwen/qwen3.7-max (req 5, in 3, out 2) | qwen/qwen3.7-max (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 5 (in 3, out 2) | oggi: qwen3.7-max 5 (in 3, out 2) | settimana: qwen3.7-max 5 (in 3, out 2) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2088:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2065:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: qwen | model: qwen3.7-max : First in order from provider list\n\nserved by qwen token plan\n\n[llmproxy] qwen/qwen3.7-max (req 5, in 3, out 2) | qwen/qwen3.7-max (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: qwen | model: qwen3.7-max : First in order from provider list\n\nserved by qwen token plan\n\n[llmproxy] req 5 (in 3, out 2) | oggi: qwen3.7-max 5 (in 3, out 2) | settimana: qwen3.7-max 5 (in 3, out 2) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2095:1
+✖ messages endpoint honors an explicit local provider variant id (13.0454ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: qwen3.7-max | model: qwen3.7-max : First in order from provider list\n' +
+      '\n' +
+      'served by explicit local variant\n' +
+      '\n' +
+  +   '[llmproxy] qwen3.7-max/qwen3.7-max (req 5, in 3, out 2) | qwen3.7-max/qwen3.7-max (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 5 (in 3, out 2) | oggi: qwen3.7-max 5 (in 3, out 2) | settimana: qwen3.7-max 5 (in 3, out 2) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2154:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2131:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: qwen3.7-max | model: qwen3.7-max : First in order from provider list\n\nserved by explicit local variant\n\n[llmproxy] qwen3.7-max/qwen3.7-max (req 5, in 3, out 2) | qwen3.7-max/qwen3.7-max (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: qwen3.7-max | model: qwen3.7-max : First in order from provider list\n\nserved by explicit local variant\n\n[llmproxy] req 5 (in 3, out 2) | oggi: qwen3.7-max 5 (in 3, out 2) | settimana: qwen3.7-max 5 (in 3, out 2) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2161:1
+✖ messages endpoint tries a provider default model before moving to the next provider (14.9822ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: kimi | model: kimi-k2.5 : Second in order because gpt-5.4 is returning: 400\n' +
+      '\n' +
+      'served by provider default\n' +
+      '\n' +
+  +   '[llmproxy] kimi/kimi-k2.5 (req 3, in 1, out 2) | kimi/kimi-k2.5 (in: 1/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 3 (in 1, out 2) | oggi: kimi-k2.5 3 (in 1, out 2) | settimana: kimi-k2.5 3 (in 1, out 2) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2227:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2209:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: kimi | model: kimi-k2.5 : Second in order because gpt-5.4 is returning: 400\n\nserved by provider default\n\n[llmproxy] kimi/kimi-k2.5 (req 3, in 1, out 2) | kimi/kimi-k2.5 (in: 1/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: kimi | model: kimi-k2.5 : Second in order because gpt-5.4 is returning: 400\n\nserved by provider default\n\n[llmproxy] req 3 (in 1, out 2) | oggi: kimi-k2.5 3 (in 1, out 2) | settimana: kimi-k2.5 3 (in 1, out 2) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2232:1
+✖ messages endpoint honors provider/model fallback lists from Claude settings (15.5418ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   undefined,
+      'kimi-k2.5'
+    ]
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2301:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2283:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ undefined, 'kimi-k2.5' ],
+    expected: [ 'kimi-k2.5' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2305:1
+✖ messages endpoint keeps deepseek model names intact from Claude settings (14.1469ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   undefined,
+      'deepseek-v4-flash'
+    ]
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2366:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2348:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ undefined, 'deepseek-v4-flash' ],
+    expected: [ 'deepseek-v4-flash' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2370:1
+✖ messages endpoint uses default models for providers not listed in Claude settings (20.3748ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'served by kimi default\n\n[llmproxy] credito residuo: n/a'
+  - 'served by kimi default'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2439:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2424:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'served by kimi default\n\n[llmproxy] credito residuo: n/a',
+    expected: 'served by kimi default',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2444:1
+✖ messages endpoint falls back when DeepSeek returns 402 insufficient balance (17.5258ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+    '[llmproxy] provider: openai | model: gpt-4.1 : Second in order because deepseek-v4-flash (deepseek) is returning: 402\n' +
+      '\n' +
+      'served by openai fallback\n' +
+      '\n' +
+  +   '[llmproxy] openai/gpt-4.1 (req 5, in 3, out 2) | openai/gpt-4.1 (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a'
+  -   '[llmproxy] req 5 (in 3, out 2) | oggi: gpt-4.1 5 (in 3, out 2) | settimana: gpt-4.1 5 (in 3, out 2) | `llmproxy stats` per la tabella completa'
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2516:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2501:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '[llmproxy] provider: openai | model: gpt-4.1 : Second in order because deepseek-v4-flash (deepseek) is returning: 402\n\nserved by openai fallback\n\n[llmproxy] openai/gpt-4.1 (req 5, in 3, out 2) | openai/gpt-4.1 (in: 3/d, out: 2/d - in: 0/w, out: 0/w) | credito residuo: n/a',
+    expected: '[llmproxy] provider: openai | model: gpt-4.1 : Second in order because deepseek-v4-flash (deepseek) is returning: 402\n\nserved by openai fallback\n\n[llmproxy] req 5 (in 3, out 2) | oggi: gpt-4.1 5 (in 3, out 2) | settimana: gpt-4.1 5 (in 3, out 2) | `llmproxy stats` per la tabella completa',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2524:1
+✖ messages endpoint ignores llmProxy UI labels when project settings are unavailable (13.9891ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      {
+  +     auth: 'Bearer token-kimi',
+  +     model: undefined
+  +   },
+  +   {
+        auth: 'Bearer token-copilot',
+        model: 'gpt-5.4'
+      },
+      {
+        auth: 'Bearer token-kimi',
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2582:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2567:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { auth: 'Bearer token-kimi', model: undefined }, { auth: 'Bearer token-copilot', model: 'gpt-5.4' }, { auth: 'Bearer token-kimi', model: 'kimi-k2.5' } ],
+    expected: [ { auth: 'Bearer token-copilot', model: 'gpt-5.4' }, { auth: 'Bearer token-kimi', model: 'kimi-k2.5' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2589:1
+✖ messages endpoint ignores llm-proxy UI labels when project settings are unavailable (13.4682ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      {
+  +     auth: 'Bearer token-kimi',
+  +     model: undefined
+  +   },
+  +   {
+        auth: 'Bearer token-copilot',
+        model: 'gpt-5.4'
+      },
+      {
+        auth: 'Bearer token-kimi',
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2647:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2632:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { auth: 'Bearer token-kimi', model: undefined }, { auth: 'Bearer token-copilot', model: 'gpt-5.4' }, { auth: 'Bearer token-kimi', model: 'kimi-k2.5' } ],
+    expected: [ { auth: 'Bearer token-copilot', model: 'gpt-5.4' }, { auth: 'Bearer token-kimi', model: 'kimi-k2.5' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2654:1
+✖ messages endpoint ignores sticky Claude models when project settings delegate model routing to llm-proxy (17.6165ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 1
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2729:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2711:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 3,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:2838:1
+✖ messages endpoint ignores sticky Claude models when project settings delegate model routing to llmproxy (16.4055ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 1
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2913:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:2895:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 3,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.js:3372:1
+✖ model:set and config endpoints are exposed via REST (11.7555ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  400 !== 200
+  
+      at C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:3404:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:30:12)
+      at async TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\app.test.js:3388:3)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 400,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:58:1
+✖ resolveServiceEntryFile uses native server entrypoint by default even in production (1.5933ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\node_modules\\llmproxy\\server.js'
+  - '/tmp/node_modules/llmproxy/server.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:65:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\node_modules\\llmproxy\\server.js',
+    expected: '/tmp/node_modules/llmproxy/server.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:68:1
+✖ resolveServiceEntryFile uses native server entrypoint on Linux in production (0.4361ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\node_modules\\llmproxy\\server.js'
+  - '/tmp/node_modules/llmproxy/server.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:75:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\node_modules\\llmproxy\\server.js',
+    expected: '/tmp/node_modules/llmproxy/server.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:78:1
+✖ resolveServiceEntryFile uses Docker entrypoint only when explicitly set (0.315ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\node_modules\\llmproxy\\lib\\service\\docker-launchd-entry.js'
+  - '/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:85:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\node_modules\\llmproxy\\lib\\service\\docker-launchd-entry.js',
+    expected: '/tmp/node_modules/llmproxy/lib/service/docker-launchd-entry.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:88:1
+✖ resolveServiceEntryFile uses the native server entrypoint in local development (0.218ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\llmproxy-package\\server.js'
+  - '/tmp/llmproxy-package/server.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:94:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\llmproxy-package\\server.js',
+    expected: '/tmp/llmproxy-package/server.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:97:1
+✖ resolveServiceEntryFile allows forcing the native server runtime (0.2781ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\node_modules\\llmproxy\\server.js'
+  - '/tmp/node_modules/llmproxy/server.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:103:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\node_modules\\llmproxy\\server.js',
+    expected: '/tmp/node_modules/llmproxy/server.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:106:1
+✖ resolveCliServiceManagerOptions uses native server entrypoint for installed production runtime (0.5019ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\node_modules\\llmproxy\\server.js'
+  - '/tmp/node_modules/llmproxy/server.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:122:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\node_modules\\llmproxy\\server.js',
+    expected: '/tmp/node_modules/llmproxy/server.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:128:1
+✖ resolveCliServiceManagerOptions uses native server entrypoint on Linux in production (0.4326ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\node_modules\\llmproxy\\server.js'
+  - '/tmp/node_modules/llmproxy/server.js'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:144:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\node_modules\\llmproxy\\server.js',
+    expected: '/tmp/node_modules/llmproxy/server.js',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:163:1
+✖ claude:setup creates .claude/settings.json for the current project (72.9371ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  undefined !== '1'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:192:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: '1',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:1042:1
+✖ provider:list shows vision and free flags for custom api-key provider instances (7.2018ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /vision=false free=true/. Input:
+  
+  '1. opencode-alessio (opencode-alessio) [n/a]\n' +
+    '   model=deepseek-v4-flash-free coding=n/a vision=false\n' +
+    '   credit=n/a\n' +
+    '   price=free\n' +
+    '   best=free (free)\n' +
+    '   bench=n/a\n'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:1066:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '1. opencode-alessio (opencode-alessio) [n/a]\n   model=deepseek-v4-flash-free coding=n/a vision=false\n   credit=n/a\n   price=free\n   best=free (free)\n   bench=n/a\n',
+    expected: /vision=false free=true/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:1672:1
+✖ service:runtime docker removes native artifacts and starts the docker runtime (5.8258ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:1721:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:1893:1
+✖ update bypasses the REST wrapper even when the local service is reachable (5.3985ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:1926:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:2586:1
+✖ config:set/get/unset manages project-scoped variables in Claude settings (2.8434ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:2596:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:2620:1
+✖ config:list shows effective llmproxy project defaults when values are unset (5.1301ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /project\.LLMPROXY_AUTO_ESCALATE=1/. Input:
+  
+  'Project configuration:\n' +
+    'project.ANTHROPIC_BASE_URL=http://127.0.0.1:7045\n' +
+    'project.ANTHROPIC_DEFAULT_MODEL=\n' +
+    'project.ANTHROPIC_AUTH_TOKEN=proxy-local\n' +
+    'project.API_TIMEOUT_MS=3000000\n' +
+    'project.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1\n' +
+    'project.LLMPROXY_LLM_STATS_API_KEY=sk_ze_ya2l89h1RoR1Cm2PlM5V4r4oVg0rmB2QQXB7rt6C-Zw\n' +
+    'project.LLMPROXY_SENDGRID_API_KEY=SG.WkNGSFLLQt-...\n' +
+    'project.LLMPROXY_SENDGRID_FROM_EMAIL=llmproxy@otomatik.it\n' +
+    'project.LLMPROXY_SENDGRID_TO_EMAIL=alessio.bacin@gmail.com\n' +
+    'project.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE=service_unreachable,service_recovered,provider_error\n' +
+    'project.LLMPROXY_METERING_INLINE=0\n' +
+    'project.LLMPROXY_INFERENCE_INFO_INLINE=1\n' +
+    'project.LLMPROXY_PROVIDER_CREDIT_INLINE=1\n' +
+    'project.LLMPROXY_SHORT_ANSWER=0\n' +
+    '\n' +
+    'Global Claude configuration:\n' +
+    '\n'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:2630:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Project configuration:\nproject.ANTHROPIC_BASE_URL=http://127.0.0.1:7045\nproject.ANTHROPIC_DEFAULT_MODEL=\nproject.ANTHROPIC_AUTH_TOKEN=proxy-local\nproject.API_TIMEOUT_MS=3000000\nproject.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1\nproject.LLMPROXY_LLM_STATS_API_KEY=sk_ze_ya2l89h1RoR1Cm2PlM5V4r4oVg0rmB2QQXB7rt6C-Zw\nproject.LLMPROXY_SENDGRID_API_KEY=SG.WkNGSFLLQt-...\nproject.LLMPROXY_SENDGRID_FROM_EMAIL=llmproxy@otomatik.it\nproject.LLMPROXY_SENDGRID_TO_EMAIL=alessio.bacin@gmail.com\nproject.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE=service_unreachable,service_recovered,provider_error\nproject.LLMPROXY_METERING_INLINE=0\nproject.LLMPROXY_INFERENCE_INFO_INLINE=1\nproject.LLMPROXY_PROVIDER_CREDIT_INLINE=1\nproject.LLMPROXY_SHORT_ANSWER=0\n\nGlobal Claude configuration:\n\n',
+    expected: /project\.LLMPROXY_AUTO_ESCALATE=1/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:3256:1
+✖ install:persistent-en stops early when the global npm prefix is protected and sudo is not pre-authorized (8.2364ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:3287:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:3472:1
+✖ stop terminates only the dev foreground instance on port 5045 (5.3567ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   {
+  -     pid: 42424,
+  -     signal: 'SIGTERM'
+  -   }
+  - ]
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:3502:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ { pid: 42424, signal: 'SIGTERM' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:4203:1
+✖ stats prints provider and model token breakdown from local metering data (24.304ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Providers:/. Input:
+  
+  '┌─────────────────────────────────────────────────────┐\n' +
+    '│ Source: jsonl\n' +
+    '│ Requests: 3 | Success: 2 | Errors: 1\n' +
+    '│ Tokens: total=205 in=175 out=30\n' +
+    '│ Range: 2026-05-01T10:00:00Z → 2026-05-03T10:00:00Z\n' +
+    '├─ Providers ─────────────────────────────────────────┤\n' +
+    '│ #  Name               Req  Total     In    Out │\n' +
+    '│ 1  qwen                 2    145    125     20 │\n' +
+    '│ 2  deepseek             1     60     50     10 │\n' +
+    '├─ Models ────────────────────────────────────────────┤\n' +
+    '│ 1  qwen3.7-max          2    145    125     20 │\n' +
+    '│ 2  deepseek-v4-pro      1     60     50     10 │\n' +
+    '└─────────────────────────────────────────────────────┘\n'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:4225:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '┌─────────────────────────────────────────────────────┐\n│ Source: jsonl\n│ Requests: 3 | Success: 2 | Errors: 1\n│ Tokens: total=205 in=175 out=30\n│ Range: 2026-05-01T10:00:00Z → 2026-05-03T10:00:00Z\n├─ Providers ─────────────────────────────────────────┤\n│ #  Name               Req  Total     In    Out │\n│ 1  qwen                 2    145    125     20 │\n│ 2  deepseek             1     60     50     10 │\n├─ Models ────────────────────────────────────────────┤\n│ 1  qwen3.7-max          2    145    125     20 │\n│ 2  deepseek-v4-pro      1     60     50     10 │\n└─────────────────────────────────────────────────────┘\n',
+    expected: /Providers:/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:4392:1
+✖ update runs the package manager command for the latest llmproxy release (4.3656ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  ... Skipped lines
+  
+    [
+      [
+        'git',
+        [
+          '--version'
+  ...
+      [
+  +     'cmd.exe',
+  -     'npm',
+        [
+  +       '/d',
+  +       '/s',
+  +       '/c',
+  +       'npm.cmd --version'
+  -       '--version'
+        ]
+      ],
+      [
+  +     'cmd.exe',
+  -     'npm',
+        [
+  +       '/d',
+  +       '/s',
+  +       '/c',
+  +       'npm.cmd prefix -g'
+  -       'prefix',
+  -       '-g'
+        ]
+      ]
+    ]
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:4422:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ [ 'git', [Array] ], [ 'cmd.exe', [Array] ], [ 'cmd.exe', [Array] ] ],
+    expected: [ [ 'git', [Array] ], [ 'npm', [Array] ], [ 'npm', [Array] ] ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:4484:1
+✖ update stops early when the global npm prefix is protected and sudo is not pre-authorized (4.0164ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /sudo -v/. Input:
+  
+  'I prerequisiti per `llmproxy update` non sono soddisfatti. Installa/correggi questi elementi e rilancia `llmproxy update`:\n' +
+    '- Impossibile determinare il prefisso globale di npm (`npm prefix -g`).\n'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:4511:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'I prerequisiti per `llmproxy update` non sono soddisfatti. Installa/correggi questi elementi e rilancia `llmproxy update`:\n- Impossibile determinare il prefisso globale di npm (`npm prefix -g`).\n',
+    expected: /sudo -v/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\cli.test.js:4518:1
+✖ update keeps going when the remote version probe times out (20.0803ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\cli.test.js:4543:10)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\paths.test.js:6:1
+✖ getDataRoot uses a distinct per-user runtime root on macOS (3.2876ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\Users\\alice\\Library\\Application Support\\llmProxy'
+  - '/Users/alice/Library/Application Support/llmProxy'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\paths.test.js:18:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\Users\\alice\\Library\\Application Support\\llmProxy',
+    expected: '/Users/alice/Library/Application Support/llmProxy',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\paths.test.js:23:1
+✖ createPaths keeps token and log files isolated per user runtime root (1.8465ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'C:\\Users\\alice\\Library\\Application Support\\llmProxy\\copilot-token.json'
+  - '/Users/alice/Library/Application Support/llmProxy/copilot-token.json'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\paths.test.js:37:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'C:\\Users\\alice\\Library\\Application Support\\llmProxy\\copilot-token.json',
+    expected: '/Users/alice/Library/Application Support/llmProxy/copilot-token.json',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\port-guard.test.js:80:1
+✖ reapConflictingPortListeners preserves docker listeners and terminates foreign listeners (5.327ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   {
+  -     pid: 72678,
+  -     signal: 'SIGTERM'
+  -   }
+  - ]
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\port-guard.test.js:115:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ { pid: 72678, signal: 'SIGTERM' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\port-guard.test.js:118:1
+✖ reapConflictingPortListeners escalates to SIGKILL when a listener survives SIGTERM (1.2848ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + []
+  - [
+  -   {
+  -     pid: 72678,
+  -     signal: 'SIGTERM'
+  -   },
+  -   {
+  -     pid: 72678,
+  -     signal: 'SIGKILL'
+  -   }
+  - ]
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\port-guard.test.js:145:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ { pid: 72678, signal: 'SIGTERM' }, { pid: 72678, signal: 'SIGKILL' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests\project-context.test.js:9:1
+✖ detectProjectContext prefers explicit header project path (9.2933ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\tmp\\workspace-a'
+  - '/tmp/workspace-a'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\project-context.test.js:18:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\tmp\\workspace-a',
+    expected: '/tmp/workspace-a',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\project-context.test.js:22:1
+✖ detectProjectContext extracts path from system prompt when headers are missing (0.8185ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\Users\\example\\project-alpha'
+  - '/Users/example/project-alpha'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\project-context.test.js:35:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\Users\\example\\project-alpha',
+    expected: '/Users/example/project-alpha',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\provider-registry.test.js:138:1
+✖ provider registry writes files with restrictive permissions (4.0638ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  438 !== 384
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\provider-registry.test.js:143:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 438,
+    expected: 384,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\service-manager.test.js:8:1
+✖ launchd service manager renders a plist with expected paths and label (3.3458ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\/opt\/llmproxy\/server\.js/. Input:
+  
+  '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n' +
+    '<plist version="1.0">\n' +
+    '<dict>\n' +
+    '  <key>Label</key>\n' +
+    '  <string>com.example.llmproxy</string>\n' +
+    '  <key>ProgramArguments</key>\n' +
+    '  <array>\n' +
+    '    <string>/usr/local/bin/node</string>\n' +
+    '    <string>C:\\opt\\llmproxy\\server.js</string>\n' +
+    '  </array>\n' +
+    '  <key>WorkingDirectory</key>\n' +
+    '  <string>C:\\opt\\llmproxy</string>\n' +
+    '  <key>RunAtLoad</key>\n' +
+    '  <true/>\n' +
+    '  <key>KeepAlive</key>\n' +
+    '  <true/>\n' +
+    '  <key>StandardOutPath</key>\n' +
+    '  <string>C:\\Users\\example\\Library\\Application Support\\llmProxy\\logs\\service.out.log</string>\n' +
+    '  <key>StandardErrorPath</key>\n' +
+    '  <string>C:\\Users\\example\\Library\\Application Support\\llmProxy\\logs\\service.err.log</string>\n' +
+    '  <key>EnvironmentVariables</key>\n' +
+    '  <dict>\n' +
+    '    <key>PORT</key>\n' +
+    '    <string>5045</string>\n' +
+    '    <key>LLMPROXY_HOME</key>\n' +
+    '    <string>/Users/example/Library/Application Support/llmProxy</string>\n' +
+    '  </dict>\n' +
+    '</dict>\n' +
+    '</plist>\n'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:23:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.start (node:internal/test_runner/test:1177:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n  <key>Label</key>\n  <string>com.example.llmproxy</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string>/usr/local/bin/node</string>\n    <string>C:\\opt\\llmproxy\\server.js</string>\n  </array>\n  <key>WorkingDirectory</key>\n  <string>C:\\opt\\llmproxy</string>\n  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <true/>\n  <key>StandardOutPath</key>\n  <string>C:\\Users\\example\\Library\\Application Support\\llmProxy\\logs\\service.out.log</string>\n  <key>StandardErrorPath</key>\n  <string>C:\\Users\\example\\Library\\Application Support\\llmProxy\\logs\\service.err.log</string>\n  <key>EnvironmentVariables</key>\n  <dict>\n    <key>PORT</key>\n    <string>5045</string>\n    <key>LLMPROXY_HOME</key>\n    <string>/Users/example/Library/Application Support/llmProxy</string>\n  </dict>\n</dict>\n</plist>\n',
+    expected: /\/opt\/llmproxy\/server\.js/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests\service-manager.test.js:28:1
+✖ launchd status reports active service when launchctl print succeeds (3.2714ms)
+  TypeError: process.getuid is not a function
+      at Object.status (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:181:59)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:39:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3)
+
+test at tests\service-manager.test.js:46:1
+✖ launchd status treats missing service as inactive without surfacing an error (0.4487ms)
+  TypeError: process.getuid is not a function
+      at Object.status (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:181:59)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:57:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+
+test at tests\service-manager.test.js:64:1
+✖ launchd treats bootout 'No such process' as a missing service (1.4775ms)
+  TypeError: process.getuid is not a function
+      at Object.install (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:101:41)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:81:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+
+test at tests\service-manager.test.js:86:1
+✖ launchd install surfaces bootstrap failures (1.4868ms)
+  TypeError: process.getuid is not a function
+      at Object.install (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:101:41)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:102:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+
+test at tests\service-manager.test.js:108:1
+✖ launchd install retries bootstrap after transient input/output errors (1.5008ms)
+  TypeError: process.getuid is not a function
+      at Object.install (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:101:41)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:126:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+
+test at tests\service-manager.test.js:132:1
+✖ launchd start surfaces kickstart failures (0.5854ms)
+  TypeError: process.getuid is not a function
+      at Object.start (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:142:41)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:145:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+
+test at tests\service-manager.test.js:151:1
+✖ launchd stop treats missing service as already stopped (0.3965ms)
+  TypeError: process.getuid is not a function
+      at Object.stop (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\lib\service\launchd.js:172:41)
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:161:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7)
+
+test at tests\service-manager.test.js:167:1
+✖ systemd status uses runtime dir env for user bus access (5.9194ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + '\\run\\user\\1000'
+  - '/run/user/1000'
+  
+      at TestContext.<anonymous> (C:\Users\alessiobacin.DESKTOP-RLE36PF\Desktop\Development\llmProxy\tests\service-manager.test.js:186:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1306:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:897:18)
+      at Test.postRun (node:internal/test_runner/test:1447:19)
+      at Test.run (node:internal/test_runner/test:1372:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:897:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '\\run\\user\\1000',
+    expected: '/run/user/1000',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

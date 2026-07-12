@@ -160,9 +160,7 @@ test("GET /api/config returns all variables", async () => {
   assert.equal(dblayer, undefined);
 
   const autoEscalate = body.variables.find((v) => v.key === "LLMPROXY_AUTO_ESCALATE");
-  assert.ok(autoEscalate, "LLMPROXY_AUTO_ESCALATE should be listed");
-  assert.equal(autoEscalate.scope, "project");
-  assert.equal(autoEscalate.value, "1");
+  assert.equal(autoEscalate, undefined, "LLMPROXY_AUTO_ESCALATE should be removed");
 
   const statsKey = body.variables.find((v) => v.key === "LLMPROXY_LLM_STATS_API_KEY");
   assert.ok(statsKey, "LLMPROXY_LLM_STATS_API_KEY should be listed");

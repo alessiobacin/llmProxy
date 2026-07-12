@@ -818,32 +818,27 @@ Crea o aggiorna `.claude/settings.json` nella cartella corrente con le variabili
 
 Supporta `--model <indice>` per mostrare in output il modello selezionato dalla lista, mantenendo `.claude/settings.json` minimale (`model: llmProxy` piu` base URL del proxy).
 
-### Routing prezzo/prestazioni
+### Riordino automatico provider
 
-`LLMPROXY_PRICE_PERFORMANCE_ROUTING` e` il controllo di routing statico disponibile a livello progetto.
+`LLMPROXY_REORDERING` e` una variabile a livello di servizio (letta dall'ambiente del proxy in esecuzione, non da `.claude/settings.json` per-progetto).
 
 Come funziona:
 
-1. parte dall'ordine provider configurato
-2. se `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`, riordina il primo tentativo preferendo:
-   - provider/modelli gratuiti (`free_model=true`)
-   - in alternativa i provider con costo stimato inferiore
-3. se più candidati hanno costo equivalente, `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` decide se preferire:
-   - `power`
-   - `speed`
+1. ogni `LLMPROXY_REORDERING_MINUTES` minuti (default 5), riordina tutti i provider registrati usando dati reali
+2. i criteri sono una lista ordinata separata da `-`, ammesso un sottoinsieme di: `price`, `power`, `speed`
+3. `price`: costo reale da CloudPrice (i provider `free_model=true` valgono costo 0)
+4. `power`: `coding_index` reale da CloudPrice benchmarks
+5. `speed`: latenza reale misurata con un probe di inferenza
+6. l'ordine calcolato viene salvato stabilmente: e` quello che vede `provider:list`, quello usato dal fallback di `/v1/messages`, e resta valido fino al ciclo successivo
 
-Esempio `.claude/settings.json`:
+Esempio `.env` del servizio:
 
-```json
-{
-  "model": "llmProxy",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
-    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
-    "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "power"
-  }
-}
 ```
+LLMPROXY_REORDERING=price-speed-power
+LLMPROXY_REORDERING_MINUTES=5
+```
+
+Se `LLMPROXY_REORDERING` non e` impostata, il reordering automatico e` disattivato e resta l'ordine impostato manualmente con `llmproxy provider:order`. Usa `llmproxy provider:reorder` per forzare subito un ciclo.
 
 Esempio notifiche progetto:
 
@@ -1033,7 +1028,7 @@ Queste variabili sono gestite con `llmproxy config:*` e l'effetto è immediato, 
 llmproxy config:list                                      # mostra i valori effettivi project + global + service
 llmproxy config:list --scope global                       # mostra solo i default gestiti in ~/.claude/settings.json
 llmproxy config:get ANTHROPIC_BASE_URL                    # legge una variabile dal suo scope effettivo
-llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --scope project
+llmproxy config:set LLMPROXY_REORDERING price-speed-power --scope service
 llmproxy config:set LLMPROXY_LLM_STATS_API_KEY your-free-key --scope global
 llmproxy config:unset ANTHROPIC_DEFAULT_MODEL --scope project
 ```
@@ -1051,8 +1046,6 @@ llmproxy config:unset ANTHROPIC_DEFAULT_MODEL --scope project
 | `LLMPROXY_SENDGRID_TO_EMAIL` | unset | email | destinatario delle notifiche email del progetto |
 | `LLMPROXY_SENDGRID_TO_MESSAGE_TYPE` | `service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update` | lista separata da virgole, `all`, `*` | categorie di notifiche abilitate nel progetto |
 | `LLMPROXY_SHORT_ANSWER` | unset (`off`) | `0`, `1` | se `1`, attiva la modalità risposta breve |
-| `LLMPROXY_PRICE_PERFORMANCE_ROUTING` | unset (`off`) | `0`, `1`, `false`, `true` | abilita il riordino free-first / lower-cost prima del primo tentativo |
-| `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` | `power` | `power`, `speed` | tie-breaker quando più candidati hanno costo equivalente |
 
 ### Service-Scope (.env — richiede restart)
 
@@ -1089,6 +1082,8 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_DOCKER_POLL_MS` | auto | millisecondi | intervallo di polling per verifica stato container docker |
 | `LLMPROXY_GLOBAL_SERVICE` | unset | `0`, `1` | se `1`, abilita il servizio globale sulle porte riservate 6045/7045 |
 | `LLMPROXY_HOME` | auto (OS-specific) | percorso directory | directory dati runtime; default: `~/Library/Application Support/llmProxy` (macOS), `~/.local/share/llmProxy` (Linux) |
+| `LLMPROXY_REORDERING` | unset (`off`) | lista `-`-separata di `price`, `power`, `speed` | riordina automaticamente i provider ogni N minuti in base a dati reali |
+| `LLMPROXY_REORDERING_MINUTES` | `5` (solo se REORDERING e` impostata) | minuti | intervallo del ciclo di reordering |
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` (dev/staging), `30` (production) | numero intero | giorni di retention dei log JSONL |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | numero intero | dimensione massima in byte di un file JSONL prima della rotazione |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | numero intero | numero massimo di file JSONL archiviati per giorno |

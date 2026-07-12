@@ -72,6 +72,23 @@ How often (in minutes) the reordering cycle runs.
 - If `LLMPROXY_REORDERING` is absent, this var has no effect regardless of its
   value.
 
+### Scope: global only, not per-project
+
+Today `LLMPROXY_PRICE_PERFORMANCE_ROUTING`/`TIEBREAKER` are `scope: "project"`
+in `CONFIG_SPECS` — read per-request from each project's `.claude/settings.json`
+via `resolveClaudeProjectSettings`, so different projects sharing the same
+proxy instance could route differently. The new persisted `order` lives on
+the single shared `token-store` (one global provider registry, not
+per-project), so per-project override is physically incompatible with
+"persist one order". `LLMPROXY_REORDERING` / `LLMPROXY_REORDERING_MINUTES`
+are therefore **`scope: "service"`** — read once from the service's own
+environment, same as `LLMPROXY_PROVIDER_BENCHMARK_MINUTES` is today, not
+overridable per-project. `pricePerformanceRouting`/`pricePerformanceTieBreaker`
+are removed entirely from `lib/project-context.js`'s
+`resolveClaudeProjectSettings` return shape (all return sites), from
+`lib/app.js`'s `handleMessages` → `executeGatewayRequest` call, and from
+`executeGatewayRequest`'s options in `lib/copilot-proxy.js`.
+
 ### Removed vars
 
 `LLMPROXY_AUTO_ESCALATE`, `LLMPROXY_PRICE_PERFORMANCE_ROUTING`,

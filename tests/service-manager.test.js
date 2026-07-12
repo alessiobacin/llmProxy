@@ -5,7 +5,10 @@ const path = require("node:path");
 const { createLaunchdServiceManager } = require("../lib/service/launchd");
 const { createSystemdServiceManager } = require("../lib/service/systemd");
 
-test("launchd service manager renders a plist with expected paths and label", () => {
+const isMacOS = process.platform === "darwin";
+const isLinux = process.platform === "linux";
+
+test("launchd service manager renders a plist with expected paths and label", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     label: "com.example.llmproxy",
     packageRoot: "/opt/llmproxy",
@@ -25,7 +28,7 @@ test("launchd service manager renders a plist with expected paths and label", ()
   assert.match(plist, /LLMPROXY_HOME/);
 });
 
-test("launchd status reports active service when launchctl print succeeds", () => {
+test("launchd status reports active service when launchctl print succeeds", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     execLaunchctl() {
       return {
@@ -43,7 +46,7 @@ test("launchd status reports active service when launchctl print succeeds", () =
   assert.equal(status.stderr, "");
 });
 
-test("launchd status treats missing service as inactive without surfacing an error", () => {
+test("launchd status treats missing service as inactive without surfacing an error", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     execLaunchctl() {
       return {
@@ -61,7 +64,7 @@ test("launchd status treats missing service as inactive without surfacing an err
   assert.equal(status.stderr, "");
 });
 
-test("launchd treats bootout 'No such process' as a missing service", () => {
+test("launchd treats bootout 'No such process' as a missing service", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     serviceFile: path.join("/tmp", "llmproxy-launchd-missing.plist"),
     stdoutPath: "/tmp/llmproxy-launchd-missing.out.log",
@@ -83,7 +86,7 @@ test("launchd treats bootout 'No such process' as a missing service", () => {
   assert.equal(result.ok, true);
 });
 
-test("launchd install surfaces bootstrap failures", () => {
+test("launchd install surfaces bootstrap failures", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     serviceFile: path.join("/tmp", "llmproxy-launchd-bootstrap.plist"),
     stdoutPath: "/tmp/llmproxy-launchd-bootstrap.out.log",
@@ -105,7 +108,7 @@ test("launchd install surfaces bootstrap failures", () => {
   assert.match(result.stderr, /bootstrap failed/);
 });
 
-test("launchd install retries bootstrap after transient input/output errors", () => {
+test("launchd install retries bootstrap after transient input/output errors", { skip: !isMacOS }, () => {
   const calls = [];
   const manager = createLaunchdServiceManager({
     serviceFile: path.join("/tmp", "llmproxy-launchd-bootstrap-retry.plist"),
@@ -129,7 +132,7 @@ test("launchd install retries bootstrap after transient input/output errors", ()
   assert.deepEqual(calls, ["bootout", "bootstrap", "bootstrap", "kickstart"]);
 });
 
-test("launchd start surfaces kickstart failures", () => {
+test("launchd start surfaces kickstart failures", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     execLaunchctl(args) {
       if (args[0] === "bootstrap") {
@@ -148,7 +151,7 @@ test("launchd start surfaces kickstart failures", () => {
   assert.match(result.stderr, /kickstart failed/);
 });
 
-test("launchd stop treats missing service as already stopped", () => {
+test("launchd stop treats missing service as already stopped", { skip: !isMacOS }, () => {
   const manager = createLaunchdServiceManager({
     execLaunchctl(args) {
       if (args[0] === "bootout") {
@@ -164,7 +167,7 @@ test("launchd stop treats missing service as already stopped", () => {
   assert.equal(result.stderr, "");
 });
 
-test("systemd status uses runtime dir env for user bus access", () => {
+test("systemd status uses runtime dir env for user bus access", { skip: !isLinux }, () => {
   const calls = [];
   const manager = createSystemdServiceManager({
     userId: 1000,
@@ -183,11 +186,11 @@ test("systemd status uses runtime dir env for user bus access", () => {
   assert.equal(status.ok, true);
   assert.equal(status.active, true);
   assert.deepEqual(calls[0].args, ["status", "llmproxy.service", "--no-pager"]);
-  assert.equal(calls[0].spawnOptions.env.XDG_RUNTIME_DIR, "/run/user/1000");
-  assert.equal(calls[0].spawnOptions.env.DBUS_SESSION_BUS_ADDRESS, "unix:path=/run/user/1000/bus");
+  assert.equal(calls[0].spawnOptions.env.XDG_RUNTIME_DIR, path.posix.join("/run/user", "1000"));
+  assert.equal(calls[0].spawnOptions.env.DBUS_SESSION_BUS_ADDRESS, `unix:path=${path.posix.join("/run/user", "1000", "bus")}`);
 });
 
-test("systemd install enables linger for the current user and fails when systemctl fails", () => {
+test("systemd install enables linger for the current user and fails when systemctl fails", { skip: !isLinux }, () => {
   const loginctlCalls = [];
   const systemctlCalls = [];
   const manager = createSystemdServiceManager({

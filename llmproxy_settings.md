@@ -8,13 +8,21 @@ For each variable, this file states:
 - what value is assumed when it is omitted
 - an example value
 
-## `LLMPROXY_AUTO_ESCALATE`
+## `LLMPROXY_REORDERING`
 
-This controls retry escalation after repeated failures on the same task. It does not optimize for price on the first attempt; it helps the proxy move to a stronger fallback after the current path has proven ineffective.
+Controls automatic, periodic provider reordering based on live price, power (coding benchmark), and speed (real latency probe) data. Value is an ordered, `-`-separated list of criteria (subset of `price`, `power`, `speed`), most important first — e.g. `price-speed-power`.
 
-May be omitted: yes.  
-Value when omitted: effectively off, usually treated as `0`.  
-Example: `LLMPROXY_AUTO_ESCALATE=1`
+May be omitted: yes.
+Value when omitted: automatic reordering is off; the manually-configured provider order is used as-is.
+Example: `LLMPROXY_REORDERING=price-speed-power`
+
+## `LLMPROXY_REORDERING_MINUTES`
+
+How often (in minutes) the reordering cycle runs when `LLMPROXY_REORDERING` is set.
+
+May be omitted: yes.
+Value when omitted: `5`, but only takes effect if `LLMPROXY_REORDERING` is also set.
+Example: `LLMPROXY_REORDERING_MINUTES=10`
 
 ## `LLMPROXY_DOCKER_COMPOSE_FILE`
 
@@ -135,22 +143,6 @@ This is the complete MongoDB connection string used for local metering/log persi
 May be omitted: yes.  
 Value when omitted: unset, meaning MongoDB-backed persistence is not configured.  
 Example: `LLMPROXY_MONGODB_CONNECTION_STRING=mongodb://user:password@localhost:27017/llmproxy`
-
-## `LLMPROXY_PRICE_PERFORMANCE_ROUTING`
-
-This enables the first-attempt reordering that prefers cheaper options, with special preference for free models when available. This is the variable that affects cost-aware initial ranking.
-
-May be omitted: yes.  
-Value when omitted: off, effectively `0`.  
-Example: `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`
-
-## `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER`
-
-This is used only when price/performance routing is enabled and multiple candidates have the same effective cost. It decides whether the proxy should prefer the stronger model or the faster one.
-
-May be omitted: yes.  
-Value when omitted: `power`.  
-Example: `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER=speed`
 
 ## `LLMPROXY_PROVIDER_CREDIT_INLINE`
 

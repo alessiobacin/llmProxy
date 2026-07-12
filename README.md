@@ -980,12 +980,14 @@ llmproxy provider:key qwen --api-key sk-sp-... --vision true --plan subscription
 Shows the current fallback order of configured providers. For each provider:
 
 - the selected model is shown as `model=...`
-- the vision capability is shown as `vision=true` or `vision=false`
+- the coding benchmark score is shown as `coding=...`
+- the vision capability is shown on a new line as `vision=true` or `vision=false`
 - for `qwen`, the saved plan is shown as `plan=subscription` or `plan=payg`
-- the residual credit is shown as `credit=...` when the provider exposes a balance endpoint
+- the residual credit is shown as `credit=...` when the provider exposes a balance endpoint (or inline if `LLMPROXY_PROVIDER_CREDIT_INLINE=1` is set in the service config)
 - if the provider does not expose a readable balance endpoint, or the current key cannot read it, the suffix is `credit=n/a` or `credit=unavailable`
 - the current provider price is shown as `price=...`
 - the cheapest alternative discovered through the CloudPrice pricing API is shown as `best=... (...)`
+- the live speed probe (latency) is shown as `bench=...ms` or `bench=errore <code>` if the probe fails (e.g., `bench=errore 429`)
 
 Pricing notes:
 
@@ -994,39 +996,6 @@ Pricing notes:
 - this makes the numbers directly comparable across providers for the same model
 - the rendered label shows both token dimensions explicitly: `in=...` and `out=...`
 - if CloudPrice cannot resolve the current provider/model pair, the command prints `price=n/a` or `price=unavailable`
-
-### `llmproxy provider:test`
-
-Tests the vision capability of all configured providers by sending a test image and analyzing responses.
-
-Use it to verify:
-
-- that the `--vision` flag is correctly set for each provider
-- that vision-capable models actually process images
-- that non-vision models correctly skip image processing
-
-Example output:
-
-```
-Test visione provider...
-
-🔍 Qwen (qwen3.7-plus) - atteso: visione ✅
-  ✅ PASS - Visione confermata
-     Risposta: L'immagine è molto semplice e astratta, composta da...
-🔍 DeepSeek (deepseek-v4-pro) - atteso: testo ❌
-  ✅ PASS - Visione correttamente disabilitata
-     Risposta: [empty response]
-
-Risultati: 2 pass, 0 fail, 0 skip
-```
-
-### `llmproxy provider:status`
-
-Shows the active provider and the ordered list of providers with the current fallback state.
-
-### `llmproxy provider:order <id> <position>`
-
-Moves a provider to the requested fallback position.
 
 ### `llmproxy provider:reorder`
 
@@ -1388,6 +1357,7 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_MONGODB_CONNECTION_STRING` | unset | full MongoDB connection string | standalone persistence target for metering/log storage; when unset, standalone mode falls back to local JSONL storage. Ignored when `LLMPROXY_MODE=platform` |
 | `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | if `1`, appends inline token/metering stats at the end of the inference; if absent in `.claude/settings.json`, the project value is `0` |
 | `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | if `1`, prepends inline provider/model info at the start of the inference; if absent in `.claude/settings.json`, the project value is `0` |
+| `LLMPROXY_PROVIDER_CREDIT_INLINE` | `1` (service default) | `0`, `1` | if `1`, shows provider residual credit inline in the provider list (`provider:list`); **service-scope variable**, must be set with `--scope service` |
 | `DBLAYER_URL` | auto | full URL | optional explicit db-layer override. If absent, llmProxy derives `5001` dev, `6001` staging, `7001` production. The port is automatically corrected by `resolveServiceUrlForProfile` to match the runtime profile port prefix (5/6/7), so a dev URL with port `6001` would be overwritten to `5001` when running in development profile |
 | `EVENTBUS_URL` | auto | full URL | optional explicit event-bus override. If absent, llmProxy derives `5048` dev, `6048` staging, `7048` production. Same automatic port correction as `DBLAYER_URL`: port must match the active runtime profile prefix |
 | `LLMPROXY_SECRET` | unset | arbitrary string | optional HMAC secret for internal token signing |

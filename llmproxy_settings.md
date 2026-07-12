@@ -146,11 +146,11 @@ Example: `LLMPROXY_MONGODB_CONNECTION_STRING=mongodb://user:password@localhost:2
 
 ## `LLMPROXY_PROVIDER_CREDIT_INLINE`
 
-This exposes provider credit or pricing information inline when such information is available.
+This exposes provider credit or pricing information inline when such information is available. **Service-scoped variable** — must be set with `--scope service`.
 
 May be omitted: yes.  
 Value when omitted: effectively off, so `0`.  
-Example: `LLMPROXY_PROVIDER_CREDIT_INLINE=1`
+Example: `llmproxy config:set LLMPROXY_PROVIDER_CREDIT_INLINE 1 --scope service`
 
 ## `LLMPROXY_RUNTIME_PROFILE`
 

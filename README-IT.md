@@ -733,7 +733,18 @@ llmproxy provider:key qwen --api-key sk-sp-... --vision true --plan subscription
 
 ### `llmproxy provider:list`
 
-Mostra l'ordine attuale di fallback dei provider configurati. Per ogni provider viene mostrata la capability vision come `vision=true` oppure `vision=false`. Per `qwen` viene mostrato anche il piano salvato (`plan=subscription` oppure `plan=payg`).
+Mostra l'ordine attuale di fallback dei provider configurati. Per ogni provider vengono mostrati su righe separate:
+
+- `model=<modello>` — il modello configurato
+- `credit=<credito>` — il credito residuo (se disponibile), altrimenti `n/a`
+- `coding=<punteggio>` — il punteggio `coding_index` da CloudPrice benchmarks
+- `vision=<true|false>` — capacità di visione su riga dedicata
+- `price=<prezzo>` — il prezzo corrente normalizzato
+- `best=<provider> (<prezzo>)` — l'alternativa più economica trovata
+- `proxy=<url>` — se il provider usa un proxy
+- `bench=<ms|errore>` — latenza del probe di velocità (es. `672 ms`) oppure codice errore se fallisce (es. `errore 429`)
+
+Il comando mostra anche `reorder=price>speed>power (ultimo: 2m fa)` se il reordering automatico e` attivo.
 
 ### `llmproxy provider:test`
 
@@ -775,6 +786,10 @@ Aggiorna il nome descrittivo di un provider senza cambiarne l'identificatore.
 ### `llmproxy provider:remove <id>`
 
 Rimuove il provider indicato dal registry locale.
+
+### `llmproxy provider:reorder`
+
+Forza un ciclo immediato di reordering automatico (price/power/speed, secondo `LLMPROXY_REORDERING`) senza attendere il timer. Stampa i criteri usati, l'ordine risultante e i punteggi grezzi per ogni provider. Non fa nulla (e lo segnala) se `LLMPROXY_REORDERING` non e` impostata.
 
 ### `llmproxy logs`
 
@@ -1072,7 +1087,7 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_MONGODB_CONNECTION_STRING` | unset | stringa completa MongoDB | destinazione standalone per persistenza metering/log; se assente usa JSONL locale. Ignorata se `LLMPROXY_MODE=platform` |
 | `LLMPROXY_METERING_INLINE` | unset | `0`, `1` | se `1`, aggiunge in fondo all'inferenza le statistiche token/metering inline; se assente in `.claude/settings.json`, il valore di progetto e` `0` |
 | `LLMPROXY_INFERENCE_INFO_INLINE` | unset | `0`, `1` | se `1`, aggiunge all'inizio dell'inferenza provider e modello usati; se assente in `.claude/settings.json`, il valore di progetto e` `0` |
-| `LLMPROXY_PROVIDER_CREDIT_INLINE` | unset | `0`, `1` | se `1`, aggiunge nel footer inline il credito residuo del provider (DeepSeek, Kimi, OpenRouter); richiede `LLMPROXY_METERING_INLINE=1` |
+| `LLMPROXY_PROVIDER_CREDIT_INLINE` | `1` (service default) | `0`, `1` | se `1`, mostra il credito residuo del provider inline nella lista (`provider:list`); variabile **service-scope**, va impostata con `--scope service` |
 | `DBLAYER_URL` | auto | URL completo | override esplicito opzionale del db-layer. Se assente, llmProxy deriva `5001` dev, `6001` staging, `7001` production |
 | `EVENTBUS_URL` | auto | URL completo | override esplicito opzionale dell'event-bus. Se assente, llmProxy deriva `5048` dev, `6048` staging, `7048` production |
 | `LLMPROXY_SECRET` | unset | stringa arbitraria | secret HMAC opzionale per la firma di token interni |

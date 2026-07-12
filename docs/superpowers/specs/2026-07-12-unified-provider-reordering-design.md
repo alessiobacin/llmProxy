@@ -192,11 +192,12 @@ module instead of `copilot-proxy.js`.
 - **New command `provider:reorder`**: triggers an immediate reordering cycle
   (doesn't wait for the timer), persists the new order, prints a table of
   provider / price / power / speed / new position.
-- **`provider:list` updated**: continues to show price/power columns using
-  the same underlying fetch helpers (now shared with the reordering module
-  instead of duplicated), adds a speed column sourced from the new
-  `provider-reordering.json` store, and — when automatic reordering is
-  active — a summary line like `reorder=price>speed>power (last: 3m ago)`.
+- **`provider:list` updated**: shows model, credit, coding score, vision (on
+  separate line), price, best alternative, proxy URL, and a `bench` field
+  containing either the live speed probe latency (e.g. `672 ms`) or an error
+  code if the probe fails (e.g. `errore 429` for rate limits, `errore network-error` for connectivity issues). When automatic reordering is active, a summary line like `reorder=price>speed>power (last: 3m ago)` is printed.
+- **Scope validation in `config:set`**: service-scoped variables (including
+  `LLMPROXY_REORDERING`, `LLMPROXY_REORDERING_MINUTES`, `LLMPROXY_PROVIDER_CREDIT_INLINE`, etc.) must be set with `--scope service`. Attempting to set them in `--scope global` or `--scope project` produces an error: "Questa variabile può essere impostata soltanto nello scope 'service'". Unknown variables also error: "Variabile non supportata: <key>". Service-scoped variables require explicit `--scope service` flag.
 
 ## File map
 

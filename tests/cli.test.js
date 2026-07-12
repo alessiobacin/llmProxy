@@ -1214,6 +1214,51 @@ test("provider:order moves providers to the requested fallback position", async 
   assert.match(stdout.toString(), /backup/);
 });
 
+test("provider:reorder reports 'not configured' when LLMPROXY_REORDERING is unset", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-reorder-off-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("primary", { access_token: "token-primary", token_type: "bearer", scope: "read:user" }, { name: "Primary" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:reorder"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /non configurata/);
+});
+
+test("provider:reorder ranks by price and persists the new order", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-reorder-price-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+
+  tokenStore.saveProvider("paid", {
+    access_token: "token-paid", token_type: "api_key", scope: "api_key",
+    provider: "deepseek", auth_type: "api_key", default_model: "deepseek-chat", free_model: false,
+  }, { name: "Paid" });
+  tokenStore.saveProvider("free", {
+    access_token: "token-free", token_type: "api_key", scope: "api_key",
+    provider: "openrouter", auth_type: "api_key", default_model: "some-free-model", free_model: true,
+  }, { name: "Free" });
+
+  const fetchFn = async () => ({ ok: false }); // pricing lookup fails for the paid provider -> treated as worst, free wins
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:reorder"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+    env: { LLMPROXY_REORDERING: "price" },
+  });
+
+  const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 0);
+  assert.deepEqual(reloaded.listProviders().map((provider) => provider.id), ["free", "paid"]);
+  assert.match(stdout.toString(), /Criteri: price/);
+  assert.match(stdout.toString(), /Nuovo ordine provider: free, paid/);
+});
+
 test("provider:rename updates the provider display name", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-rename-"));
   const stdout = createWritableBuffer();

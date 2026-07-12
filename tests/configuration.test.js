@@ -70,16 +70,15 @@ test("getConfigSpec for project-scope variable", () => {
   assert.equal(spec.hotReloadable, true);
 });
 
-test("getConfigSpec exposes price/performance routing project variables", () => {
-  const routingSpec = getConfigSpec("LLMPROXY_PRICE_PERFORMANCE_ROUTING");
-  const tieBreakerSpec = getConfigSpec("LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER");
-  const autoEscalateSpec = getConfigSpec("LLMPROXY_AUTO_ESCALATE");
+test("getConfigSpec exposes the reordering service variables", () => {
+  const reorderingSpec = getConfigSpec("LLMPROXY_REORDERING");
+  const minutesSpec = getConfigSpec("LLMPROXY_REORDERING_MINUTES");
   const meteringInlineSpec = getConfigSpec("LLMPROXY_METERING_INLINE");
-  assert.equal(routingSpec.scope, "project");
-  assert.equal(routingSpec.hotReloadable, true);
-  assert.equal(tieBreakerSpec.scope, "project");
-  assert.equal(tieBreakerSpec.restartRequired, false);
-  assert.equal(autoEscalateSpec.scope, "project");
+  assert.equal(reorderingSpec.scope, "service");
+  assert.equal(reorderingSpec.hotReloadable, true);
+  assert.equal(reorderingSpec.restartRequired, false);
+  assert.equal(minutesSpec.scope, "service");
+  assert.equal(minutesSpec.restartRequired, true);
   assert.equal(meteringInlineSpec.scope, "project");
 });
 
@@ -315,7 +314,6 @@ test("unsetScopeValue removes global project-scope variables from the user's glo
 
 test("getProjectDefaultValues returns llmproxy project defaults", () => {
   const defaults = getProjectDefaultValues({ cwd: tmpDir, serviceConfigFile: path.join(tmpDir, "service", "config.json") });
-  assert.equal(defaults.LLMPROXY_AUTO_ESCALATE, "1");
   assert.equal(defaults.LLMPROXY_LLM_STATS_API_KEY, "");
   assert.equal(defaults.LLMPROXY_SENDGRID_API_KEY, "");
   assert.equal(defaults.LLMPROXY_SENDGRID_FROM_EMAIL, "");
@@ -323,8 +321,6 @@ test("getProjectDefaultValues returns llmproxy project defaults", () => {
   assert.equal(defaults.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE, "service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update");
   assert.equal(defaults.LLMPROXY_INFERENCE_INFO_INLINE, "1");
   assert.equal(defaults.LLMPROXY_METERING_INLINE, "0");
-  assert.equal(defaults.LLMPROXY_PRICE_PERFORMANCE_ROUTING, "1");
-  assert.equal(defaults.LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER, "power");
   assert.equal(defaults.LLMPROXY_PROVIDER_CREDIT_INLINE, "1");
   assert.equal(defaults.LLMPROXY_SHORT_ANSWER, "0");
 });
@@ -354,6 +350,9 @@ test("normalizeClaudeSettingsConfig removes legacy project variables and injects
       SENDGRID_TO_MESSAGE_TYPE: "provider_error",
       LLMPROXY_SMART_ROUTE: "hybrid",
       LLMPROXY_SMART_PREFERENCE: "balanced",
+      LLMPROXY_AUTO_ESCALATE: "1",
+      LLMPROXY_PRICE_PERFORMANCE_ROUTING: "1",
+      LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER: "speed",
     },
   }, {
     cwd: tmpDir,
@@ -366,8 +365,8 @@ test("normalizeClaudeSettingsConfig removes legacy project variables and injects
   assert.equal(normalized.env.LLMPROXY_SENDGRID_FROM_EMAIL, "from@example.com");
   assert.equal(normalized.env.LLMPROXY_SENDGRID_TO_EMAIL, "to@example.com");
   assert.equal(normalized.env.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE, "provider_error");
-  assert.equal(normalized.env.LLMPROXY_PRICE_PERFORMANCE_ROUTING, "1");
-  assert.equal(normalized.env.LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER, "power");
+  assert.equal("LLMPROXY_AUTO_ESCALATE" in normalized.env, false);
+  assert.equal("LLMPROXY_PRICE_PERFORMANCE_ROUTING" in normalized.env, false);
   assert.equal("LLM_STATS_API_KEY" in normalized.env, false);
   assert.equal("SENDGRID_API_KEY" in normalized.env, false);
   assert.equal("LLMPROXY_SMART_ROUTE" in normalized.env, false);

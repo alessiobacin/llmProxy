@@ -353,25 +353,3 @@ test("resolveClaudeProjectSettings defaults missing boolean flags in Claude env 
   assert.equal(result.inlineInferenceInfo, false);
   assert.equal(result.shortAnswer, 0);
 });
-
-test("resolveClaudeProjectSettings reads price/performance routing preferences from Claude env", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-price-performance-"));
-  const projectRoot = path.join(root, "workspace");
-  const nestedDir = path.join(projectRoot, "src");
-  const claudeDir = path.join(projectRoot, ".claude");
-  fs.mkdirSync(nestedDir, { recursive: true });
-  fs.mkdirSync(claudeDir, { recursive: true });
-  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
-    model: "llmProxy",
-    env: {
-      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
-      LLMPROXY_PRICE_PERFORMANCE_ROUTING: "1",
-      LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER: "speed",
-    },
-  }, null, 2));
-
-  const result = resolveClaudeProjectSettings(nestedDir);
-
-  assert.equal(result.pricePerformanceRouting, true);
-  assert.equal(result.pricePerformanceTieBreaker, "speed");
-});

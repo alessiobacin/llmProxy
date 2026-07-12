@@ -1,0 +1,686 @@
+{
+  "0.3.55": {
+    "it": [
+      "Changelog spostato da package.json a release-notes.json dedicato.",
+      "Rimosso campo llmproxyReleaseNotes da package.json (250+ righe).",
+      "Aggiornato readEmbeddedReleaseNotes per leggere dal nuovo file JSON con supporto locale it/en."
+    ],
+    "en": [
+      "Changelog moved from package.json to dedicated release-notes.json.",
+      "Removed llmproxyReleaseNotes field from package.json (250+ lines).",
+      "Updated readEmbeddedReleaseNotes to read from new JSON file with it/en locale support."
+    ]
+  },
+  "0.3.54": {
+    "it": ["Changelog 0.3.54: - 0.3.54"],
+    "en": ["Changelog 0.3.54: - 0.3.54"]
+  },
+  "0.3.53": {
+    "it": ["Changelog 0.3.53: - 0.3.53"],
+    "en": ["Changelog 0.3.53: - 0.3.53"]
+  },
+  "0.3.52": {
+    "it": ["Changelog 0.3.52: - 0.3.52"],
+    "en": ["Changelog 0.3.52: - 0.3.52"]
+  },
+  "0.3.51": {
+    "it": ["Changelog 0.3.51: - 0.3.51"],
+    "en": ["Changelog 0.3.51: - 0.3.51"]
+  },
+  "0.3.50": {
+    "it": ["Changelog 0.3.50: - 0.3.50"],
+    "en": ["Changelog 0.3.50: - 0.3.50"]
+  },
+  "0.3.49": {
+    "it": ["Changelog 0.3.49: - 0.3.49"],
+    "en": ["Changelog 0.3.49: - 0.3.49"]
+  },
+  "0.3.48": {
+    "it": ["Changelog 0.3.48: - 0.3.48"],
+    "en": ["Changelog 0.3.48: - 0.3.48"]
+  },
+  "0.3.47": {
+    "it": ["Changelog 0.3.47: - 0.3.47"],
+    "en": ["Changelog 0.3.47: - 0.3.47"]
+  },
+  "0.3.46": {
+    "it": ["Changelog 0.3.46: - 0.3.46"],
+    "en": ["Changelog 0.3.46: - 0.3.46"]
+  },
+  "0.3.45": {
+    "it": ["Changelog 0.3.45: - 0.3.45"],
+    "en": ["Changelog 0.3.45: - 0.3.45"]
+  },
+  "0.3.44": {
+    "it": ["Changelog 0.3.44: - 0.3.44"],
+    "en": ["Changelog 0.3.44: - 0.3.44"]
+  },
+  "0.3.43": {
+    "it": ["Changelog 0.3.43: - 0.3.43"],
+    "en": ["Changelog 0.3.43: - 0.3.43"]
+  },
+  "0.3.42": {
+    "it": ["Changelog 0.3.42: - 0.3.42"],
+    "en": ["Changelog 0.3.42: - 0.3.42"]
+  },
+  "0.3.41": {
+    "it": ["Changelog 0.3.41: - 0.3.41"],
+    "en": ["Changelog 0.3.41: - 0.3.41"]
+  },
+  "0.3.40": {
+    "it": ["Changelog 0.3.40: - 0.3.40"],
+    "en": ["Changelog 0.3.40: - 0.3.40"]
+  },
+  "0.3.39": {
+    "it": ["Changelog 0.3.39: - 0.3.39"],
+    "en": ["Changelog 0.3.39: - 0.3.39"]
+  },
+  "0.3.38": {
+    "it": ["Changelog 0.3.38: - 0.3.38"],
+    "en": ["Changelog 0.3.38: - 0.3.38"]
+  },
+  "0.3.37": {
+    "it": ["Changelog 0.3.37: - 0.3.37"],
+    "en": ["Changelog 0.3.37: - 0.3.37"]
+  },
+  "0.3.36": {
+    "it": ["Changelog 0.3.36: - 0.3.36"],
+    "en": ["Changelog 0.3.36: - 0.3.36"]
+  },
+  "0.3.35": {
+    "it": ["Changelog 0.3.35: - 0.3.35"],
+    "en": ["Changelog 0.3.35: - 0.3.35"]
+  },
+  "0.3.34": {
+    "it": ["Changelog 0.3.34: - 0.3.34"],
+    "en": ["Changelog 0.3.34: - 0.3.34"]
+  },
+  "0.3.33": {
+    "it": ["Changelog 0.3.33: - 0.3.33"],
+    "en": ["Changelog 0.3.33: - 0.3.33"]
+  },
+  "0.3.32": {
+    "it": ["Changelog 0.3.32: - 0.3.32"],
+    "en": ["Changelog 0.3.32: - 0.3.32"]
+  },
+  "0.3.31": {
+    "it": ["Changelog 0.3.31: - 0.3.31"],
+    "en": ["Changelog 0.3.31: - 0.3.31"]
+  },
+  "0.3.30": {
+    "it": [
+      "Fix provider:add: solo copilot usa il login device-flow GitHub, le istanze custom API-key restano sul percorso API-key.",
+      "Istanza custom provider distinte possono coesistere anche se puntano allo stesso provider kind e modello di default.",
+      "Fix auto-escalation per catene fallback free-model: fallimenti ripetuti promuovono ancora tra candidati free senza leak verso provider a pagamento."
+    ],
+    "en": [
+      "Fix provider:add: only copilot uses GitHub device-flow login; custom API-key provider instance ids stay on the API-key path.",
+      "Distinct custom provider instance ids can coexist even when pointing to the same provider kind and default model.",
+      "Fix auto-escalation for free-model fallback chains so repeated failures can still promote across all-free candidates without leaking into paid providers."
+    ]
+  },
+  "0.3.29": {
+    "it": [
+      "Fix update preflight: llmp up esce pulito se la CLI locale è già più nuova del probe versione online.",
+      "I test API config-list isolati dalle impostazioni globali reali di Claude su macOS e altri ambienti locali.",
+      "Mantiene la release 0.3.28 di validazione update macOS intatta rimuovendo un falso percorso self-update su installazioni dev symlinkate."
+    ],
+    "en": [
+      "Fix update preflight so llmp up exits cleanly when the local CLI is already newer than the online version probe result.",
+      "Isolate config-list API tests from the developer's real global Claude settings on macOS and other local environments.",
+      "Keep the 0.3.28 macOS update validation release intact while removing a false-positive self-update path on symlinked dev installs."
+    ]
+  },
+  "0.3.28": {
+    "it": [
+      "Valida il percorso self-update macOS end-to-end contro l'installazione persistente attuale e runtime servizio Docker-backed.",
+      "Mantiene i fix locale config-scope 0.3.27 e comportamento risoluzione LLMPROXY_LLM_STATS_API_KEY intatti.",
+      "Rilascio no-behavior-change usato per verificare affidabilità llmp up locale su macOS."
+    ],
+    "en": [
+      "Validate the macOS self-update path end-to-end against the current persistent installation and Docker-backed service runtime.",
+      "Keep the 0.3.27 local config-scope fixes and LLMPROXY_LLM_STATS_API_KEY resolution behavior intact.",
+      "Ship a no-behavior-change release used to verify local llmp up reliability on macOS."
+    ]
+  },
+  "0.3.27": {
+    "it": [
+      "Fix comandi config locali: config:set/get/list/unset non proxy più tramite servizio in esecuzione evitando uso accidentale di Claude home dell'account servizio.",
+      "llmproxy test legge LLMPROXY_LLM_STATS_API_KEY effettivo da scope configurazione invece di richiedere marker proxy Claude nel file settings progetto.",
+      "Mantiene bypass self-diagnostica locale 0.3.26 intatto ripristinando gestione corretta chiavi globali Claude su Windows."
+    ],
+    "en": [
+      "Fix local config commands so config:set/get/list/unset no longer proxy through the running service and accidentally use the service account Claude home.",
+      "Make llmproxy test read the effective LLMPROXY_LLM_STATS_API_KEY from configuration scopes instead of requiring Claude proxy markers in the project settings file.",
+      "Keep the 0.3.26 local self-diagnostics bypass intact while restoring correct global Claude key handling on Windows."
+    ]
+  },
+  "0.3.26": {
+    "it": [
+      "Bypassa wrapper REST locale per version, status, comandi gestione servizio così self-diagnostica usa binario CLI invocante direttamente.",
+      "Previene debug update locale su Windows da letture accidentali version o risposte servizio da istanza servizio già in esecuzione più vecchia.",
+      "Mantiene preflight Administrator 0.3.25 per servizi Windows attivi intatto."
+    ],
+    "en": [
+      "Bypass the local REST wrapper for version, status, and service-management commands so self-diagnostics use the invoking CLI binary directly.",
+      "Prevent local update debugging on Windows from accidentally reading version or service responses from an older already-running service instance.",
+      "Keep the 0.3.25 Administrator preflight for active Windows services intact."
+    ]
+  },
+  "0.3.25": {
+    "it": [
+      "Windows update fallisce presto con guida esplicita Administrator quando servizio nativo llmproxy ancora attivo in sessione non-elevata.",
+      "Superficie errore reale stop servizio Windows invece di messaggio generico, così access-denied diagnosticabile subito.",
+      "Mantiene fix launcher 0.3.24 per npm.cmd, wrapper PowerShell, entrypoint Node intatti."
+    ],
+    "en": [
+      "Make Windows update fail early with explicit Administrator guidance when the native llmproxy service is still active in a non-elevated session.",
+      "Surface the real Windows service stop error instead of a generic failure message, so access-denied cases are diagnosable immediately.",
+      "Keep the 0.3.24 launcher fix for npm.cmd, PowerShell wrappers, and Node entrypoints intact."
+    ]
+  },
+  "0.3.24": {
+    "it": [
+      "Fix Windows self-update: Start-Process instrada npm.cmd e altri entrypoint stile script tramite host executable corretto.",
+      "Previene fallimento llmp update locale con '%1 is not a valid Win32 application' quando updater incontra cmd, PowerShell, o wrapper Node.",
+      "Mantiene protezione stop servizio Windows 0.3.23 mentre indurisce risoluzione launcher updater."
+    ],
+    "en": [
+      "Fix Windows self-update so Start-Process routes npm.cmd and other script-style entrypoints through the correct host executable.",
+      "Prevent local llmp update from failing with '%1 is not a valid Win32 application' when the updater hits cmd, PowerShell, or Node wrappers.",
+      "Keep the Windows service-stop protection from 0.3.23 while hardening the updater's launcher resolution."
+    ]
+  },
+  "0.3.23": {
+    "it": [
+      "Fix Windows update e persistent install fermando servizio nativo prima di sostituire pacchetto npm globale.",
+      "Previene fallimenti EBUSY rename quando npm install -g tocca directory llmproxy live posseduta da servizio in esecuzione.",
+      "Mantiene fix status Windows localizzato 0.3.22 e updater SSH-safe 0.3.21 intatti."
+    ],
+    "en": [
+      "Fix Windows update and persistent install by stopping the native service before replacing the global npm package.",
+      "Prevent EBUSY rename failures when npm install -g touches a live llmproxy directory owned by the running service.",
+      "Keep the localized Windows status fix from 0.3.22 and the SSH-safe updater from 0.3.21 intact."
+    ]
+  },
+  "0.3.22": {
+    "it": [
+      "Fix rilevamento status servizio Windows su host localizzati riconoscendo codici numerici sc state come STATO : 4 RUNNING.",
+      "llmproxy status riporta Service active: yes quando servizio nativo in esecuzione su installazioni Windows non-inglesi.",
+      "Mantiene updater SSH-safe 0.3.21 e avvio diretto-node nssm 0.3.20 invariati."
+    ],
+    "en": [
+      "Fix Windows service status detection on localized hosts by recognizing numeric sc state codes such as STATO : 4 RUNNING.",
+      "Make llmproxy status report Service active: yes when the native service is running on non-English Windows installations.",
+      "Keep the 0.3.21 SSH-safe updater and 0.3.20 direct-node nssm startup unchanged."
+    ]
+  },
+  "0.3.21": {
+    "it": [
+      "Fix Windows self-update su SSH instradando git, npm, e comandi CLI post-install tramite helper Start-Process silenzioso.",
+      "Previene rumore NativeCommandError PowerShell da abortire llmproxy update quando git clone o npm emettono progress su stderr.",
+      "Mantiene avvio diretto-node nssm 0.3.20 mentre rende updater resiliente in sessioni remote non-interattive."
+    ],
+    "en": [
+      "Fix Windows self-update over SSH by routing git, npm, and post-install CLI commands through a quiet Start-Process helper.",
+      "Prevent PowerShell NativeCommandError noise from aborting llmproxy update when git clone or npm emit progress on stderr.",
+      "Keep the 0.3.20 direct-node nssm startup while making the updater resilient in non-interactive remote sessions."
+    ]
+  },
+  "0.3.20": {
+    "it": [
+      "Fix servizi nativi Windows facendo lanciare node.exe direttamente da nssm invece di routing tramite wrapper cmd.",
+      "Imposta PATH servizio Windows gestito esplicitamente dentro nssm così avvio server non dipende più da comportamento shell wrapper.",
+      "Mantiene fix port-guard netstat.exe assoluto 0.3.19 rimuovendo ultimo fragile layer batch da avvio nativo."
+    ],
+    "en": [
+      "Fix Windows native services by making nssm launch node.exe directly instead of routing through a cmd wrapper.",
+      "Set the managed Windows service PATH explicitly inside nssm so server startup no longer depends on wrapper shell behavior.",
+      "Keep the absolute netstat.exe port-guard fix from 0.3.19 while removing the last fragile batch layer from native startup."
+    ]
+  },
+  "0.3.19": {
+    "it": [
+      "Fix avvio nativo Windows su ambienti vincolati invocando C:\\\\Windows\\\\System32\\\\netstat.exe con path assoluto.",
+      "Evita qualsiasi dipendenza residua su risoluzione comandi nativi basata su PATH durante cleanup porta global-service su Windows.",
+      "Mantiene avvio nssm wrapper-based e precedenti fix Windows update/service intatti."
+    ],
+    "en": [
+      "Fix Windows native startup on constrained environments by invoking C:\\\\Windows\\\\System32\\\\netstat.exe with an absolute path.",
+      "Avoid any remaining dependence on PATH-based native command resolution during global-service port cleanup on Windows.",
+      "Keep the wrapper-based nssm startup and previous Windows update/service fixes intact."
+    ]
+  },
+  "0.3.18": {
+    "it": [
+      "Fix probing porta global-service Windows invocando netstat.exe esplicitamente invece di affidarsi a risoluzione comando senza estensione.",
+      "Previene avvio nativo Windows che fallisce ancora su host dove spawnSync non risolve netstat senza suffisso .exe.",
+      "Mantiene avvio nssm wrapper-based e ripristino PATH sistema Windows 0.3.17."
+    ],
+    "en": [
+      "Fix Windows global-service port probing by invoking netstat.exe explicitly instead of relying on extension-less command resolution.",
+      "Prevent native Windows startup from still failing on hosts where spawnSync cannot resolve netstat without the .exe suffix.",
+      "Keep the nssm wrapper-based startup and Windows system PATH restoration introduced in 0.3.17."
+    ]
+  },
+  "0.3.17": {
+    "it": [
+      "Fix servizi nssm Windows lanciando wrapper generato tramite cmd.exe e ripristinando voci PATH sistema Windows richieste.",
+      "Assicura servizi nativi Windows possano risolvere comandi built-in come netstat mentre antepongono ancora runtime Node gestito.",
+      "Mantiene fix port-guard Windows 0.3.16 rendendo configurazione default nssm servizio effettivamente eseguibile."
+    ],
+    "en": [
+      "Fix Windows nssm services by launching the generated wrapper through cmd.exe and restoring the required Windows system PATH entries.",
+      "Ensure native Windows services can resolve built-in commands such as netstat while still prepending the managed Node runtime.",
+      "Keep the Windows port-guard fix from 0.3.16 while making the default nssm service configuration actually runnable."
+    ]
+  },
+  "0.3.16": {
+    "it": [
+      "Fix avvio global-service Windows usando cleanup porta basato su netstat invece di lsof quando LLMPROXY_GLOBAL_SERVICE=1.",
+      "Previene crash immediato servizio nativo Windows all'avvio perché lsof non disponibile su Windows.",
+      "Aggiunge copertura regressione per discovery listener Windows nel percorso global port-guard."
+    ],
+    "en": [
+      "Fix Windows global-service startup by using netstat-based port cleanup instead of lsof when LLMPROXY_GLOBAL_SERVICE=1.",
+      "Prevent the native Windows service from crashing immediately on startup because lsof is unavailable on Windows.",
+      "Add regression coverage for Windows listener discovery in the global port-guard path."
+    ]
+  },
+  "0.3.15": {
+    "it": [
+      "Fix Windows self-update su SSH silenziando git clone, npm pack/install, e stream comandi nativi restart servizio dentro updater PowerShell.",
+      "Previene output stderr/progress comandi nativi innocui da abortire llmproxy update con NativeCommandError su host Windows.",
+      "Mantiene gestore servizio nativo Windows nssm-based 0.3.14 e verifica attività post-start intatti."
+    ],
+    "en": [
+      "Fix Windows self-update over SSH by silencing git clone, npm pack/install, and service restart native command streams inside the PowerShell updater.",
+      "Prevent harmless native command stderr/progress output from aborting llmproxy update with NativeCommandError on Windows hosts.",
+      "Keep the 0.3.14 nssm-based Windows native service manager and post-start activity verification intact."
+    ]
+  },
+  "0.3.14": {
+    "it": [
+      "Fix gestione servizio nativo Windows usando nssm.exe quando disponibile invece di registrare wrapper .cmd raw con sc.exe.",
+      "Installazione persistente Windows silenzia output notice npm e fallisce se servizio registrato non effettivamente attivo dopo avvio.",
+      "Non perde più caller PATH nel wrapper servizio Windows generato e mantiene solo path runtime Node richiesto."
+    ],
+    "en": [
+      "Fix Windows native service management by using nssm.exe when available instead of registering a raw .cmd wrapper with sc.exe.",
+      "Make Windows persistent install silence npm notice output and fail if the registered service is not actually active after startup.",
+      "Stop leaking the caller PATH into the generated Windows service wrapper and keep only the required Node runtime path."
+    ]
+  },
+  "0.3.13": {
+    "it": [
+      "Fix installazione persistente Windows così impacchetta build llmproxy corrente prima di disinstallare vecchia copia globale.",
+      "Previene install:persistent da eliminare propria sorgente pacchetto su Windows durante reinstall globale.",
+      "Mantiene percorso compatibilità npm.cmd 0.3.12 per update e bootstrap servizio."
+    ],
+    "en": [
+      "Fix Windows persistent install so it packs the current llmproxy build before uninstalling the old global copy.",
+      "Prevent install:persistent from deleting its own package source on Windows during global reinstall.",
+      "Keep the npm.cmd compatibility path introduced in 0.3.12 for update and service bootstrap."
+    ]
+  },
+  "0.3.12": {
+    "it": [
+      "Fix preflight CLI Windows così update e installazione persistente rilevano npm via npm.cmd in sessioni SSH e non-interattive.",
+      "Mantiene controlli protected-prefix intatti evitando falsi fallimenti 'npm not found' su host Windows.",
+      "Aggiunge copertura regressione per percorsi update/install Windows che risolvono npm tramite wrapper cmd."
+    ],
+    "en": [
+      "Fix Windows CLI preflight so update and persistent install detect npm via npm.cmd in SSH and non-interactive sessions.",
+      "Keep protected-prefix checks intact while avoiding false 'npm not found' failures on Windows hosts.",
+      "Add regression coverage for Windows update/install paths that resolve npm through the cmd wrapper."
+    ]
+  },
+  "0.3.11": {
+    "it": [
+      "Indurisce logging richieste così file JSONL non scrivibili non crashano più /v1/messages e test provider.",
+      "Ripara ownership LLMPROXY_HOME e file runtime scrivibili automaticamente durante installazione persistente e self-update.",
+      "Previene upgrade legacy basati su sudo da lasciare log runtime owned-by-root che rompono richieste servizio nativo successive."
+    ],
+    "en": [
+      "Harden request logging so unwritable JSONL files no longer crash /v1/messages and provider tests.",
+      "Repair LLMPROXY_HOME ownership and writable runtime files automatically during persistent install and self-update.",
+      "Prevent legacy sudo-based upgrades from leaving root-owned runtime logs that break subsequent native service requests."
+    ]
+  },
+  "0.3.10": {
+    "it": [
+      "Valori config project-scoped ereditano da ~/.claude/settings.json globale utente quando override locali assenti.",
+      "Mostra valori progetto effettivi insieme a sezione dedicata Global Claude configuration in config:list.",
+      "Mantiene configurazione servizio separata da default utente Claude rendendo fallback globali visibili e testabili."
+    ],
+    "en": [
+      "Make project-scoped config values inherit from the user's global ~/.claude/settings.json when local overrides are absent.",
+      "Show the effective project values together with a dedicated Global Claude configuration section in config:list.",
+      "Keep service configuration separate from Claude user defaults while making global fallbacks visible and testable."
+    ]
+  },
+  "0.3.09": {
+    "it": [
+      "Fix self-update e installazione persistente Unix così riparano e preservano wrapper sia llmproxy che llmp.",
+      "Rimuove alias llmp stale durante uninstall per evitare shadowing installazione globale aggiornata.",
+      "Previene vecchi shim llmp user-local da sopravvivere update e mascherare CLI system-wide su server Linux."
+    ],
+    "en": [
+      "Fix self-update and persistent install on Unix so they repair and preserve both llmproxy and llmp wrappers.",
+      "Remove stale llmp aliases during uninstall to avoid shadowing an updated global installation.",
+      "Prevent old user-local llmp shims from surviving updates and masking the system-wide CLI on Linux servers."
+    ]
+  },
+  "0.3.08": {
+    "it": [
+      "llmproxy test fallisce quando LLMPROXY_LLM_STATS_API_KEY manca sia da impostazioni progetto che globali Claude.",
+      "Allinea test rapido provider con gate inferenza reale Claude Code per chiave llm-stats obbligatoria.",
+      "Mantiene probing salute provider intatto prevenendo falsi positivi 'ok' per validazione inference-ready."
+    ],
+    "en": [
+      "Make llmproxy test fail when LLMPROXY_LLM_STATS_API_KEY is missing from both project and global Claude settings.",
+      "Align the quick provider test with the real Claude Code inference gate for the mandatory llm-stats key.",
+      "Keep provider health probing intact while preventing false positive 'ok' results for inference-ready validation."
+    ]
+  },
+  "0.3.07": {
+    "it": [
+      "Aggiunge timeout a probe versione pacchetto remoto usato da llmproxy update.",
+      "Previene llmproxy update da apparire bloccato prima installazione quando check latest-version penzola su rete lenta o rotta.",
+      "Mantiene migrazione impostazioni Claude globali/progetto introdotta in 0.3.06."
+    ],
+    "en": [
+      "Add a timeout to the remote package version probe used by llmproxy update.",
+      "Prevent llmproxy update from appearing stuck before installation when the latest-version check hangs on a slow or broken network.",
+      "Keep the global/project Claude settings migration introduced in 0.3.06."
+    ]
+  },
+  "0.3.06": {
+    "it": [
+      "Migra impostazioni legacy Claude sia da progetto corrente che da ~/.claude/settings.json globale durante migrazione config e self-update.",
+      "Esegue migrazione config anche quando update lanciato fuori directory progetto.",
+      "Rimuove alias key legacy e LLMPROXY_SMART_* stale da vere impostazioni Claude on-disk, non solo da vista runtime effettiva."
+    ],
+    "en": [
+      "Migrate legacy Claude settings from both the current project and the global ~/.claude/settings.json during config migration and self-update.",
+      "Run config migration even when update is launched outside a project directory.",
+      "Remove stale LLMPROXY_SMART_* and legacy key aliases from real on-disk Claude settings, not only from the effective runtime view."
+    ]
+  },
+  "0.3.05": {
+    "it": [
+      "Fix llmproxy update e uninstall così CLI bypassa wrapper REST locale ed esegue direttamente nella shell invocante.",
+      "Evita deadlock self-update quando servizio gestito llmProxy già in esecuzione sulla stessa macchina.",
+      "Mantiene migrazione config automatica e cleanup porta-7045 da 0.3.04 intatti."
+    ],
+    "en": [
+      "Fix llmproxy update and uninstall so the CLI bypasses the local REST wrapper and runs directly in the invoking shell.",
+      "Avoid self-update deadlocks when a managed llmProxy service is already running on the same machine.",
+      "Keep automatic config migration and port-7045 cleanup from 0.3.04 intact."
+    ]
+  },
+  "0.3.04": {
+    "it": [
+      "Migra configurazione progetto e servizio gestita automaticamente durante self-update.",
+      "Rimuove variabili config legacy come LLM_STATS_API_KEY, SENDGRID_*, LLMPROXY_SMART_*, LLMPROXY_METERING_SINK, e split chiavi MongoDB.",
+      "Libera porta 7045 prima di restart sia in self-update che in installer one-line per evitare conflitti runtime stale."
+    ],
+    "en": [
+      "Migrate managed project and service configuration automatically during self-update.",
+      "Remove legacy config variables such as LLM_STATS_API_KEY, SENDGRID_*, LLMPROXY_SMART_*, LLMPROXY_METERING_SINK, and split MongoDB keys.",
+      "Reap port 7045 before restart both in self-update and in the one-line installer to avoid stale runtime conflicts."
+    ]
+  },
+  "0.3.03": {
+    "it": [
+      "Fix llmproxy update così GitHub CLI non più prerequisito richiesto.",
+      "Permette self-update su server Linux lean che hanno solo git e npm installati.",
+      "Mantiene preflight update focalizzato su requisiti reali usati da updater."
+    ],
+    "en": [
+      "Fix llmproxy update so GitHub CLI is no longer required as a prerequisite.",
+      "Allow self-update on lean Linux servers that only have git and npm installed.",
+      "Keep update preflight focused on real requirements used by the updater."
+    ]
+  },
+  "0.3.02": {
+    "it": [
+      "Fix installer Linux così prefissi npm user-local installati e persistiti correttamente senza risoluzione wrapper stale.",
+      "llmproxy test stampa dettagli errore HTTP provider per probe inferenza rapida falliti.",
+      "Aggiunge copertura regressione per persistenza PATH installer e reporting errore HTTP test rapido."
+    ],
+    "en": [
+      "Fix Linux installers so user-local npm prefixes are installed and persisted correctly without stale wrapper resolution.",
+      "Make llmproxy test print the provider HTTP error details for failed quick inference probes.",
+      "Add regression coverage for installer PATH persistence and quick test HTTP error reporting."
+    ]
+  },
+  "0.3.01": {
+    "it": [
+      "Self-update: backup automatico del pacchetto globale attuale prima di installare la nuova release.",
+      "Verifica post-update: il binario appena installato deve superare `version`, `config:list` e `status` prima di essere confermato.",
+      "Rollback automatico: se la nuova build non passa i controlli, llmProxy ripristina la versione precedente e riavvia il servizio gestito."
+    ],
+    "en": [
+      "Self-update: automatically back up the current global package before installing the new release.",
+      "Post-update verification: the freshly installed binary must pass `version`, `config:list`, and `status` before it is accepted.",
+      "Automatic rollback: if the new build fails validation, llmProxy restores the previous version and restarts the managed service."
+    ]
+  },
+  "0.2.74": {
+    "it": [
+      "Test: aggiunti 12 unit test per modulo EscalationTracker auto-escalation.",
+      "Coprono modalità disabled/enabled, escalation soglia, multi-livello, isolamento conversazione, cleanup, ed eviction."
+    ],
+    "en": [
+      "Test: add 12 unit tests for EscalationTracker auto-escalation module.",
+      "Cover disabled/enabled modes, threshold escalation, multi-level, conversation isolation, cleanup, and eviction."
+    ]
+  },
+  "0.2.73": {
+    "it": [
+      "Fix self-update: wrapper generati puntano direttamente al CLI pacchetto installato invece di altro wrapper globale.",
+      "Fix percorso update nvm così llmproxy rimane invocabile dopo upgrade da install user-global più vecchia."
+    ],
+    "en": [
+      "Fix self-update: make generated wrappers point directly to the installed package CLI instead of another global wrapper.",
+      "Fix nvm update path so llmproxy remains callable after upgrading from an older user-global install."
+    ]
+  },
+  "0.2.72": {
+    "it": [
+      "Feat: auto-escalation a provider migliori su richieste ripetute.",
+      "Aggiunto EscalationTracker — rileva quando stesso messaggio utente rinviato N volte.",
+      "Escala automaticamente al provider successivo dopo soglia messaggi identici (LLMPROXY_AUTO_ESCALATE=1)."
+    ],
+    "en": [
+      "Feat: auto-escalation to better providers on repeated requests.",
+      "Add EscalationTracker — detects when the same user message is resent N times.",
+      "Automatically escalates to the next provider after threshold identical messages (LLMPROXY_AUTO_ESCALATE=1)."
+    ]
+  },
+  "0.2.71": {
+    "it": [
+      "Fix self-update con nvm: preserva path npm global bin originale del chiamante prima di switchare versioni Node.",
+      "Ricrea llmproxy nel prefix npm originale così comando rimane disponibile nella shell attiva utente."
+    ],
+    "en": [
+      "Fix self-update with nvm: preserve the caller's original npm global bin path before switching Node versions.",
+      "Recreate llmproxy in the original npm prefix so the command remains available in the user's active shell."
+    ]
+  },
+  "0.2.70": {
+    "it": [
+      "Fix self-update: ricrea wrapper legacy come /usr/bin/llmproxy dopo update.",
+      "Preserva percorsi wrapper standard durante cleanup update per evitare rimozione comando attivo."
+    ],
+    "en": [
+      "Fix self-update: recreate legacy wrappers such as /usr/bin/llmproxy after update.",
+      "Preserve standard wrapper paths during update cleanup to avoid removing the active command."
+    ]
+  },
+  "0.2.69": {
+    "it": [
+      "Documenta in CLAUDE.md che ogni commit e push deve includere version bump llmproxy prima.",
+      "Niente eccezioni. Non creare o pushare commit senza aggiornare versione progetto. Tratta version bump come parte dello stesso change set obbligatorio del codice che commetti."
+    ],
+    "en": [
+      "Document in CLAUDE.md that every commit and push must include an llmproxy version bump first.",
+      "No exceptions. Do not create or push a commit without updating the project version. Treat version bump as part of the same mandatory change set as the code you are committing."
+    ]
+  },
+  "0.2.68": {
+    "it": [
+      "Self-update: usa sempre il binario del pacchetto appena installato prima di qualunque wrapper vecchio trovato nel PATH.",
+      "Wrapper globale: ricreazione automatica di `llmproxy` se manca dopo l'aggiornamento.",
+      "Cleanup update: il wrapper globale valido viene preservato e non può più essere rimosso dall'update stesso."
+    ],
+    "en": [
+      "Self-update: always prefer the freshly installed package CLI before any stale wrapper found in PATH.",
+      "Global wrapper: automatically recreate `llmproxy` when it is missing after update.",
+      "Update cleanup: preserve the valid global wrapper so the updater cannot remove its own entrypoint."
+    ]
+  },
+  "0.2.66": {
+    "it": [
+      "Fix llmproxy test: accetta risposte provider metadata-only quando request_summary conferma successo.",
+      "Stabilizza gestione fallback provider test per scritture request_summary ritardate."
+    ],
+    "en": [
+      "Fix llmproxy test: accept metadata-only provider responses when request_summary confirms success.",
+      "Stabilize provider test fallback handling for delayed request_summary writes."
+    ]
+  },
+  "0.2.65": {
+    "it": [
+      "Fix llmproxy test: accetta risposte provider metadata-only quando request_summary conferma successo.",
+      "Stabilizza gestione fallback provider test per scritture request_summary ritardate."
+    ],
+    "en": [
+      "Fix llmproxy test: accept metadata-only provider responses when request_summary confirms success.",
+      "Stabilize provider test fallback handling for delayed request_summary writes."
+    ]
+  },
+  "0.2.63": {
+    "it": [
+      "Supporta multiple istanze stesso provider con modelli diversi via provider:add.",
+      "Fix update-service.sh: usa docker-compose.production.yml e imposta LLMPROXY_HOME quando mancante.",
+      "Fix update-service.sh: skip graceful quando Docker Compose non installato."
+    ],
+    "en": [
+      "Support multiple instances of the same provider with different models via provider:add.",
+      "Fix update-service.sh: use docker-compose.production.yml and set LLMPROXY_HOME when missing.",
+      "Fix update-service.sh: graceful skip when Docker Compose is not installed."
+    ]
+  },
+  "0.2.62": {
+    "it": [
+      "Aggiunto flag --vision esplicito per provider con capability vision in provider:add e provider:key.",
+      "Implementato fallback automatico skip per provider non-vision quando richieste contengono immagini.",
+      "Aggiunto comando provider:test per verificare capability vision di tutti i provider configurati.",
+      "Aggiunto supporto reasoning_content per Kimi e altri modelli thinking.",
+      "Aggiunti qwen3.7-plus, deepseek-v4-pro, kimi-k2.6 a registry model-capabilities."
+    ],
+    "en": [
+      "Added explicit --vision flag for providers with vision capability in provider:add and provider:key.",
+      "Implemented automatic fallback skip for non-vision providers when requests contain images.",
+      "Added provider:test command to verify vision capability of all configured providers.",
+      "Added reasoning_content support for Kimi and other thinking models.",
+      "Added qwen3.7-plus, deepseek-v4-pro, kimi-k2.6 to model-capabilities registry."
+    ]
+  },
+  "0.2.61": {
+    "it": [
+      "Stabilizza restart servizio launchd evitando stop esplicito prima di kickstart su macOS.",
+      "Tratta target launchd bootout mancanti come già fermati durante recovery servizio.",
+      "Limita tool Copilot inoltrati a 128 su entrambi /responses e /chat/completions.",
+      "claude:setup e model:set targettano porta servizio llmproxy installato quando LLMPROXY_HOME impostato."
+    ],
+    "en": [
+      "Stabilize launchd service restart by avoiding explicit stop before kickstart on macOS.",
+      "Treat missing launchd bootout targets as already stopped during service recovery.",
+      "Cap forwarded Copilot tools to 128 on both /responses and /chat/completions.",
+      "Make claude:setup and model:set target the installed llmproxy service port when LLMPROXY_HOME is set."
+    ]
+  },
+  "0.2.60": {
+    "it": [
+      "Release 0.2.60.",
+      "Embed note di rilascio correnti nel pacchetto installato per compatibilità first-update.",
+      "Deriva changelog update da commit message release quando disponibile.",
+      "Preserva note hardcoded solo come fallback finale backward-compatible."
+    ],
+    "en": [
+      "Release 0.2.60.",
+      "Embed current release notes in the installed package for first-update compatibility.",
+      "Keep deriving update changelogs from the release commit message when available.",
+      "Preserve hardcoded release notes only as a backward-compatible final fallback."
+    ]
+  },
+  "0.2.58": {
+    "it": [
+      "Update: il changelog viene letto dal binario appena installato, non dal processo precedente che ha avviato l'aggiornamento.",
+      "Risolto il caso in cui l'update completava la 0.2.57 ma mostrava ancora il fallback 'Note di rilascio non disponibili'."
+    ],
+    "en": [
+      "Update: release notes are now read from the freshly installed binary instead of the previous process that started the upgrade.",
+      "Fixed the case where updating to 0.2.57 completed successfully but still showed the 'Release notes are not available' fallback."
+    ]
+  },
+  "0.2.57": {
+    "it": [
+      "CLI globale: profilo runtime esplicito in production per usare la porta 7045 anche quando l'installazione globale punta al checkout locale.",
+      "Servizio persistente: bootstrap coerente con l'ambiente (Docker per production/staging, server nativo per development locale).",
+      "Update output: aggiunte note di rilascio per evitare il fallback 'Note di rilascio non disponibili'."
+    ],
+    "en": [
+      "Global CLI: explicit production runtime profile so the global command uses port 7045 even when the global install points to the local checkout.",
+      "Persistent service: environment-aware bootstrap (Docker for production/staging, native server for local development).",
+      "Update output: added release notes to avoid the 'Release notes are not available' fallback."
+    ]
+  },
+  "0.2.55": {
+    "it": [
+      "Update: changelog localizzato in base alla lingua di installazione persistente (install:persistent-it / install:persistent-en).",
+      "Lingua installazione persistita nel runtime per output coerente dei successivi update.",
+      "Fallback esplicito: se una versione non ha note, viene stampato comunque il blocco changelog con messaggio dedicato."
+    ],
+    "en": [
+      "Update: localized changelog based on persistent install language (install:persistent-it / install:persistent-en).",
+      "Install language is persisted in runtime storage for consistent output across subsequent updates.",
+      "Explicit fallback: if a version has no notes, update still prints a changelog block with a dedicated message."
+    ]
+  },
+  "0.2.54": {
+    "it": [
+      "Rete provider: retry automatico su errori transienti di socket chiuso (es. 'The socket connection was closed unexpectedly').",
+      "Maggiore resilienza: ridotti i falsi 502 su disconnessioni brevi upstream."
+    ],
+    "en": [
+      "Provider network: automatic retry on transient socket-close errors (e.g. 'The socket connection was closed unexpectedly').",
+      "Higher resilience: fewer false 502s on short upstream disconnects."
+    ]
+  },
+  "0.2.53": {
+    "it": [
+      "Update output: stampa il changelog della versione installata.",
+      "Self-update: se rileva il container Docker persistente in esecuzione, esegue rebuild+recreate (docker compose up -d --build llmproxy).",
+      "Event Bus (modulo 48): pubblicazione evento llmproxy.call.completed per ogni richiesta LLM."
+    ],
+    "en": [
+      "Update output: prints the changelog for the installed version.",
+      "Self-update: if a persistent Docker container is running, it performs rebuild+recreate (docker compose up -d --build llmproxy).",
+      "Event Bus (module 48): publish llmproxy.call.completed on every LLM request."
+    ]
+  },
+  "0.2.52": {
+    "it": [
+      "Event Bus (modulo 48): pubblicazione evento llmproxy.call.completed per ogni richiesta LLM.",
+      "Nuovo sink Event Bus configurabile con EVENTBUS_URL (5048 dev, 6048 staging, 7048 prod)."
+    ],
+    "en": [
+      "Event Bus (module 48): publish llmproxy.call.completed on every LLM request.",
+      "New Event Bus sink configurable with EVENTBUS_URL (5048 dev, 6048 staging, 7048 prod)."
+    ]
+  }
+}

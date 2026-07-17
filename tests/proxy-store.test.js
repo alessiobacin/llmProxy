@@ -114,6 +114,20 @@ test("clearProxy with last proxy clears the file", () => {
   assert.equal(fs.existsSync(file), false);
 });
 
+test("addProxy with --name stores the name on the proxy", () => {
+  const file = tmpFile();
+  const store = createProxyStore({ filePath: file });
+  const proxy = store.addProxy("http://user:pass@named.test:9999", "Proxy primario");
+  assert.equal(proxy.name, "Proxy primario");
+});
+
+test("addProxy without name leaves name undefined", () => {
+  const file = tmpFile();
+  const store = createProxyStore({ filePath: file });
+  const proxy = store.addProxy("http://user:pass@noname.test:9999");
+  assert.equal(proxy.name, undefined);
+});
+
 test("File is created with 0600 permissions and readable", () => {
   const file = tmpFile();
   const store = createProxyStore({ filePath: file });

@@ -97,14 +97,33 @@ interface GatewayRequestParams {
 
 // ---------- provider selection ----------
 
+/**
+ * Extract an explicit provider from a `model@provider` label, e.g.
+ * "deepseek-v4-flash-free@opencode-bacin" -> { model, provider }.
+ * Returns provider === null when no `@provider` suffix is present.
+ */
+function parseProviderModelAtLabel(value: unknown): { model: string; provider: string | null } {
+  const raw = String(value || "").trim();
+  const atIndex = raw.lastIndexOf("@");
+  if (atIndex < 0) {
+    return { model: raw, provider: null };
+  }
+  return {
+    model: raw.slice(0, atIndex).trim(),
+    provider: raw.slice(atIndex + 1).trim(),
+  };
+}
+
 function resolveProviderSelection({
   requestedProvider,
+  requestedModel,
   hierarchyContext,
   traceId,
   tokenStore,
   providerRegistry,
 }: {
   requestedProvider: string;
+  requestedModel?: string | null;
   hierarchyContext: HierarchyContext | null;
   traceId: string | null;
   tokenStore: unknown;
@@ -121,7 +140,7 @@ function resolveProviderSelection({
     if (exactLocalProvider?.access_token) {
       return {
         provider,
-        defaultModel: exactLocalProvider.default_model || null,
+        defaultModel: requestedModel && requestedModel.trim() ? requestedModel.trim() : (exactLocalProvider.default_model || null),
         source: "local",
         providerCandidates: [{
           id: exactLocalProvider.id || provider,
@@ -158,7 +177,7 @@ function resolveProviderSelection({
     }
     return {
       provider,
-      defaultModel: localProvider.default_model || null,
+      defaultModel: requestedModel && requestedModel.trim() ? requestedModel.trim() : (localProvider.default_model || null),
       source: "local",
     };
   }
@@ -190,7 +209,7 @@ function resolveProviderSelection({
     }
     return {
       provider: provider && provider !== "auto" ? firstCandidate.provider : "auto",
-      defaultModel: firstCandidate.default_model || null,
+      defaultModel: requestedModel && requestedModel.trim() ? requestedModel.trim() : (firstCandidate.default_model || null),
       source: "registry",
       providerCandidates: implementedCandidates.map((entry) => {
         const authType = String(entry.metadata?.auth_type || (entry.provider === "copilot" ? "oauth" : "api_key"));
@@ -261,6 +280,7 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
 }
 
 export {
+  parseProviderModelAtLabel,
   resolveProviderSelection,
   executeGatewayRequest,
   SUPPORTED_PROVIDERS,

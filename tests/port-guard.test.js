@@ -73,6 +73,14 @@ test("assertGlobalServicePortAccess blocks reserved service ports for non-global
     () => assertGlobalServicePortAccess({ port: 7045, env: {} }),
     /Porta riservata: 7045/
   );
+  assert.throws(
+    () => assertGlobalServicePortAccess({ port: 7045, env: {} }),
+    /porta dev 5045/
+  );
+  assert.throws(
+    () => assertGlobalServicePortAccess({ port: 7045, env: {} }),
+    /llmproxy service:stop/
+  );
   assert.doesNotThrow(() => assertGlobalServicePortAccess({ port: 7045, env: { LLMPROXY_GLOBAL_SERVICE: "1" } }));
   assert.doesNotThrow(() => assertGlobalServicePortAccess({ port: 5045, env: {} }));
 });

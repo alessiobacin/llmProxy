@@ -1848,10 +1848,10 @@ test("service:restart recovers the Docker runtime when the managed container is 
       commandCalls.push([command, ...args]);
       const joined = args.join(" ");
       if (joined.includes("ps --status running --services llmproxy")) {
-        const wasRestarted = commandCalls.some((call) => call.join(" ").includes("up -d --build llmproxy"));
+        const wasRestarted = commandCalls.some((call) => call.join(" ").includes("up -d --build --force-recreate llmproxy"));
         return { status: 0, stdout: wasRestarted ? "llmproxy\n" : "", stderr: "" };
       }
-      if (joined.includes("up -d --build llmproxy")) {
+      if (joined.includes("up -d --build --force-recreate llmproxy")) {
         return { status: 0, stdout: "started", stderr: "" };
       }
       return { status: 0, stdout: "", stderr: "" };
@@ -1865,6 +1865,54 @@ test("service:restart recovers the Docker runtime when the managed container is 
   });
 
   assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
+  assert.match(stdout.toString(), /Health check OK/);
+  assert.equal(stderr.toString(), "");
+});
+
+test("service:restart force-recreates the Docker runtime even when the container is already running", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-docker-running-"));
+  const packageRoot = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-service-restart-docker-running-pkg-")), "node_modules", "llmproxy");
+  const composeFile = path.join(packageRoot, "docker-compose.production.yml");
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const commandCalls = [];
+
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(composeFile, "services:\n  llmproxy:\n    image: llmproxy:test\n", "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "service:restart"], {
+    dataRoot: runtimeRoot,
+    packageRoot,
+    env: {
+      LLMPROXY_RUNTIME_PROFILE: "production",
+      LLMPROXY_DOCKER_COMPOSE_FILE: composeFile,
+      LLMPROXY_SERVICE_RUNTIME: "docker",
+    },
+    stdout,
+    stderr,
+    fetchFn: async () => ({ ok: true, async json() { return { ok: true }; } }),
+    commandRunner(command, args) {
+      commandCalls.push([command, ...args]);
+      const joined = args.join(" ");
+      if (joined.includes("ps --status running --services llmproxy")) {
+        return { status: 0, stdout: "llmproxy\n", stderr: "" };
+      }
+      if (joined.includes("up -d --build --force-recreate llmproxy")) {
+        return { status: 0, stdout: "recreated", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    },
+    serviceManager: {
+      kind: "launchd",
+      install() {
+        return { ok: true, stdout: "", stderr: "" };
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(commandCalls.some((call) => call.join(" ").includes("up -d --build --force-recreate llmproxy")), true);
   assert.match(stdout.toString(), /Runtime Docker: container ricreato/);
   assert.match(stdout.toString(), /Health check OK/);
   assert.equal(stderr.toString(), "");

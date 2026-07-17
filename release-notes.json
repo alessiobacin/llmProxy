@@ -1,4 +1,14 @@
 {
+  "0.3.65": {
+    "it": [
+      "Aggiunge un timeout esplicito ai probe benchmark live dei provider per evitare che `llmproxy provider:list` resti bloccato sullo spinner.",
+      "Mantiene l'elenco provider disponibile anche quando un benchmark live scade o restituisce un errore remoto."
+    ],
+    "en": [
+      "Adds an explicit timeout to live provider benchmark probes so `llmproxy provider:list` no longer hangs on the spinner.",
+      "Keeps provider listing available even when a live benchmark times out or returns a remote error."
+    ]
+  },
   "0.3.55": {
     "it": [
       "Changelog spostato da package.json a release-notes.json dedicato.",

@@ -115,6 +115,41 @@ test("computeProviderScores: speed measures real probe latency in ms", async () 
   assert.ok(typeof scores.get("p1").speed === "number" && scores.get("p1").speed >= 5);
 });
 
+test("buildDefaultProbeFn aborts a stuck provider probe instead of hanging forever", async () => {
+  const originalTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = () => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new Error("probe-timeout")), 10);
+    return controller.signal;
+  };
+
+  try {
+    const probeFn = buildDefaultProbeFn();
+    const result = await probeFn({
+      provider: {
+        provider: "openai",
+        access_token: "token",
+      },
+      model: "gpt-4o-mini",
+      fetchFn: (_url, options = {}) => new Promise((_, reject) => {
+        const signal = options.signal;
+        if (signal?.aborted) {
+          reject(signal.reason || new Error("aborted"));
+          return;
+        }
+        signal?.addEventListener("abort", () => {
+          reject(signal.reason || new Error("aborted"));
+        }, { once: true });
+      }),
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(String(result.error || ""), /timeout|aborted/i);
+  } finally {
+    AbortSignal.timeout = originalTimeout;
+  }
+});
+
 test("computeProviderScores: missing data becomes null (worst) for that criterion only", async () => {
   const fetchFn = async () => ({ ok: false });
   const probeFn = async () => ({ ok: false });

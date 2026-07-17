@@ -1066,6 +1066,40 @@ test("provider:list shows vision and free flags for custom api-key provider inst
   assert.match(stdout.toString(), /vision=false free=true/);
 });
 
+test("provider:add persists proxy rotation and provider:list renders proxy:rotation", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-list-proxy-rotation-"));
+  const stdoutAdd = createWritableBuffer();
+  const stdoutList = createWritableBuffer();
+  const fetchFn = async () => ({ ok: true, status: 200, async json() { return {}; } });
+
+  const addExitCode = await runCli([
+    "node", "llmproxy", "provider:add", "opencode-alessio",
+    "--api-key", "sk-zen-test",
+    "--model", "deepseek-v4-flash-free",
+    "--vision", "false",
+    "--proxy",
+    "--free-model",
+  ], {
+    dataRoot: runtimeRoot,
+    stdout: stdoutAdd,
+    fetchFn,
+  });
+
+  const listExitCode = await runCli(["node", "llmproxy", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout: stdoutList,
+    fetchFn: async () => ({ ok: false, status: 404, async json() { return {}; }, async text() { return "not found"; } }),
+  });
+
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const provider = tokenStore.getProvider("opencode-alessio");
+
+  assert.equal(addExitCode, 0);
+  assert.equal(listExitCode, 0);
+  assert.equal(provider.proxy_rotation, true);
+  assert.match(stdoutList.toString(), /proxy=proxy:rotation/);
+});
+
 test("provider:add rejects invalid qwen plan values", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-add-qwen-invalid-plan-"));
   const stderr = createWritableBuffer();

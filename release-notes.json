@@ -1,4 +1,14 @@
 {
+  "0.3.66": {
+    "it": [
+      "Preserva `proxy_rotation` nel token store locale quando un provider viene registrato con `--proxy` senza URL.",
+      "Fa mostrare `proxy:rotation` in `llmproxy provider:list` per i provider configurati con rotazione proxy."
+    ],
+    "en": [
+      "Preserves `proxy_rotation` in the local token store when a provider is registered with bare `--proxy`.",
+      "Makes `llmproxy provider:list` display `proxy:rotation` for providers configured with proxy rotation."
+    ]
+  },
   "0.3.65": {
     "it": [
       "Aggiunge un timeout esplicito ai probe benchmark live dei provider per evitare che `llmproxy provider:list` resti bloccato sullo spinner.",

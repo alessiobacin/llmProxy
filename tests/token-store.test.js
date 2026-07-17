@@ -70,6 +70,25 @@ test("token store persists free_model flags for provider/model instances", { con
   assert.equal(reloaded.getProvider("opencode").free_model, true);
 });
 
+test("token store persists proxy_rotation flags for provider/model instances", { concurrency: false }, () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-store-proxy-rotation-"));
+  const tokenFile = path.join(tempRoot, "copilot-token.json");
+  const store = createTokenStore({ filePath: tokenFile });
+
+  store.saveProvider("opencode", {
+    access_token: "sk-zen-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    proxy_rotation: true,
+  }, { name: "OpenCode Zen" });
+
+  const reloaded = createTokenStore({ filePath: tokenFile });
+  assert.equal(reloaded.getProvider("opencode").proxy_rotation, true);
+});
+
 test("token store keeps provider order stable when updating an existing provider", { concurrency: false }, () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-token-update-order-"));
   const tokenFile = path.join(tempRoot, "copilot-token.json");

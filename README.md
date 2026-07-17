@@ -197,7 +197,50 @@ llmproxy provider:order kimi 2
 llmproxy provider:rename kimi "Kimi Fallback"
 ```
 
-### 6. Install as a persistent service
+### 6. Proxy Registry (Rotazione Proxy)
+
+Puoi registrare proxy URL per usarli in rotazione quando `--proxy` viene passato senza valore:
+
+```bash
+# Aggiungi un proxy
+llmproxy proxy:add http://user:pass@proxy.esempio.com:10001
+
+# Elenca proxy registrati
+llmproxy proxy:list
+
+# Testa tutti i proxy
+llmproxy proxy:test
+
+# Riordina proxy (primo = prioritario in failover)
+llmproxy proxy:reorder proxy-a.com proxy-b.com
+
+# Rimuovi un proxy
+llmproxy proxy:remove proxy-a.com
+```
+
+**Usare la rotazione in un provider:**
+
+```bash
+# --proxy senza valore = rotazione automatica su tutti i proxy registrati
+llmproxy provider:add opencode --name "bacin2" --api-key "<key>" --model deepseek-v4-flash-free --vision false --proxy --free-model
+```
+
+Il provider ruoterà in failover sequenziale: prova il primo proxy, se fallisce passa al successivo.
+
+**Compatibilità:** `--proxy <url>` con valore esplicito continua a funzionare come prima (proxy specifico sul provider).
+
+```bash
+# --proxy con URL = proxy specifico (comportamento esistente)
+llmproxy provider:add opencode --name "bacin2" --api-key "<key>" --model deepseek-v4-flash-free --proxy "http://user:pass@host:7064" --vision false --free-model
+```
+
+Per testare tutti i provider attraverso tutti i proxy registrati:
+
+```bash
+llmproxy provider:test --all-proxies
+```
+
+### 7. Install as a persistent service
 
 ```bash
 llmproxy service:start
@@ -218,14 +261,14 @@ pnpm run install:persistent-en
 On macOS this creates and loads a user `LaunchAgent`.
 On Linux this creates and enables a `systemd --user` service.
 
-### 7. Configure Claude Code with the desired model
+### 8. Configure Claude Code with the desired model
 
 ```bash
 llmproxy models:list
 llmproxy claude:setup --model 2
 ```
 
-### 8. Service status and logs
+### 9. Service status and logs
 
 ```bash
 llmproxy status

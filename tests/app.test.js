@@ -44,8 +44,8 @@ function withInferenceMetadata(text, providerId, modelUsed, promptTokens = 0, co
   }
   parts.push(text);
   if (footer) {
-    // Production format: [llmproxy] provider/model (req X, in Y, out Z) | provider/model (in: Y/d, out: Z/d - in: 0/w, out: 0/w) | credito residuo: n/a
-    parts.push(`[llmproxy] ${providerId}/${modelUsed} (req ${requestTokens}, in ${promptTokens}, out ${completionTokens}) | ${providerId}/${modelUsed} (in: ${promptTokens}/d, out: ${completionTokens}/d - in: 0/w, out: 0/w) | credito residuo: n/a`);
+    // Production format: [llmproxy] provider/model (req X, in Y, out Z) | provider/model (in: Y/d, out: Z/d - in: 0/w, out: 0/w)
+    parts.push(`[llmproxy] ${providerId}/${modelUsed} (req ${requestTokens}, in ${promptTokens}, out ${completionTokens}) | ${providerId}/${modelUsed} (in: ${promptTokens}/d, out: ${completionTokens}/d - in: 0/w, out: 0/w)`);
   }
   return parts.join("\n\n");
 }
@@ -815,7 +815,7 @@ test("messages endpoint preserves inline provider and metering metadata for non-
     assert.match(payload.content[0].text, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
     assert.equal(payload.content[1].type, "tool_use");
     assert.equal(payload.content.at(-1).type, "text");
-    assert.match(payload.content.at(-1).text, /\[llmproxy\] req 16 \(in 11, out 5\)/);
+    assert.match(payload.content.at(-1).text, /\[llmproxy\] default\/claude-sonnet-4\.5 \(req 16, in 11, out 5\)/);
     assert.equal(meteringSink.records.length, 1);
     assert.equal(meteringSink.records[0].provider, "default");
   });
@@ -887,7 +887,7 @@ test("messages endpoint preserves inline provider and metering metadata for stre
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
-    assert.match(payload, /\[llmproxy\] req 10 \(in 7, out 3\)/);
+    assert.match(payload, /\[llmproxy\] default\/claude-sonnet-4\.5 \(req 10, in 7, out 3\)/);
     assert.match(payload, /"type":"tool_use"/);
     assert.match(payload, /"stop_reason":"tool_use"/);
     assert.equal(meteringSink.records.length, 1);
@@ -980,7 +980,7 @@ test("messages endpoint preserves inline provider and metering metadata for anth
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /\[llmproxy\] provider: opencode-go \| model: minimax-m3/);
-    assert.match(payload, /\[llmproxy\] req 6 \(in 4, out 2\)/);
+    assert.match(payload, /\[llmproxy\] opencode-go\/minimax-m3 \(req 6, in 4, out 2\)/);
     assert.match(payload, /"type":"tool_use"/);
     assert.match(payload, /"stop_reason":"tool_use"/);
     assert.equal(meteringSink.records.length, 1);
@@ -1040,7 +1040,7 @@ test("messages endpoint counts tokens from a usage-only final streaming chunk", 
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /pong stream/);
-    assert.match(payload, /\[llmproxy\] req 256 \(in 20, out 236\)/);
+    assert.match(payload, /\[llmproxy\] default\/qwen3\.7-max \(req 256, in 20, out 236\)/);
   });
 });
 
@@ -1922,7 +1922,7 @@ test("messages endpoint can fall back to every configurable API-key provider", a
           `^\\[llmproxy\\] provider: ${providerId} \\| model: ${expectedModel}` +
           ` : Second in order because .+ \\(copilot\\) is returning: 400\\n\\n` +
           `served by ${providerId}\\n\\n` +
-          `\\[llmproxy\\] req 5 \\(in 3, out 2\\).+`;
+          `\\[llmproxy\\] ${providerId}\\/${String(expectedModel).replace(/[.*+?^${}()|[\]\\\\]/g, "\\$&")} \\(req 5, in 3, out 2\\).+`;
         assert.match(payload.content[0].text, new RegExp(fullPat));
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
@@ -3396,30 +3396,30 @@ test("model:set and config endpoints are exposed via REST", async () => {
     assert.equal(modelResponse.status, 200);
     assert.equal(modelPayload.success, true);
 
-    const configSetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_REORDERING`, {
+    const configSetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SHORT_ANSWER`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ projectPath: projectRoot, scope: "project", value: "price" }),
+      body: JSON.stringify({ projectPath: projectRoot, scope: "project", value: "1" }),
     });
     const configSetPayload = await configSetResponse.json();
     assert.equal(configSetResponse.status, 200);
     assert.equal(configSetPayload.success, true);
 
-    const configGetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_REORDERING?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
+    const configGetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SHORT_ANSWER?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
     const configGetPayload = await configGetResponse.json();
     assert.equal(configGetResponse.status, 200);
     assert.equal(configGetPayload.success, true);
-    assert.match(configGetPayload.data.output, /project\.LLMPROXY_REORDERING=price/);
+    assert.match(configGetPayload.data.output, /project\.LLMPROXY_SHORT_ANSWER=1/);
 
     const configListResponse = await fetch(`${baseUrl}/api/config?scope=project&projectPath=${encodeURIComponent(projectRoot)}`);
     const configListPayload = await configListResponse.json();
     assert.equal(configListResponse.status, 200);
     assert.equal(configListPayload.success, true);
     assert.match(configListPayload.data.output, /Project configuration:/);
-    assert.match(configListPayload.data.output, /project\.LLMPROXY_REORDERING_MINUTES=5/);
+    assert.match(configListPayload.data.output, /project\.LLMPROXY_SHORT_ANSWER=1/);
     assert.match(configListPayload.data.output, /project\.LLMPROXY_INFERENCE_INFO_INLINE=1/);
 
-    const configUnsetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_REORDERING`, {
+    const configUnsetResponse = await fetch(`${baseUrl}/api/config/LLMPROXY_SHORT_ANSWER`, {
       method: "DELETE",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ projectPath: projectRoot, scope: "project" }),
@@ -3432,7 +3432,7 @@ test("model:set and config endpoints are exposed via REST", async () => {
   const settings = JSON.parse(fs.readFileSync(path.join(projectRoot, ".claude", "settings.json"), "utf8"));
   assert.equal(settings.model, "deepseek:deepseek-v4-flash");
   assert.equal(settings.env.ANTHROPIC_DEFAULT_MODEL, "deepseek:deepseek-v4-flash");
-  assert.equal("LLMPROXY_REORDERING" in settings.env, false);
+  assert.equal("LLMPROXY_SHORT_ANSWER" in settings.env, false);
 });
 
 test("REST config endpoints support the global Claude scope", async () => {

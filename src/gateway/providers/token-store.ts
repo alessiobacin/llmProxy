@@ -20,6 +20,7 @@ interface ProviderToken {
   free_model?: boolean;
   proxy_url?: string;
   proxy_api_key?: string;
+  proxy_rotation?: boolean;
   created_at: number;
   updated_at: number;
 }
@@ -131,6 +132,9 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
   }
   if (provider?.proxy_api_key) {
     token.proxy_api_key = String(provider.proxy_api_key).trim();
+  }
+  if (provider?.proxy_rotation === true || provider?.proxy_rotation === false) {
+    token.proxy_rotation = provider.proxy_rotation;
   }
   return token;
 }
@@ -290,14 +294,14 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
 
   function updateProvider(
     providerId: string,
-    patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model">>,
+    patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model" | "proxy_rotation">>,
   ): ProviderToken {
     const targetId = normalizeProviderId(providerId);
     if (!targetId) throw new Error("Provider id richiesto");
     const existing = getProvider(targetId);
     if (!existing) throw new Error(`Provider non trovato: ${targetId}`);
 
-    const normalizedPatch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model">> = {};
+    const normalizedPatch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model" | "proxy_rotation">> = {};
     if (patch && Object.prototype.hasOwnProperty.call(patch, "name")) {
       const newName = String(patch.name ?? "").trim();
       if (!newName) throw new Error("Provider name non valido");
@@ -315,6 +319,12 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
       }
       normalizedPatch.free_model = patch.free_model;
     }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "proxy_rotation")) {
+      if (patch.proxy_rotation !== true && patch.proxy_rotation !== false) {
+        throw new Error("--proxy deve essere true oppure false");
+      }
+      normalizedPatch.proxy_rotation = patch.proxy_rotation;
+    }
 
     if (Object.keys(normalizedPatch).length === 0) {
       return existing;
@@ -326,6 +336,7 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
       const merged: ProviderToken = { ...registry.providers[idx]! };
       if (normalizedPatch.vision !== undefined) merged.vision = normalizedPatch.vision;
       if (normalizedPatch.free_model !== undefined) merged.free_model = normalizedPatch.free_model;
+      if (normalizedPatch.proxy_rotation !== undefined) merged.proxy_rotation = normalizedPatch.proxy_rotation;
       if (normalizedPatch.name) merged.name = normalizedPatch.name;
       registry.providers[idx] = merged;
       persistRegistry(registry);

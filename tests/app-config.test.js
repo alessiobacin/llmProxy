@@ -270,7 +270,7 @@ test("POST /api/config/:key with wrong scope returns error", async () => {
   const { status, body } = await fetchFromApp(app, "POST", "/api/config/PORT", { value: "5040", scope: "project" });
   assert.equal(status, 400);
   assert.equal(body.success, false);
-  assert.ok(body.data.error.includes("scope service"));
+  assert.ok(body.data.error.includes("scope 'service'"));
 });
 
 // ─── Values persisted correctly ───────────────────────────────────────────────

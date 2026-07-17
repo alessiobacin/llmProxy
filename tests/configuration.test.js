@@ -321,7 +321,7 @@ test("getProjectDefaultValues returns llmproxy project defaults", () => {
   assert.equal(defaults.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE, "service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update");
   assert.equal(defaults.LLMPROXY_INFERENCE_INFO_INLINE, "1");
   assert.equal(defaults.LLMPROXY_METERING_INLINE, "0");
-  assert.equal(defaults.LLMPROXY_PROVIDER_CREDIT_INLINE, "1");
+  assert.equal(defaults.LLMPROXY_PROVIDER_CREDIT_INLINE, undefined);
   assert.equal(defaults.LLMPROXY_SHORT_ANSWER, "0");
 });
 

@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  buildInferenceHeader,
   parseProviderModelPreferences,
   sanitizeSchemaForMoonshot,
   sanitizeToolsForMoonshot,
@@ -403,6 +404,21 @@ test("buildSelectionReason adds WITH VISION when hasImages is true and no failur
 
   const r2 = buildSelectionReason([], "copilot", "gpt-4", null, true);
   assert.match(r2, /First in order from provider list WITH VISION$/);
+});
+
+test("buildInferenceHeader includes the proxy hostname when a proxy URL is used", () => {
+  process.env.LLMPROXY_INFERENCE_INFO_INLINE = "1";
+  const header = buildInferenceHeader(
+    "opencode-alessio",
+    "deepseek-v4-flash-free",
+    true,
+    "First in order from provider list",
+    "http://proxy:test@37.27.55.17:7064/",
+  );
+  assert.equal(
+    header,
+    "[llmproxy] provider: opencode-alessio | model: deepseek-v4-flash-free | proxy: 37.27.55.17 : First in order from provider list",
+  );
 });
 
 test("buildSelectionReason preserves preferredReason even with hasImages", () => {

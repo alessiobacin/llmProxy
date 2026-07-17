@@ -189,11 +189,8 @@ test("claude:setup creates .claude/settings.json for the current project", async
   assert.equal(settings.env.LLMPROXY_SENDGRID_FROM_EMAIL, "");
   assert.equal(settings.env.LLMPROXY_SENDGRID_TO_EMAIL, "");
   assert.equal(settings.env.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE, "service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update");
-  assert.equal(settings.env.LLMPROXY_AUTO_ESCALATE, "1");
   assert.equal(settings.env.LLMPROXY_INFERENCE_INFO_INLINE, "1");
   assert.equal(settings.env.LLMPROXY_METERING_INLINE, "0");
-  assert.equal(settings.env.LLMPROXY_PRICE_PERFORMANCE_ROUTING, "1");
-  assert.equal(settings.env.LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER, "power");
   assert.equal(settings.env.LLMPROXY_PROVIDER_CREDIT_INLINE, "1");
   assert.equal(settings.env.LLMPROXY_SHORT_ANSWER, "0");
   assert.match(stdout.toString(), /settings\.json/);
@@ -385,9 +382,9 @@ test("provider:list shows the effective project fallback chain when Claude setti
 
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Provider effettivi per il progetto/);
-  assert.match(stdout.toString(), /1\. default \(Default Copilot\)\n\s+model=gpt-5\.4 coding=n\/a/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\)\n\s+model=kimi-k2\.5 coding=n\/a/);
-  assert.match(stdout.toString(), /3\. qwen \(Qwen\)\n\s+model=qwen3\.7-max coding=n\/a/);
+  assert.match(stdout.toString(), /1\. default \(Default Copilot\)\n\s+model=gpt-5\.4\n\s+credit=n\/a\n\s+coding=n\/a/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\)\n\s+model=kimi-k2\.5\n\s+credit=unavailable\n\s+coding=n\/a/);
+  assert.match(stdout.toString(), /3\. qwen \(Qwen\)\n\s+model=qwen3\.7-max\n\s+credit=n\/a\n\s+coding=n\/a/);
 });
 
 test("provider:list keeps provider default models when the project sets a global override model", async () => {
@@ -439,9 +436,9 @@ test("provider:list keeps provider default models when the project sets a global
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\)\n\s+model=deepseek-v4-pro coding=n\/a/);
-  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\)\n\s+model=minimax\/minimax-m3 coding=n\/a/);
-  assert.match(stdout.toString(), /3\. commandcode \(Command Code\)\n\s+model=Qwen\/Qwen3\.7-Max coding=n\/a/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\)\n\s+model=deepseek-v4-pro\n\s+credit=unavailable\n\s+coding=n\/a/);
+  assert.match(stdout.toString(), /2\. openrouter \(OpenRouter\)\n\s+model=minimax\/minimax-m3\n\s+credit=unavailable\n\s+coding=n\/a/);
+  assert.match(stdout.toString(), /3\. commandcode \(Command Code\)\n\s+model=Qwen\/Qwen3\.7-Max\n\s+credit=n\/a\n\s+coding=n\/a/);
   assert.doesNotMatch(stdout.toString(), /model=gpt-5\.4/);
 });
 
@@ -689,10 +686,10 @@ test("provider:list shows residual credit plus current and best provider pricing
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\)\n\s+model=deepseek-v4-pro coding=59\.4\n\s+credit=USD 12\.34\n\s+price=in=USD 0\.43\/1M out=USD 0\.87\/1M\n\s+best=openrouter/);
-  assert.match(stdout.toString(), /2\. kimi \(Kimi\)\n\s+model=kimi-k2\.7-code coding=48\.8\n\s+credit=49\.59\n\s+price=n\/a\n\s+best=openrouter/);
-  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\)\n\s+model=minimax\/minimax-m3 coding=37\.3\n\s+credit=74\.75 credits\n\s+price=in=USD 0\.30\/1M out=USD 1\.20\/1M\n\s+best=fireworks/);
-  assert.match(stdout.toString(), /4\. qwen \(Qwen\)\n\s+model=qwen3\.7-plus coding=52\.1\n\s+credit=n\/a\n\s+price=in=USD 0\.40\/1M out=USD 1\.60\/1M\n\s+best=openrouter/);
+  assert.match(stdout.toString(), /1\. deepseek \(DeepSeek\)\n\s+model=deepseek-v4-pro\n\s+credit=USD 12\.34\n\s+coding=59\.4\n\s+price=in=USD 0\.43\/1M out=USD 0\.87\/1M\n\s+best=openrouter/);
+  assert.match(stdout.toString(), /2\. kimi \(Kimi\)\n\s+model=kimi-k2\.7-code\n\s+credit=49\.59\n\s+coding=48\.8\n\s+price=n\/a\n\s+best=openrouter/);
+  assert.match(stdout.toString(), /3\. openrouter \(OpenRouter\)\n\s+model=minimax\/minimax-m3\n\s+credit=74\.75 credits\n\s+coding=37\.3\n\s+price=in=USD 0\.30\/1M out=USD 1\.20\/1M\n\s+best=fireworks/);
+  assert.match(stdout.toString(), /4\. qwen \(Qwen\)\n\s+model=qwen3\.7-plus\n\s+credit=n\/a\n\s+coding=52\.1\n\s+price=in=USD 0\.40\/1M out=USD 1\.60\/1M\n\s+best=openrouter/);
 });
 
 test("provider:available shows supported providers with aliases and auth type", async () => {
@@ -1189,6 +1186,176 @@ test("provider:test treats NVIDIA HTTP 429 as a reachable provider", async () =>
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /NVIDIA \(z-ai\/glm-5\.2\)/i);
   assert.match(stdout.toString(), /PASS - Visione correttamente disabilitata \(errore HTTP 429\)/i);
+});
+
+test("provider:test --all-proxies runs real inference across all provider/proxy pairs with grouped output", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-all-proxies-inference-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const proxyStore = require("../lib/proxy-store").createProxyStore({ filePath: path.join(runtimeRoot, "proxy-registry.json") });
+  const logsDir = path.join(runtimeRoot, "logs");
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  tokenStore.saveProvider("deepseek", {
+    access_token: "sk-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+    vision: false,
+  }, { name: "DeepSeek" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "sk-qwen",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-plus",
+    vision: true,
+  }, { name: "Qwen" });
+
+  proxyStore.addProxy("http://proxy:one@77.42.22.198:7064/");
+  proxyStore.addProxy("http://proxy:two@37.27.55.17:7064/");
+
+  const seenBodies = [];
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    seenBodies.push(body);
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    fs.appendFileSync(logFile, `${JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "request_summary",
+      requestId: `req-${body.provider}-${seenBodies.length}`,
+      success: true,
+      finalProvider: body.provider,
+      finalModel: body.model,
+      finalStatus: 200,
+      providerSequence: [{ provider: body.provider, status: 200, success: true, effective_model: body.model, actual_model: body.model }],
+    })}\n`, "utf8");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          content: [{ type: "text", text: "[llmproxy] provider: hidden | model: hidden" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:test", "--all-proxies"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(seenBodies.length, 4);
+  seenBodies.forEach((body) => {
+    assert.match(body.messages[0].content[0].text, /^Rispondi solo: llmproxy-proxy-test-/);
+    assert.equal(body.messages[0].content.length, 1);
+  });
+  assert.match(stdout.toString(), /Test di inferenza provider × proxy/);
+  assert.match(stdout.toString(), /DeepSeek \(deepseek-v4-flash\)\n  77\.42\.22\.198\n    OK deepseek-v4-flash\n    risposta testuale non visibile, ma inferenza completata correttamente\n  37\.27\.55\.17\n    OK deepseek-v4-flash\n    risposta testuale non visibile, ma inferenza completata correttamente\n\nQwen \(qwen3\.7-plus\)/);
+  assert.doesNotMatch(stdout.toString(), /Visione|visione|immagine/);
+  assert.match(stdout.toString(), /Risultati: 4 pass, 0 fail, 0 skip/);
+});
+
+test("provider:test --all-proxies accepts canonical finalProvider for instance-scoped providers", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-all-proxies-opencode-instance-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const proxyStore = require("../lib/proxy-store").createProxyStore({ filePath: path.join(runtimeRoot, "proxy-registry.json") });
+  const logsDir = path.join(runtimeRoot, "logs");
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  tokenStore.saveProvider("opencode-alessio", {
+    access_token: "sk-opencode",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    vision: false,
+  }, { name: "opencode-alessio" });
+
+  proxyStore.addProxy("http://proxy:one@77.42.22.198:7064/");
+
+  const fetchFn = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    const logFile = path.join(logsDir, `requests-${new Date().toISOString().slice(0, 10)}.jsonl`);
+    fs.appendFileSync(logFile, `${JSON.stringify({
+      ts: new Date().toISOString(),
+      event: "request_summary",
+      requestId: "req-opencode-instance",
+      success: true,
+      finalProvider: "opencode",
+      finalModel: body.model,
+      finalStatus: 200,
+      providerSequence: [{ provider: "opencode", status: 200, success: true, effective_model: body.model, actual_model: body.model }],
+    })}\n`, "utf8");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          content: [{ type: "text", text: "[llmproxy] provider: hidden | model: hidden" }],
+        };
+      },
+    };
+  };
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:test", "--all-proxies"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /opencode-alessio \(deepseek-v4-flash-free\)\n  77\.42\.22\.198\n    OK deepseek-v4-flash-free/i);
+  assert.doesNotMatch(stdout.toString(), /FAIL risposta vuota/i);
+  assert.match(stdout.toString(), /Risultati: 1 pass, 0 fail, 0 skip/i);
+});
+
+test("provider:test --all-proxies returns a failing exit code when at least one provider-proxy pair fails", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-all-proxies-exit-code-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  const proxyStore = require("../lib/proxy-store").createProxyStore({ filePath: path.join(runtimeRoot, "proxy-registry.json") });
+
+  tokenStore.saveProvider("deepseek", {
+    access_token: "sk-deepseek",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "deepseek",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+    vision: false,
+  }, { name: "DeepSeek" });
+
+  proxyStore.addProxy("http://proxy:one@77.42.22.198:7064/");
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:test", "--all-proxies"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "deepseek-v4-flash",
+          content: [{ type: "text", text: "[llmproxy] provider: hidden | model: hidden" }],
+        };
+      },
+    }),
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stdout.toString(), /FAIL risposta vuota/i);
+  assert.match(stdout.toString(), /Risultati: 0 pass, 1 fail, 0 skip/i);
 });
 
 test("provider:add requires a default model for api-key providers", async () => {
@@ -2622,7 +2789,7 @@ test("config:set/get/unset manages project-scoped variables in Claude settings",
   const stdout = createWritableBuffer();
   const stderr = createWritableBuffer();
 
-  let exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_PRICE_PERFORMANCE_ROUTING", "1", "--project"], {
+  let exitCode = await runCli(["node", "llmproxy", "config:set", "LLMPROXY_SHORT_ANSWER", "1", "--project"], {
     cwd: tempRoot,
     stdout,
     stderr,
@@ -2630,25 +2797,25 @@ test("config:set/get/unset manages project-scoped variables in Claude settings",
   assert.equal(exitCode, 0);
 
   const settings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
-  assert.equal(settings.env.LLMPROXY_PRICE_PERFORMANCE_ROUTING, "1");
+  assert.equal(settings.env.LLMPROXY_SHORT_ANSWER, "1");
 
   const getStdout = createWritableBuffer();
-  exitCode = await runCli(["node", "llmproxy", "config:get", "LLMPROXY_PRICE_PERFORMANCE_ROUTING", "--project"], {
+  exitCode = await runCli(["node", "llmproxy", "config:get", "LLMPROXY_SHORT_ANSWER", "--project"], {
     cwd: tempRoot,
     stdout: getStdout,
   });
   assert.equal(exitCode, 0);
-  assert.match(getStdout.toString(), /project\.LLMPROXY_PRICE_PERFORMANCE_ROUTING=1/);
+  assert.match(getStdout.toString(), /project\.LLMPROXY_SHORT_ANSWER=1/);
 
   const unsetStdout = createWritableBuffer();
-  exitCode = await runCli(["node", "llmproxy", "config:unset", "LLMPROXY_PRICE_PERFORMANCE_ROUTING", "--project"], {
+  exitCode = await runCli(["node", "llmproxy", "config:unset", "LLMPROXY_SHORT_ANSWER", "--project"], {
     cwd: tempRoot,
     stdout: unsetStdout,
   });
   assert.equal(exitCode, 0);
 
   const nextSettings = JSON.parse(fs.readFileSync(path.join(tempRoot, ".claude", "settings.json"), "utf8"));
-  assert.equal("LLMPROXY_PRICE_PERFORMANCE_ROUTING" in nextSettings.env, false);
+  assert.equal("LLMPROXY_SHORT_ANSWER" in nextSettings.env, false);
 });
 
 test("config:list shows effective llmproxy project defaults when values are unset", async () => {
@@ -2661,7 +2828,6 @@ test("config:list shows effective llmproxy project defaults when values are unse
   });
 
   assert.equal(exitCode, 0);
-  assert.match(stdout.toString(), /project\.LLMPROXY_AUTO_ESCALATE=1/);
   assert.match(stdout.toString(), /project\.LLMPROXY_LLM_STATS_API_KEY=/);
   assert.match(stdout.toString(), /Global Claude configuration:/);
   assert.match(stdout.toString(), /project\.LLMPROXY_SENDGRID_API_KEY=/);
@@ -2670,9 +2836,6 @@ test("config:list shows effective llmproxy project defaults when values are unse
   assert.match(stdout.toString(), /project\.LLMPROXY_SENDGRID_TO_MESSAGE_TYPE=service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update/);
   assert.match(stdout.toString(), /project\.LLMPROXY_INFERENCE_INFO_INLINE=1/);
   assert.match(stdout.toString(), /project\.LLMPROXY_METERING_INLINE=0/);
-  assert.match(stdout.toString(), /project\.LLMPROXY_PRICE_PERFORMANCE_ROUTING=1/);
-  assert.match(stdout.toString(), /project\.LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER=power/);
-  assert.match(stdout.toString(), /project\.LLMPROXY_PROVIDER_CREDIT_INLINE=1/);
   assert.match(stdout.toString(), /project\.LLMPROXY_SHORT_ANSWER=0/);
 });
 
@@ -2869,7 +3032,7 @@ test("config:set rejects scope mismatches", async () => {
   });
 
   assert.equal(exitCode, 1);
-  assert.match(stderr.toString(), /appartiene allo scope service/);
+  assert.match(stderr.toString(), /può essere impostata soltanto nello scope 'service'/);
 });
 
 test("claude:setup resolves model indexes from the live Copilot catalog", async () => {
@@ -4256,12 +4419,12 @@ test("stats prints provider and model token breakdown from local metering data",
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Requests: 3 \| Success: 2 \| Errors: 1/);
   assert.match(stdout.toString(), /Tokens: total=205 in=175 out=30/);
-  assert.match(stdout.toString(), /Providers:/);
-  assert.match(stdout.toString(), /1\. qwen requests=2 total=145 in=125 out=20/);
-  assert.match(stdout.toString(), /2\. deepseek requests=1 total=60 in=50 out=10/);
-  assert.match(stdout.toString(), /Models:/);
-  assert.match(stdout.toString(), /1\. qwen3\.7-max requests=2 total=145 in=125 out=20/);
-  assert.match(stdout.toString(), /2\. deepseek-v4-pro requests=1 total=60 in=50 out=10/);
+  assert.match(stdout.toString(), /├─ Providers/);
+  assert.match(stdout.toString(), /│ 1  qwen\s+2\s+145\s+125\s+20 │/);
+  assert.match(stdout.toString(), /│ 2  deepseek\s+1\s+60\s+50\s+10 │/);
+  assert.match(stdout.toString(), /├─ Models/);
+  assert.match(stdout.toString(), /│ 1  qwen3\.7-max\s+2\s+145\s+125\s+20 │/);
+  assert.match(stdout.toString(), /│ 2  deepseek-v4-pro\s+1\s+60\s+50\s+10 │/);
 });
 
 test("help stats prints detailed guidance", async () => {
@@ -5096,8 +5259,8 @@ test("release-notes reads embedded package notes when commit message is unavaila
 
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /Changelog 0\.2\.60:/);
-  assert.match(stdout.toString(), /- release 0\.2\.60/);
-  assert.match(stdout.toString(), /- embed current release notes in the installed package for first-update compatibility/);
+  assert.match(stdout.toString(), /- Release 0\.2\.60\./);
+  assert.match(stdout.toString(), /- Embed note di rilascio correnti nel pacchetto installato per compatibilità first-update\./);
   assert.doesNotMatch(stdout.toString(), /Note di rilascio non disponibili/);
 });
 

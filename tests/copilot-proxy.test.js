@@ -20,6 +20,8 @@ const {
   probeApiKeyProviderModel,
   handleStreaming,
   consumeMinimaxToolCallBuffer,
+  resolveProviderProxyUrls,
+  extractProxyHost,
 } = require("../lib/copilot-proxy");
 const {
   normalizeCopilotTooling,
@@ -419,6 +421,77 @@ test("buildInferenceHeader includes the proxy hostname when a proxy URL is used"
     header,
     "[llmproxy] provider: opencode-alessio | model: deepseek-v4-flash-free | proxy: 37.27.55.17 : First in order from provider list",
   );
+});
+
+test("resolveProviderProxyUrls returns every registered proxy for rotating providers", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const originalRegistry = process.env.LLMPROXY_PROXY_REGISTRY;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-proxy-urls-"));
+  const registryPath = path.join(tempDir, "proxy-registry.json");
+
+  fs.writeFileSync(registryPath, JSON.stringify({
+    version: 1,
+    proxies: [
+      { id: "77.42.22.198", url: "http://proxy:test@77.42.22.198:7064/" },
+      { id: "37.27.55.17", url: "http://proxy:test@37.27.55.17:7064/" },
+    ],
+    order: ["77.42.22.198", "37.27.55.17"],
+  }, null, 2));
+
+  process.env.LLMPROXY_PROXY_REGISTRY = registryPath;
+  try {
+    assert.deepEqual(resolveProviderProxyUrls({ proxy_rotation: true }), [
+      "http://proxy:test@77.42.22.198:7064/",
+      "http://proxy:test@37.27.55.17:7064/",
+    ]);
+  } finally {
+    if (originalRegistry === undefined) delete process.env.LLMPROXY_PROXY_REGISTRY;
+    else process.env.LLMPROXY_PROXY_REGISTRY = originalRegistry;
+  }
+});
+
+test("resolveProviderProxyUrls honors provider-specific proxy order before global order", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const originalRegistry = process.env.LLMPROXY_PROXY_REGISTRY;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-proxy-urls-provider-order-"));
+  const registryPath = path.join(tempDir, "proxy-registry.json");
+
+  fs.writeFileSync(registryPath, JSON.stringify({
+    version: 1,
+    proxies: [
+      { id: "77.42.22.198", url: "http://proxy:test@77.42.22.198:7064/" },
+      { id: "37.27.55.17", url: "http://proxy:test@37.27.55.17:7064/" },
+      { id: "158.220.122.55", url: "http://proxy:test@158.220.122.55:7064/" },
+    ],
+    order: ["77.42.22.198", "37.27.55.17", "158.220.122.55"],
+  }, null, 2));
+
+  process.env.LLMPROXY_PROXY_REGISTRY = registryPath;
+  try {
+    assert.deepEqual(
+      resolveProviderProxyUrls({
+        proxy_rotation: true,
+        proxy_order: ["37.27.55.17", "158.220.122.55"],
+      }),
+      [
+        "http://proxy:test@37.27.55.17:7064/",
+        "http://proxy:test@158.220.122.55:7064/",
+        "http://proxy:test@77.42.22.198:7064/",
+      ],
+    );
+  } finally {
+    if (originalRegistry === undefined) delete process.env.LLMPROXY_PROXY_REGISTRY;
+    else process.env.LLMPROXY_PROXY_REGISTRY = originalRegistry;
+  }
+});
+
+test("extractProxyHost returns the hostname for a proxy URL", () => {
+  assert.equal(extractProxyHost("http://proxy:test@37.27.55.17:7064/"), "37.27.55.17");
+  assert.equal(extractProxyHost("not a url"), "");
 });
 
 test("buildSelectionReason preserves preferredReason even with hasImages", () => {

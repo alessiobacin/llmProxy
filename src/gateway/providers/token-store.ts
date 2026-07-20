@@ -21,6 +21,7 @@ interface ProviderToken {
   proxy_url?: string;
   proxy_api_key?: string;
   proxy_rotation?: boolean;
+  proxy_order?: string[];
   created_at: number;
   updated_at: number;
 }
@@ -135,6 +136,11 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
   }
   if (provider?.proxy_rotation === true || provider?.proxy_rotation === false) {
     token.proxy_rotation = provider.proxy_rotation;
+  }
+  if (Array.isArray(provider?.proxy_order)) {
+    token.proxy_order = provider.proxy_order
+      .map((entry) => String(entry || "").trim())
+      .filter((entry) => entry.length > 0);
   }
   return token;
 }
@@ -294,14 +300,14 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
 
   function updateProvider(
     providerId: string,
-    patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model" | "proxy_rotation">>,
+    patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model" | "proxy_rotation" | "proxy_order">>,
   ): ProviderToken {
     const targetId = normalizeProviderId(providerId);
     if (!targetId) throw new Error("Provider id richiesto");
     const existing = getProvider(targetId);
     if (!existing) throw new Error(`Provider non trovato: ${targetId}`);
 
-    const normalizedPatch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model" | "proxy_rotation">> = {};
+    const normalizedPatch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model" | "proxy_rotation" | "proxy_order">> = {};
     if (patch && Object.prototype.hasOwnProperty.call(patch, "name")) {
       const newName = String(patch.name ?? "").trim();
       if (!newName) throw new Error("Provider name non valido");
@@ -325,6 +331,14 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
       }
       normalizedPatch.proxy_rotation = patch.proxy_rotation;
     }
+    if (patch && Object.prototype.hasOwnProperty.call(patch, "proxy_order")) {
+      if (!Array.isArray(patch.proxy_order)) {
+        throw new Error("--proxy-order deve essere una lista");
+      }
+      normalizedPatch.proxy_order = patch.proxy_order
+        .map((entry) => String(entry || "").trim())
+        .filter((entry) => entry.length > 0);
+    }
 
     if (Object.keys(normalizedPatch).length === 0) {
       return existing;
@@ -337,6 +351,7 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
       if (normalizedPatch.vision !== undefined) merged.vision = normalizedPatch.vision;
       if (normalizedPatch.free_model !== undefined) merged.free_model = normalizedPatch.free_model;
       if (normalizedPatch.proxy_rotation !== undefined) merged.proxy_rotation = normalizedPatch.proxy_rotation;
+      if (normalizedPatch.proxy_order !== undefined) merged.proxy_order = normalizedPatch.proxy_order;
       if (normalizedPatch.name) merged.name = normalizedPatch.name;
       registry.providers[idx] = merged;
       persistRegistry(registry);

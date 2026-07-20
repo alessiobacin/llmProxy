@@ -19,6 +19,7 @@ const { createApp } = require("../lib/app");
 const { API_KEY_PROVIDER_CONFIGS } = require("../lib/copilot-proxy");
 const { createTokenStore } = require("../lib/token-store");
 const { createProviderRegistry } = require("../lib/provider-registry");
+const { createProxyStore } = require("../lib/proxy-store");
 
 async function withServer(app, callback) {
   const server = await new Promise((resolve) => {
@@ -2520,6 +2521,233 @@ test("messages endpoint falls back when DeepSeek returns 402 insufficient balanc
       { auth: "Bearer token-openai", model: "gpt-4.1" },
     ]);
   });
+});
+
+test("messages endpoint exhausts rotating proxies on the same provider before falling back to the next provider", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-proxy-rotation-fallback-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("opencode-primary", {
+    access_token: "token-opencode",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    proxy_rotation: true,
+  }, { name: "OpenCode Primary" });
+  tokenStore.saveProvider("openrouter-backup", {
+    access_token: "token-openrouter",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "tencent/hy3:free",
+  }, { name: "OpenRouter Backup" });
+
+  const proxyStore = createProxyStore({ filePath: path.join(tempRoot, "proxy-registry.json") });
+  proxyStore.addProxy("http://proxy:test@77.42.22.198:7064/");
+  proxyStore.addProxy("http://proxy:test@37.27.55.17:7064/");
+
+  const undici = require("undici");
+  const originalUndiciFetch = undici.fetch;
+  const proxyHosts = [];
+  const fallbackCalls = [];
+
+  undici.fetch = async (_url, options = {}) => {
+    const dispatcher = options.dispatcher;
+    const proxyMeta = Object.getOwnPropertySymbols(dispatcher || {})
+      .map((symbol) => dispatcher[symbol])
+      .find((value) => value && typeof value === "object" && typeof value.uri === "string");
+    const proxyHost = proxyMeta ? new URL(proxyMeta.uri).hostname : "direct";
+    const body = JSON.parse(String(options.body || "{}"));
+    proxyHosts.push(proxyHost);
+
+    if (proxyHost === "77.42.22.198") {
+      return { ok: false, status: 429, async text() { return "quota exceeded"; } };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: body.model,
+          choices: [{ message: { content: "served by second proxy" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 2, completion_tokens: 3 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async (_url, options = {}) => {
+      fallbackCalls.push(JSON.parse(String(options.body || "{}")).model || "unknown");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            model: "tencent/hy3:free",
+            choices: [{ message: { content: "served by fallback provider" }, finish_reason: "stop" }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 },
+          };
+        },
+      };
+    },
+  });
+
+  try {
+    await withServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "llmProxy",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Ping" }] }],
+        }),
+      });
+
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.model, "deepseek-v4-flash-free");
+      assert.equal(proxyHosts.slice(0, 2).join(","), "77.42.22.198,37.27.55.17");
+      assert.deepEqual(fallbackCalls, []);
+      assert.match(payload.content[0].text, /\| proxy: 37\.27\.55\.17/);
+      assert.match(payload.content[0].text, /served by second proxy/);
+    });
+  } finally {
+    undici.fetch = originalUndiciFetch;
+  }
+});
+
+test("messages endpoint demotes a failed proxy only for the provider that failed", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-provider-specific-proxy-order-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("opencode-primary", {
+    access_token: "token-opencode-primary",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    proxy_rotation: true,
+  }, { name: "OpenCode Primary" });
+  tokenStore.saveProvider("opencode-secondary", {
+    access_token: "token-opencode-secondary",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    proxy_rotation: true,
+  }, { name: "OpenCode Secondary" });
+
+  const proxyStore = createProxyStore({ filePath: path.join(tempRoot, "proxy-registry.json") });
+  proxyStore.addProxy("http://proxy:test@77.42.22.198:7064/");
+  proxyStore.addProxy("http://proxy:test@37.27.55.17:7064/");
+  proxyStore.addProxy("http://proxy:test@158.220.122.55:7064/");
+
+  const undici = require("undici");
+  const originalUndiciFetch = undici.fetch;
+  const attemptsByProvider = [];
+  const perProviderSeenHosts = new Map();
+
+  undici.fetch = async (_url, options = {}) => {
+    const dispatcher = options.dispatcher;
+    const proxyMeta = Object.getOwnPropertySymbols(dispatcher || {})
+      .map((symbol) => dispatcher[symbol])
+      .find((value) => value && typeof value === "object" && typeof value.uri === "string");
+    const proxyHost = proxyMeta ? new URL(proxyMeta.uri).hostname : "direct";
+    const auth = String(options.headers?.Authorization || "");
+    const providerId = auth.includes("token-opencode-secondary") ? "opencode-secondary" : "opencode-primary";
+    const seenHosts = perProviderSeenHosts.get(providerId) || new Set();
+    const firstTimeForProvider = !seenHosts.has(proxyHost);
+    seenHosts.add(proxyHost);
+    perProviderSeenHosts.set(providerId, seenHosts);
+    attemptsByProvider.push(`${providerId}:${proxyHost}`);
+
+    if (providerId === "opencode-primary" && proxyHost === "77.42.22.198" && firstTimeForProvider) {
+      return { ok: false, status: 429, async text() { return "quota exceeded"; } };
+    }
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: "deepseek-v4-flash-free",
+          choices: [{ message: { content: `served by ${providerId} via ${proxyHost}` }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 2, completion_tokens: 3 },
+        };
+      },
+    };
+  };
+
+  const app = createApp({ dataRoot: tempRoot, tokenStore, fetchFn: async () => { throw new Error("fallback should not run"); } });
+
+  try {
+    await withServer(app, async (baseUrl) => {
+      const primaryFirst = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "opencode-primary",
+          model: "deepseek-v4-flash-free",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Ping primary" }] }],
+        }),
+      });
+      assert.equal(primaryFirst.status, 200);
+      await primaryFirst.json();
+
+      const primaryProvider = tokenStore.getProvider("opencode-primary");
+      const secondaryProvider = tokenStore.getProvider("opencode-secondary");
+      assert.deepEqual(primaryProvider.proxy_order, ["37.27.55.17", "158.220.122.55", "77.42.22.198"]);
+      assert.equal(Array.isArray(secondaryProvider.proxy_order), false);
+
+      const primarySecond = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "opencode-primary",
+          model: "deepseek-v4-flash-free",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Ping primary again" }] }],
+        }),
+      });
+      assert.equal(primarySecond.status, 200);
+      await primarySecond.json();
+
+      const secondary = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "opencode-secondary",
+          model: "deepseek-v4-flash-free",
+          stream: false,
+          max_tokens: 64,
+          messages: [{ role: "user", content: [{ type: "text", text: "Ping secondary" }] }],
+        }),
+      });
+      assert.equal(secondary.status, 200);
+      await secondary.json();
+    });
+  } finally {
+    undici.fetch = originalUndiciFetch;
+  }
+
+  assert.deepEqual(attemptsByProvider.slice(0, 2), [
+    "opencode-primary:77.42.22.198",
+    "opencode-primary:37.27.55.17",
+  ]);
+  assert.equal(attemptsByProvider[2], "opencode-primary:37.27.55.17");
+  assert.equal(attemptsByProvider[3], "opencode-secondary:77.42.22.198");
 });
 
 test("messages endpoint ignores llmProxy UI labels when project settings are unavailable", async () => {

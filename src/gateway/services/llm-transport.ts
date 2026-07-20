@@ -48,6 +48,8 @@ interface LocalProviderEntry {
   endpoint_variant?: string;
   vision?: boolean;
   free_model?: boolean;
+  proxy_rotation?: boolean;
+  proxy_order?: string[];
   proxy_url?: string;
   proxy_api_key?: string;
   name?: string;
@@ -93,6 +95,7 @@ interface GatewayRequestParams {
   endpointPreferences: unknown;
   availableModels: string[];
   providerCandidates?: Record<string, unknown>[] | null;
+  proxyRegistryFile?: string;
 }
 
 // ---------- provider selection ----------
@@ -154,6 +157,8 @@ function resolveProviderSelection({
           endpoint_variant: String(exactLocalProvider.endpoint_variant || ""),
           ...(exactLocalProvider.vision === true || exactLocalProvider.vision === false ? { vision: exactLocalProvider.vision } : {}),
           ...(exactLocalProvider.free_model === true || exactLocalProvider.free_model === false ? { free_model: exactLocalProvider.free_model } : {}),
+          ...(exactLocalProvider.proxy_rotation === true || exactLocalProvider.proxy_rotation === false ? { proxy_rotation: exactLocalProvider.proxy_rotation } : {}),
+          ...(Array.isArray(exactLocalProvider.proxy_order) ? { proxy_order: exactLocalProvider.proxy_order.map((entry) => String(entry || "").trim()).filter((entry) => entry.length > 0) } : {}),
           ...(exactLocalProvider.proxy_url ? { proxy_url: String(exactLocalProvider.proxy_url) } : {}),
           ...(exactLocalProvider.proxy_api_key ? { proxy_api_key: String(exactLocalProvider.proxy_api_key) } : {}),
         }],
@@ -272,11 +277,12 @@ async function executeGatewayRequest(params: GatewayRequestParams): Promise<void
     inlineInferenceInfo: params.inlineInferenceInfo,
     tokenStore: params.tokenStore,
     logger: params.logger,
-    fetchFn: params.fetchFn,
-    endpointPreferences: params.endpointPreferences,
-    availableModels: params.availableModels,
-    providerCandidates: params.providerCandidates,
-  });
+        fetchFn: params.fetchFn,
+        endpointPreferences: params.endpointPreferences,
+        availableModels: params.availableModels,
+        providerCandidates: params.providerCandidates,
+        proxyRegistryFile: params.proxyRegistryFile,
+    });
 }
 
 export {

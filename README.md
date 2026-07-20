@@ -848,6 +848,7 @@ x-project-path: /absolute/path/to/project
 | `llmproxy model:set <model>` | `POST /api/model/set` |
 | `llmproxy test` | `POST /api/test` |
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
+| `llmproxy pi:setup` | `POST /api/pi/setup` |
 | `llmproxy provider:list` | `GET /api/providers` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
 | `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
@@ -1115,6 +1116,22 @@ Creates or updates `.claude/settings.json` in the current folder with the `env` 
 As part of the setup, llmProxy also synchronizes a small global Claude support entry in `~/.claude/settings.json` for the local auth placeholder used by Claude itself. This is not the project configuration and does not replace the `.claude/settings.json` created in the current folder.
 
 Supports `--model <index>` to show the selected default model in CLI output while keeping `.claude/settings.json` minimal (`model: llmProxy` plus proxy base URL).
+
+### `llmproxy pi:setup` (alias `llmp pi:s`)
+
+Creates `.pi/models.json` and `.pi/settings.json` in the current folder to configure PI Agent to use llmProxy as its provider.
+
+```bash
+llmproxy pi:setup
+```
+
+Generates two files:
+
+**`.pi/models.json`** — defines the `llmproxy` provider with `anthropic-messages` type, local baseUrl and `proxy-local` apiKey.
+
+**`.pi/settings.json`** — sets `defaultProvider: "llmproxy"` and `defaultModel: "llmproxy"`.
+
+The command writes project-level files only, never touching `~/.pi/` global configurations.
 
 ### `llmproxy config:list|get|set|unset`
 

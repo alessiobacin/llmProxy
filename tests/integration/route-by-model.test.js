@@ -70,12 +70,25 @@ function buildCandidates(provider, modelPreference, openaiModel, availableModels
 }
 
 // Simulate the provider sorting that now happens in proxyAnthropicRequest
+// Prioritizes by: kind/id match first, then supportsModel, then nothing
 function sortProvidersByModelSupport(providers, requestModel) {
+  if (!requestModel) return [...providers];
+  const normalizedRequest = requestModel.toLowerCase();
+  const kindMatchIds = new Set();
+  for (const p of providers) {
+    const pk = String(p.provider || "").toLowerCase();
+    const pid = String(p.id || "").toLowerCase();
+    if (pk === normalizedRequest || pid === normalizedRequest) {
+      kindMatchIds.add(p.id);
+    }
+  }
+  if (kindMatchIds.size === 0) return [...providers];
+
   return [...providers].sort((a, b) => {
-    const aSupports = supportsModel(a, requestModel);
-    const bSupports = supportsModel(b, requestModel);
-    if (aSupports && !bSupports) return -1;
-    if (!aSupports && bSupports) return 1;
+    const aMatch = kindMatchIds.has(a.id);
+    const bMatch = kindMatchIds.has(b.id);
+    if (aMatch && !bMatch) return -1;
+    if (!aMatch && bMatch) return 1;
     return 0;
   });
 }
@@ -130,6 +143,23 @@ test("no clientProvidedModel = backward compat: opencode-bacin uses default mode
   );
   assert.ok(candidates.length > 0, "opencode should have candidates when no explicit model");
   assert.ok(candidates.includes("deepseek-v4-flash-free"), "should fall back to default model");
+});
+
+test("provider sorting: deepseek provider (kind=deepseek) sorted first when model=deepseek", () => {
+  const providers = [
+    { id: "opencode-bacin", provider: "opencode", default_model: "deepseek-v4-flash-free" },
+    { id: "tencent/hy3:free", provider: "openrouter", default_model: "tencent/hy3:free" },
+    { id: "deepseek", provider: "deepseek", default_model: "deepseek-v4-flash" },
+  ];
+
+  const sorted = sortProvidersByModelSupport(providers, "deepseek");
+
+  assert.equal(sorted[0].id, "deepseek",
+    "deepseek provider should be first (kind matches)");
+  assert.equal(sorted[1].id, "opencode-bacin",
+    "second stays same (original order among non-matches)");
+  assert.equal(sorted[2].id, "tencent/hy3:free",
+    "third stays same (original order among non-matches)");
 });
 
 test("provider sorting: OpenRouter is tried first when tencent/hy3:free is requested", () => {

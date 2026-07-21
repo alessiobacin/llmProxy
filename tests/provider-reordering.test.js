@@ -150,6 +150,42 @@ test("buildDefaultProbeFn aborts a stuck provider probe instead of hanging forev
   }
 });
 
+test("buildDefaultProbeFn uses proxyStore for proxy_rotation providers", async () => {
+  const proxyStore = {
+    listProxies: () => [
+      { id: "proxy-a", url: "http://proxy-a:8080" },
+    ],
+  };
+  const probeFn = buildDefaultProbeFn({ proxyStore });
+  let calledOpts = null;
+  const fetchFn = async (url, opts = {}) => {
+    calledOpts = opts;
+    return { ok: true };
+  };
+  const result = await probeFn({
+    provider: { provider: "openai", access_token: "t", proxy_rotation: true },
+    model: "gpt-4o-mini",
+    fetchFn,
+  });
+  assert.equal(result.ok, true);
+  // Should have a dispatcher (ProxyAgent) rather than bare fetch
+  assert.ok(calledOpts.dispatcher, "proxy_rotation provider should use ProxyAgent dispatcher");
+});
+
+test("buildDefaultProbeFn falls back to bare fetch when proxy_rotation has no proxies", async () => {
+  const proxyStore = { listProxies: () => [] };
+  const probeFn = buildDefaultProbeFn({ proxyStore });
+  let calledUrl = null;
+  const fetchFn = async (url) => { calledUrl = url; return { ok: true }; };
+  const result = await probeFn({
+    provider: { provider: "deepseek", access_token: "t", proxy_rotation: true },
+    model: "deepseek-chat",
+    fetchFn,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calledUrl, "https://api.deepseek.com/v1/chat/completions");
+});
+
 test("computeProviderScores: missing data becomes null (worst) for that criterion only", async () => {
   const fetchFn = async () => ({ ok: false });
   const probeFn = async () => ({ ok: false });

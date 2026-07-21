@@ -70,23 +70,39 @@ function buildCandidates(provider, modelPreference, openaiModel, availableModels
 }
 
 // Simulate the provider sorting that now happens in proxyAnthropicRequest
-// Prioritizes by: kind/id match first, then supportsModel, then nothing
+// Extracts preferred provider from provider#model or provider:model syntax
 function sortProvidersByModelSupport(providers, requestModel) {
   if (!requestModel) return [...providers];
-  const normalizedRequest = requestModel.toLowerCase();
-  const kindMatchIds = new Set();
-  for (const p of providers) {
-    const pk = String(p.provider || "").toLowerCase();
-    const pid = String(p.id || "").toLowerCase();
-    if (pk === normalizedRequest || pid === normalizedRequest) {
-      kindMatchIds.add(p.id);
+
+  // Extract preferred provider from provider#model or provider:model syntax
+  let preferredProvider = null;
+  const hashIndex = requestModel.indexOf("#");
+  const colonIndex = requestModel.indexOf(":");
+  if (hashIndex > 0) {
+    preferredProvider = requestModel.slice(0, hashIndex).trim().toLowerCase();
+  } else if (colonIndex > 0) {
+    const potentialProvider = requestModel.slice(0, colonIndex).trim().toLowerCase();
+    const knownProviders = new Set(["copilot", "openrouter", "qwen", "opencode", "opencode-go", "openai", "anthropic", "deepseek", "groq", "mistral", "xai", "perplexity", "together", "fireworks", "commandcode", "nvidia", "kimi", "zai"]);
+    if (knownProviders.has(potentialProvider)) {
+      preferredProvider = potentialProvider;
+    } else {
+      // Not a known provider → treat as bare model name
+      preferredProvider = requestModel.toLowerCase();
     }
+  } else {
+    // Bare model name
+    preferredProvider = requestModel.toLowerCase();
   }
-  if (kindMatchIds.size === 0) return [...providers];
+
+  if (!preferredProvider) return [...providers];
 
   return [...providers].sort((a, b) => {
-    const aMatch = kindMatchIds.has(a.id);
-    const bMatch = kindMatchIds.has(b.id);
+    const aKind = String(a.provider || "").toLowerCase();
+    const bKind = String(b.provider || "").toLowerCase();
+    const aId = String(a.id || "").toLowerCase();
+    const bId = String(b.id || "").toLowerCase();
+    const aMatch = aKind === preferredProvider || aId === preferredProvider;
+    const bMatch = bKind === preferredProvider || bId === preferredProvider;
     if (aMatch && !bMatch) return -1;
     if (!aMatch && bMatch) return 1;
     return 0;
@@ -174,6 +190,23 @@ test("provider sorting: OpenRouter is tried first when tencent/hy3:free is reque
     "OpenRouter should be first after sorting by model support");
   assert.equal(sorted[1].id, "opencode-bacin",
     "opencode-bacin should be second (fallback)");
+});
+
+test("provider sorting: openrouter#deepseek-v4-flash puts openrouter first", () => {
+  const providers = [
+    { id: "qwen", provider: "qwen", default_model: "qwen3.7-plus" },
+    { id: "opencode-bacin", provider: "opencode", default_model: "deepseek-v4-flash-free" },
+    { id: "openrouter", provider: "openrouter", default_model: "deepseek-v4-flash" },
+  ];
+
+  const sorted = sortProvidersByModelSupport(providers, "openrouter#deepseek-v4-flash");
+
+  assert.equal(sorted[0].id, "openrouter",
+    "openrouter should be first when specified with # syntax");
+  assert.equal(sorted[1].id, "qwen",
+    "qwen should be second (original order)");
+  assert.equal(sorted[2].id, "opencode-bacin",
+    "opencode-bacin should be third (original order)");
 });
 
 test("provider sorting: normal provider order preserved when no model is explicitly requested", () => {

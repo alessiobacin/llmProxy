@@ -353,3 +353,25 @@ test("resolveClaudeProjectSettings defaults missing boolean flags in Claude env 
   assert.equal(result.inlineInferenceInfo, false);
   assert.equal(result.shortAnswer, 0);
 });
+
+test("resolveClaudeProjectSettings passes through ANTHROPIC_DEFAULT_MODEL with non-standard model name like tencent/hy3:free", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-claude-settings-tencent-model-"));
+  const projectRoot = path.join(root, "workspace");
+  const nestedDir = path.join(projectRoot, "packages", "api");
+  const claudeDir = path.join(projectRoot, ".claude");
+  fs.mkdirSync(nestedDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, "settings.json"), JSON.stringify({
+    model: "llmProxy",
+    env: {
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:7045",
+      ANTHROPIC_DEFAULT_MODEL: "tencent/hy3:free",
+    },
+  }, null, 2));
+
+  const result = resolveClaudeProjectSettings(nestedDir);
+
+  assert.equal(result.configuredModel, "tencent/hy3:free");
+  assert.equal(result.configuredModelSource, "settings.json");
+  assert.equal(result.proxyControlsModel, false);
+});

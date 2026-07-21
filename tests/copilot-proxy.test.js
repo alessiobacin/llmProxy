@@ -28,6 +28,31 @@ const {
   translateOpenAiChatBodyToResponsesRequest,
 } = require("../lib/copilot-responses");
 
+test("parseProviderModelPreferences: bare model name with colon (tencent/hy3:free) is not treated as provider:model", () => {
+  const parsed = parseProviderModelPreferences("tencent/hy3:free");
+  assert.deepEqual(parsed, [{ provider: null, model: "tencent/hy3:free" }]);
+});
+
+test("parseProviderModelPreferences: known provider prefix (openai:gpt-4o) is treated as provider:model", () => {
+  const parsed = parseProviderModelPreferences("openai:gpt-4o");
+  assert.deepEqual(parsed, [{ provider: "openai", model: "gpt-4o" }]);
+});
+
+test("parseProviderModelPreferences: anthropic messages protocol uses provider:model", () => {
+  const parsed = parseProviderModelPreferences("anthropic:claude-sonnet-5-20250701");
+  assert.deepEqual(parsed, [{ provider: "anthropic", model: "claude-sonnet-5-20250701" }]);
+});
+
+test("parseProviderModelPreferences: deepseek:deepseek-v4-flash is a known provider prefix", () => {
+  const parsed = parseProviderModelPreferences("deepseek:deepseek-v4-flash");
+  assert.deepEqual(parsed, [{ provider: "deepseek", model: "deepseek-v4-flash" }]);
+});
+
+test("parseProviderModelPreferences: unknown provider prefix with colon is treated as bare model", () => {
+  const parsed = parseProviderModelPreferences("unknown/model:free");
+  assert.deepEqual(parsed, [{ provider: null, model: "unknown/model:free" }]);
+});
+
 test("parseProviderModelPreferences keeps deepseek model names intact", () => {
   const parsed = parseProviderModelPreferences("deepseek-v4-flash");
   assert.deepEqual(parsed, [{ provider: null, model: "deepseek-v4-flash" }]);

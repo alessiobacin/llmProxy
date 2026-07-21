@@ -53,24 +53,24 @@ test("parseProviderModelPreferences: unknown provider prefix with colon is treat
   assert.deepEqual(parsed, [{ provider: null, model: "unknown/model:free" }]);
 });
 
-test("parseProviderModelPreferences: openrouter/deepseek-v4-flash is treated as provider/model", () => {
-  const parsed = parseProviderModelPreferences("openrouter/deepseek-v4-flash");
+test("parseProviderModelPreferences: openrouter#deepseek-v4-flash is treated as provider#model", () => {
+  const parsed = parseProviderModelPreferences("openrouter#deepseek-v4-flash");
   assert.deepEqual(parsed, [{ provider: "openrouter", model: "deepseek-v4-flash" }]);
 });
 
-test("parseProviderModelPreferences: qwen/qwen3.7-plus is treated as provider/model", () => {
-  const parsed = parseProviderModelPreferences("qwen/qwen3.7-plus");
+test("parseProviderModelPreferences: qwen#qwen3.7-plus is treated as provider#model", () => {
+  const parsed = parseProviderModelPreferences("qwen#qwen3.7-plus");
   assert.deepEqual(parsed, [{ provider: "qwen", model: "qwen3.7-plus" }]);
 });
 
-test("parseProviderModelPreferences: tencent/hy3:free is NOT treated as provider/model (tencent is not a known provider)", () => {
+test("parseProviderModelPreferences: tencent/hy3:free is NOT treated as provider#model (no # separator)", () => {
   const parsed = parseProviderModelPreferences("tencent/hy3:free");
   assert.deepEqual(parsed, [{ provider: null, model: "tencent/hy3:free" }]);
 });
 
-test("parseProviderModelPreferences: opengo/deepseek is NOT treated as provider/model (opengo is not a known provider)", () => {
-  const parsed = parseProviderModelPreferences("opengo/deepseek-v4-flash");
-  assert.deepEqual(parsed, [{ provider: null, model: "opengo/deepseek-v4-flash" }]);
+test("parseProviderModelPreferences: bare model with slash is NOT treated as provider#model", () => {
+  const parsed = parseProviderModelPreferences("some/path/model");
+  assert.deepEqual(parsed, [{ provider: null, model: "some/path/model" }]);
 });
 
 test("parseProviderModelPreferences keeps deepseek model names intact", () => {

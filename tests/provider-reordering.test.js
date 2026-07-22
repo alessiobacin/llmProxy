@@ -157,19 +157,21 @@ test("buildDefaultProbeFn uses proxyStore for proxy_rotation providers", async (
     ],
   };
   const probeFn = buildDefaultProbeFn({ proxyStore });
-  let calledOpts = null;
+  let reachedFetchFn = false;
   const fetchFn = async (url, opts = {}) => {
-    calledOpts = opts;
+    reachedFetchFn = true;
     return { ok: true };
   };
   const result = await probeFn({
-    provider: { provider: "openai", access_token: "t", proxy_rotation: true },
+    provider: { provider: "openai", access_token: "test-key", proxy_rotation: true },
     model: "gpt-4o-mini",
     fetchFn,
   });
-  assert.equal(result.ok, true);
-  // Should have a dispatcher (ProxyAgent) rather than bare fetch
-  assert.ok(calledOpts.dispatcher, "proxy_rotation provider should use ProxyAgent dispatcher");
+  // With proxy_rotation, it should use undici's fetch + ProxyAgent, NOT the passed fetchFn
+  assert.equal(reachedFetchFn, false, "should not call the bare fetchFn when proxy is available");
+  // The proxy host is unreachable in test, so result should be a fetch error
+  assert.equal(result.ok, false);
+  assert.ok(typeof result.error === "string" && result.error.length > 0, "should have an error message");
 });
 
 test("buildDefaultProbeFn falls back to bare fetch when proxy_rotation has no proxies", async () => {

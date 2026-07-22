@@ -23,6 +23,7 @@ const SUPPORTED_PROVIDERS = [
   "fireworks",
   "commandcode",
   "nvidia",
+  "vercel-ai-gateway",
 ] as const;
 
 const VALID_SCOPE_TYPES = ["master", "agency", "client", "project", "user"] as const;

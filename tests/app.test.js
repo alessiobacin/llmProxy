@@ -3779,3 +3779,96 @@ test("logs stream endpoint exposes live logs over SSE", async () => {
     assert.match(buffer, /linea-sse-iniziale/);
   });
 });
+
+test("GET /v1/models returns OpenAI-compatible model list from provider defaults", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "sk-or-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+  }, { name: "OpenRouter" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "sk-qwen-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async () => { throw new Error("fetch should not run"); },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/models`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.object, "list");
+    assert.ok(Array.isArray(payload.data));
+    assert.ok(payload.data.length >= 2);
+    const ids = payload.data.map((m) => m.id);
+    assert.ok(ids.includes("deepseek-v4-flash"));
+    assert.ok(ids.includes("qwen3.7-max"));
+    for (const entry of payload.data) {
+      assert.equal(entry.object, "model");
+      assert.ok(typeof entry.created === "number");
+      assert.ok(typeof entry.owned_by === "string");
+    }
+  });
+});
+
+test("GET /v1/models deduplicates models with same id", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-dedup-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("a", {
+    access_token: "t1", provider: "deepseek", default_model: "deepseek-v4-flash",
+  }, { name: "A" });
+  tokenStore.saveProvider("b", {
+    access_token: "t2", provider: "openrouter", default_model: "deepseek-v4-flash",
+  }, { name: "B" });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async () => { throw new Error("fetch should not run"); },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const payload = await (await fetch(`${baseUrl}/v1/models`)).json();
+    const ids = payload.data.map((m) => m.id);
+    assert.equal(ids.filter((id) => id === "deepseek-v4-flash").length, 1);
+  });
+});
+
+test("GET /v1/models/:modelId returns single model or 404", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-single-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("deepseek", {
+    access_token: "t", provider: "deepseek", default_model: "deepseek-v4-flash",
+  }, { name: "DeepSeek" });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async () => { throw new Error("fetch should not run"); },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const found = await fetch(`${baseUrl}/v1/models/deepseek-v4-flash`);
+    assert.equal(found.status, 200);
+    const body = await found.json();
+    assert.equal(body.id, "deepseek-v4-flash");
+    assert.equal(body.object, "model");
+    assert.equal(body.owned_by, "deepseek");
+
+    const missing = await fetch(`${baseUrl}/v1/models/nonexistent`);
+    assert.equal(missing.status, 404);
+  });
+});

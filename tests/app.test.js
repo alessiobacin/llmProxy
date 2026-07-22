@@ -6,6 +6,7 @@ const path = require("node:path");
 
 process.env.LLMPROXY_METERING_INLINE = "true";
 process.env.LLMPROXY_INFERENCE_INFO_INLINE = "true";
+process.env.LLMPROXY_PROVIDER_CREDIT_INLINE = "false";
 const TEST_HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-home-"));
 fs.mkdirSync(path.join(TEST_HOME_DIR, ".claude"), { recursive: true });
 fs.writeFileSync(path.join(TEST_HOME_DIR, ".claude", "settings.json"), JSON.stringify({

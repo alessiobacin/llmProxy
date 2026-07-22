@@ -389,8 +389,9 @@ Notes:
 
 ### Provider-targeted model preferences and fallback chain
 
-You can route different models to different providers directly from `ANTHROPIC_DEFAULT_MODEL` using a comma-separated list:
+You can route different models to different providers directly from `ANTHROPIC_DEFAULT_MODEL` using a comma-separated list. Two syntaxes are supported:
 
+**Provider:model** (colon separator) — specify model per provider:
 ```json
 {
   "env": {
@@ -402,6 +403,23 @@ You can route different models to different providers directly from `ANTHROPIC_D
   "model": "llmProxy"
 }
 ```
+
+**provider#model** (hash separator) — force a specific provider as first in the list:
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
+    "ANTHROPIC_DEFAULT_MODEL": "openrouter#deepseek-v4-flash"
+  }
+}
+```
+
+The `#` separator avoids ambiguity with model names containing `/` (e.g. `tencent/hy3:free`). When you use `provider#model`:
+
+- The **specified provider** is moved to the **top of the effective provider list** — it becomes the first fallback candidate.
+- `llmproxy provider:list` shows `(override: provider#model)` and the provider appears first in the displayed chain.
+- The remaining providers follow in their configured order (or reordering order if `LLMPROXY_REORDERING` is active).
+- This is ideal when you want a specific provider (e.g. `openrouter`) to always be tried first for a project, without changing the global provider order.
 
 How it works:
 

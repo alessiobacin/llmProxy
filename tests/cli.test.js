@@ -1177,7 +1177,7 @@ test("provider:test treats NVIDIA HTTP 429 as a reachable provider", async () =>
     vision: false,
   }, { name: "NVIDIA" });
 
-  const exitCode = await runCli(["node", "llmproxy", "provider:test"], {
+  const exitCode = await runCli(["node", "llmproxy", "provider:test", "--vision"], {
     dataRoot: runtimeRoot,
     stdout,
     fetchFn: async () => ({ ok: false, status: 429, async text() { return "rate limit"; } }),
@@ -1186,6 +1186,52 @@ test("provider:test treats NVIDIA HTTP 429 as a reachable provider", async () =>
   assert.equal(exitCode, 0);
   assert.match(stdout.toString(), /NVIDIA \(z-ai\/glm-5\.2\)/i);
   assert.match(stdout.toString(), /PASS - Visione correttamente disabilitata \(errore HTTP 429\)/i);
+});
+
+test("provider:test default runs full text inference for every configured provider", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-default-text-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "sk-or-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+    vision: false,
+  }, { name: "OpenRouter" });
+
+  let capturedBody = null;
+  const exitCode = await runCli(["node", "llmproxy", "provider:test"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    fetchFn: async (url, init) => {
+      capturedBody = init?.body ? JSON.parse(init.body) : null;
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            type: "message",
+            role: "assistant",
+            model: "deepseek-v4-flash",
+            content: [{ type: "text", text: "llmproxy-test-openrouter" }],
+          };
+        },
+        async text() { return JSON.stringify({ type: "message", content: [{ type: "text", text: "llmproxy-test-openrouter" }] }); },
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Test inferenza provider/i);
+  assert.match(stdout.toString(), /OpenRouter \(deepseek-v4-flash\)/i);
+  assert.match(stdout.toString(), /✅ PASS/i);
+  // Verify text-only message (no image)
+  assert.ok(capturedBody, "should have sent a request body");
+  assert.equal(capturedBody.messages[0].content.length, 1, "should send only text content, no image");
+  assert.equal(capturedBody.messages[0].content[0].type, "text");
 });
 
 test("provider:test --all-proxies runs real inference across all provider/proxy pairs with grouped output", async () => {

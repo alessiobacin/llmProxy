@@ -813,7 +813,23 @@ test("track with continuation='same' mantiene l'intento e non resetta il counter
   assert.equal(r2.escalated, false);
 });
 
-test("track with continuation='new' resetta il counter anche se correctionWords match", () => {
+test("track with continuation='new' ma _isCorrectionMessage dice sticky → resta sticky", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "4" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // "fix bug" is a pure correction-words intent
+  // Even with continuation="new", _isCorrectionMessage acts as safety net
+  tracker.track("create api", "deepseek-v4-flash", providers);
+  const r2 = tracker.track("fix bug", "deepseek-v4-flash", providers, "new");
+  assert.equal(r2.count, 2, "continuation='new' ma _isCorrectionMessage dice sticky → counter incrementa");
+});
+
+test("track with continuation='new' E intent senza correctionWords match → reset genuino", () => {
   const home = freshEscalationHome();
   const { IntentTracker } = require("../lib/intent-escalation");
   const providers = makeProviders();
@@ -823,9 +839,9 @@ test("track with continuation='new' resetta il counter anche se correctionWords 
   });
 
   tracker.track("create api", "deepseek-v4-flash", providers);
-  // "fix bug" would be sticky via _isCorrectionMessage, but continuation='new' overrides
-  const r2 = tracker.track("fix bug", "deepseek-v4-flash", providers, "new");
-  assert.equal(r2.count, 1, "continuation='new' override _isCorrectionMessage → reset");
+  // "optimize query" has no correctionWords relation to "create api" → reset
+  const r2 = tracker.track("optimize query", "deepseek-v4-flash", providers, "new");
+  assert.equal(r2.count, 1, "continuation='new' + nessuna relazione → reset");
 });
 
 test("track with continuation='same' e intent diverso → escalation counts correctly", () => {

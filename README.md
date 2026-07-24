@@ -319,6 +319,11 @@ If you prefer manual configuration, set both the top-level `model` field and the
 
 Service-scoped variable (read from the running proxy's own environment, not per-project `.claude/settings.json`).
 
+> **⚠️ FORMATO:** Separatore obbligatorio: `-` (trattino). NO virgole, NO spazi.
+> **✅ Valori ammessi:** `price` (costo), `power` (potenza/coding_index), `speed` (velocità/latenza)
+> **✅ Esempi validi:** `LLMPROXY_REORDERING=price-speed-power`, `LLMPROXY_REORDERING=speed`, `LLMPROXY_REORDERING=power-price`
+> **❌ Errato:** `price,power,speed` (usa trattini!), `powe` (non esiste), `price-price` (niente duplicati)
+
 Supported values: an ordered, `-`-separated list of criteria, most important first. Valid tokens: `price`, `power`, `speed`. Any subset is allowed (e.g. just `price`).
 
 Related variable:
@@ -1410,6 +1415,33 @@ Example project notification block:
 }
 ```
 
+#### Esempi pratici — project scope
+
+```bash
+# Attivare il routing price/performance (free provider first)
+llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --scope project
+
+# Preferire la velocità come tiebreaker
+llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER speed --scope project
+
+# Abilitare risposte brevi per un progetto
+llmproxy config:set LLMPROXY_SHORT_ANSWER 1 --scope project
+
+# Impostare un modello predefinito con catena di fallback
+llmproxy config:set ANTHROPIC_DEFAULT_MODEL "copilot:gpt-5.4,kimi:kimi-k2.5" --scope project
+
+# Configurare notifiche email SendGrid
+llmproxy config:set LLMPROXY_SENDGRID_API_KEY SG.xxx --scope project
+llmproxy config:set LLMPROXY_SENDGRID_FROM_EMAIL llmproxy@example.com --scope project
+llmproxy config:set LLMPROXY_SENDGRID_TO_EMAIL ops@example.com --scope project
+
+# Leggere il valore corrente
+llmproxy config:get LLMPROXY_SHORT_ANSWER --scope project
+
+# Rimuovere un'impostazione
+llmproxy config:unset LLMPROXY_PRICE_PERFORMANCE_ROUTING --scope project
+```
+
 ### Service-Scope (.env — richiede restart)
 
 For a complete ready-to-copy variable list, see `[.env.example](/Users/alessiobacin/Development/llmProxy/.env.example)`.
@@ -1448,6 +1480,43 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `LLMPROXY_LOG_RETENTION_DAYS` | `7` (dev/staging), `30` (production) | integer | JSONL log retention in days |
 | `LLMPROXY_LOG_MAX_BYTES` | `5242880` | integer | max JSONL file size before rotation |
 | `LLMPROXY_LOG_MAX_FILES` | `5` | integer | max archived JSONL files per day |
+| `LLMPROXY_REORDERING` | unset | `price`, `power`, `speed` separati da `-` | riordino automatico provider per costo, potenza e/o velocità. Formato: `price-speed-power`. Effetto immediato (hot-reload) |
+| `LLMPROXY_REORDERING_MINUTES` | `5` (se LLMPROXY_REORDERING è impostata) | integer (minuti) | ogni quanti minuti rieseguire il ciclo di reordering. Richiede restart |
+| `LLMPROXY_INTENT_ESCALATION` | unset | `0`, `1` | se `1`, abilita l'escalation automatica dell'intent a provider più potenti quando il primo fallisce |
+| `LLMPROXY_INTENT_ESCALATION_GAP` | unset | integer (minuti) | finestra temporale in minuti per l'escalation dell'intent |
+
+#### Esempi pratici — service scope
+
+```bash
+# Attivare il riordino automatico (costo > velocità > potenza)
+# Nel file .env (o via CLI con --scope service):
+LLMPROXY_REORDERING=price-speed-power
+LLMPROXY_REORDERING_MINUTES=10
+
+# Oppure via CLI (richiede restart del servizio):
+llmproxy config:set LLMPROXY_REORDERING price-speed-power --scope service
+
+# Forzare un ciclo di reordering immediato (senza aspettare il timer)
+llmproxy provider:reorder
+
+# Cambiare la porta del proxy
+llmproxy config:set PORT 5045 --scope service
+
+# Passare da standalone a platform mode
+llmproxy config:set LLMPROXY_MODE platform --scope service
+
+# Configurare la persistenza MongoDB
+llmproxy config:set LLMPROXY_MONGODB_CONNECTION_STRING mongodb://localhost:27017/llmProxy --scope service
+
+# Attivare le statistiche inline nelle risposte
+llmproxy config:set LLMPROXY_METERING_INLINE 1 --scope service
+
+# Impostare il secret per la firma dei token
+llmproxy config:set LLMPROXY_SECRET my-secret-key --scope service
+
+# Abilitare escalation intent
+llmproxy config:set LLMPROXY_INTENT_ESCALATION 1 --scope service
+```
 
 ### Port Mapping by Environment
 

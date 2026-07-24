@@ -459,7 +459,7 @@ test("_findEscalationModel returns null when no provider has an access token", (
   assert.equal(result, null);
 });
 
-test("_findEscalationModel respects custom gap", () => {
+test("_findEscalationModel con gap=30 fallisce con 86.2 ma trova sonnet con gap progressivo", () => {
   const home = freshEscalationHome();
   const { IntentTracker } = require("../lib/intent-escalation");
 
@@ -470,11 +470,9 @@ test("_findEscalationModel respects custom gap", () => {
   });
 
   // deepseek-v4-flash score 56.2 + gap 30 = need >= 86.2
-  // claude-sonnet-4 has 80, claude-opus-4-6 has 95
-  // But we only have deepseek-v4-flash (56.2), deepseek-v4-flash-free (50), claude-sonnet-4 (80)
-  // None >= 86.2 → returns null
+  // gap=30 → fallisce, poi scende fino a gap=23 (need 79.2) → sonnet (80) qualifica
   const result = tracker._findEscalationModel("deepseek-v4-flash", providers);
-  assert.equal(result, null);
+  assert.equal(result, "claude-sonnet-4", "gap fallback deve trovare sonnet quando gap=30 e' troppo alto");
 });
 
 test("_findEscalationModel picks the cheapest qualifying model (lowest intelligence above gap)", () => {

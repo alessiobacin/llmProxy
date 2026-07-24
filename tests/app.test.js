@@ -7,6 +7,7 @@ const path = require("node:path");
 process.env.LLMPROXY_METERING_INLINE = "true";
 process.env.LLMPROXY_INFERENCE_INFO_INLINE = "true";
 process.env.LLMPROXY_PROVIDER_CREDIT_INLINE = "false";
+process.env.LLMPROXY_INTENT_ESCALATION = "0";
 const TEST_HOME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-home-"));
 fs.mkdirSync(path.join(TEST_HOME_DIR, ".claude"), { recursive: true });
 fs.writeFileSync(path.join(TEST_HOME_DIR, ".claude", "settings.json"), JSON.stringify({
@@ -40,8 +41,29 @@ function withInferenceMetadata(text, providerId, modelUsed, promptTokens = 0, co
   const requestTokens = Number(promptTokens || 0) + Number(completionTokens || 0);
   const parts = [];
   if (header) {
-    let headerStr = `[llmproxy] provider: ${providerId} | model: ${modelUsed}`;
-    if (reason) headerStr += ` : ${reason}`;
+    // Parse reason for compact format
+    let attemptNumber = null;
+    let failureText = "";
+    if (reason) {
+      const ordinals = ["First", "Second", "Third", "Fourth", "Fifth"];
+      for (let i = 0; i < ordinals.length; i++) {
+        if (reason.startsWith(ordinals[i] + " in order")) {
+          attemptNumber = i + 1;
+          break;
+        }
+      }
+      if (attemptNumber !== null && attemptNumber > 1) {
+        const failMatch = reason.match(/because\s+(.+?)\s+is returning:\s*(.+)$/);
+        if (failMatch) {
+          failureText = ` (${failMatch[1].trim()} returning: ${failMatch[2].trim()})`;
+        }
+      }
+    }
+    let headerStr = `[llmp] provider`;
+    if (attemptNumber && attemptNumber > 1) {
+      headerStr += ` n.${attemptNumber}`;
+    }
+    headerStr += `: ${providerId} | model: ${modelUsed}${failureText}`;
     parts.push(headerStr);
   }
   parts.push(text);
@@ -448,7 +470,7 @@ test("messages endpoint follows the order persisted by an LLMPROXY_REORDERING pr
 
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.match(payload.content[0].text, /^\[llmproxy\] provider: opencode \| model: deepseek-v4-flash-free : First in order from provider list/m);
+    assert.match(payload.content[0].text, /^\[llmp\] provider: opencode \| model: deepseek-v4-flash-free/m);
     assert.match(payload.content[0].text, /served by opencode/);
   });
 });
@@ -747,7 +769,7 @@ test("messages endpoint appends provider and model footer to streaming responses
     assert.equal(response.status, 200);
     assert.match(payload, /event: content_block_delta/);
     assert.match(payload, /pong stream/);
-    assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
+    assert.match(payload, /\[llmp\] provider: default \| model: claude-sonnet-4\.5/);
   });
 });
 
@@ -814,7 +836,7 @@ test("messages endpoint preserves inline provider and metering metadata for non-
     assert.equal(response.status, 200);
     assert.equal(payload.stop_reason, "tool_use");
     assert.equal(payload.content[0].type, "text");
-    assert.match(payload.content[0].text, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
+    assert.match(payload.content[0].text, /\[llmp\] provider: default \| model: claude-sonnet-4\.5/);
     assert.equal(payload.content[1].type, "tool_use");
     assert.equal(payload.content.at(-1).type, "text");
     assert.match(payload.content.at(-1).text, /\[llmproxy\] default\/claude-sonnet-4\.5 \(req 16, in 11, out 5\)/);
@@ -888,7 +910,7 @@ test("messages endpoint preserves inline provider and metering metadata for stre
 
     const payload = await response.text();
     assert.equal(response.status, 200);
-    assert.match(payload, /\[llmproxy\] provider: default \| model: claude-sonnet-4\.5/);
+    assert.match(payload, /\[llmp\] provider: default \| model: claude-sonnet-4\.5/);
     assert.match(payload, /\[llmproxy\] default\/claude-sonnet-4\.5 \(req 10, in 7, out 3\)/);
     assert.match(payload, /"type":"tool_use"/);
     assert.match(payload, /"stop_reason":"tool_use"/);
@@ -981,7 +1003,7 @@ test("messages endpoint preserves inline provider and metering metadata for anth
 
     const payload = await response.text();
     assert.equal(response.status, 200);
-    assert.match(payload, /\[llmproxy\] provider: opencode-go \| model: minimax-m3/);
+    assert.match(payload, /\[llmp\] provider: opencode-go \| model: minimax-m3/);
     assert.match(payload, /\[llmproxy\] opencode-go\/minimax-m3 \(req 6, in 4, out 2\)/);
     assert.match(payload, /"type":"tool_use"/);
     assert.match(payload, /"stop_reason":"tool_use"/);
@@ -1155,7 +1177,7 @@ test("messages endpoint strips llmproxy metadata from streaming provider deltas 
     const payload = await response.text();
     assert.equal(response.status, 200);
     assert.match(payload, /build ok/);
-    assert.equal((payload.match(/\[llmproxy\] provider:/g) || []).length, 1);
+    assert.equal((payload.match(/\[llmp\] provider:/g) || []).length, 1);
     assert.doesNotMatch(payload, /today 980728/);
   });
 });
@@ -1920,11 +1942,12 @@ test("messages endpoint can fall back to every configurable API-key provider", a
         assert.equal(payload.model, expectedModel);
         // Il copilot model nel reason può essere provider-native-model o
         // claude-sonnet-4.5. Verifichiamo la struttura completa con regex.
+        const escModel = String(expectedModel).replace(/[.*+?^${}()|[\]\\\\]/g, "\\$&");
         const fullPat =
-          `^\\[llmproxy\\] provider: ${providerId} \\| model: ${expectedModel}` +
-          ` : Second in order because .+ \\(copilot\\) is returning: 400\\n\\n` +
+          `^\\[llmp\\] provider n\\.2: ${providerId} \\| model: ${escModel}` +
+          ` \\(.+\\(copilot\\) returning: 400\\)\\n\\n` +
           `served by ${providerId}\\n\\n` +
-          `\\[llmproxy\\] ${providerId}\\/${String(expectedModel).replace(/[.*+?^${}()|[\]\\\\]/g, "\\$&")} \\(req 5, in 3, out 2\\).+`;
+          `\\[llmproxy\\] ${providerId}\\/${escModel} \\(req 5, in 3, out 2\\).+`;
         assert.match(payload.content[0].text, new RegExp(fullPat));
         assert.equal(calls.length, 2);
         assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
@@ -2617,7 +2640,7 @@ test("messages endpoint exhausts rotating proxies on the same provider before fa
       assert.equal(payload.model, "deepseek-v4-flash-free");
       assert.equal(proxyHosts.slice(0, 2).join(","), "77.42.22.198,37.27.55.17");
       assert.deepEqual(fallbackCalls, []);
-      assert.match(payload.content[0].text, /\| proxy: 37\.27\.55\.17/);
+      assert.match(payload.content[0].text, /\| px: 37\.27\.55\.17/);
       assert.match(payload.content[0].text, /served by second proxy/);
     });
   } finally {

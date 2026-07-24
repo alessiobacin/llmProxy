@@ -464,7 +464,7 @@ test("buildInferenceHeader includes the proxy hostname when a proxy URL is used"
   );
   assert.equal(
     header,
-    "[llmproxy] provider: opencode-alessio | model: deepseek-v4-flash-free | proxy: 37.27.55.17 : First in order from provider list",
+    "[llmp] provider: opencode-alessio | model: deepseek-v4-flash-free | px: 37.27.55.17",
   );
 });
 

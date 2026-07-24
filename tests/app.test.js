@@ -55,7 +55,14 @@ function withInferenceMetadata(text, providerId, modelUsed, promptTokens = 0, co
       if (attemptNumber !== null && attemptNumber > 1) {
         const failMatch = reason.match(/because\s+(.+?)\s+is returning:\s*(.+)$/);
         if (failMatch) {
-          failureText = ` (${failMatch[1].trim()} returning: ${failMatch[2].trim()})`;
+          const rawFail = failMatch[1].trim();
+          const statusPart = failMatch[2].trim();
+          const provMatch = rawFail.match(/^(.+?)\s+\((.+?)\)\s*$/);
+          if (provMatch) {
+            failureText = ` (${provMatch[2].trim()} - ${provMatch[1].trim()} is returning: ${statusPart})`;
+          } else {
+            failureText = ` (${rawFail} is returning: ${statusPart})`;
+          }
         }
       }
     }
@@ -1945,7 +1952,7 @@ test("messages endpoint can fall back to every configurable API-key provider", a
         const escModel = String(expectedModel).replace(/[.*+?^${}()|[\]\\\\]/g, "\\$&");
         const fullPat =
           `^\\[llmp\\] provider n\\.2: ${providerId} \\| model: ${escModel}` +
-          ` \\(.+\\(copilot\\) returning: 400\\)\\n\\n` +
+          ` \\([^()]+ is returning: 400\\)\\n\\n` +
           `served by ${providerId}\\n\\n` +
           `\\[llmproxy\\] ${providerId}\\/${escModel} \\(req 5, in 3, out 2\\).+`;
         assert.match(payload.content[0].text, new RegExp(fullPat));

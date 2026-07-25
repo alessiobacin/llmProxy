@@ -13,3 +13,11 @@ graphify-out/
 
 # Project memory
 memory/
+
+# Build artifacts
+package-lock.json
+*.txt
+test_output.txt
+HANDOFF.md
+demo/
+llmproxy_settings.md

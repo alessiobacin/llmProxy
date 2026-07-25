@@ -2299,7 +2299,7 @@ test("models:list prints a numbered list of available models", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-model-list-"));
   const stdout = createWritableBuffer();
 
-  const exitCode = await runCli(["node", "llmproxy", "models:list"], {
+  const exitCode = await runCli(["node", "llmproxy", "models:list", "--all"], {
     dataRoot: runtimeRoot,
     stdout,
   });
@@ -2328,7 +2328,7 @@ test("models:list uses the live Copilot model catalog when authenticated", async
     },
   });
 
-  const exitCode = await runCli(["node", "llmproxy", "models:list"], {
+  const exitCode = await runCli(["node", "llmproxy", "models:list", "--all"], {
     dataRoot: runtimeRoot,
     stdout,
     tokenStore,

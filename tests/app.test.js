@@ -3512,7 +3512,7 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     const modelsPayload = await modelsResponse.json();
     assert.equal(modelsResponse.status, 200);
     assert.equal(modelsPayload.success, true);
-    assert.match(modelsPayload.data.output, /gpt-4\.1/);
+    assert.match(modelsPayload.data.output, /1\. default/);
 
     const releaseNotesResponse = await fetch(`${baseUrl}/api/release-notes?version=0.2.62`);
     const releaseNotesPayload = await releaseNotesResponse.json();

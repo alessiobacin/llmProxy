@@ -46,6 +46,7 @@ interface TokenStore {
   renameProvider: (providerId: string, nextName: string) => ProviderToken;
   updateProvider: (providerId: string, patch: Partial<Pick<ProviderToken, "name" | "vision" | "free_model">>) => ProviderToken;
   getAccessToken: (providerId?: string) => string | null;
+  getProviderOrder: () => string[];
 }
 
 interface FilePersistence {
@@ -368,6 +369,10 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
     return listProviders()[0]?.access_token || null;
   }
 
+  function getProviderOrder(): string[] {
+    return loadRegistry().order;
+  }
+
   return {
     filePath,
     load,
@@ -382,6 +387,7 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
     renameProvider,
     updateProvider,
     getAccessToken,
+    getProviderOrder,
   };
 }
 

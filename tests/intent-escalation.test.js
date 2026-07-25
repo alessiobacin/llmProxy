@@ -249,7 +249,7 @@ test("IntentTracker — economy model (deepseek-chat, score 50) escalates with d
   const home = freshEscalationHome();
   const { tracker, providers } = makeTracker(home, { threshold: 2 });
 
-  // deepseek-chat is explicitly in INTELLIGENCE_SCORES at 50.
+  // deepseek-chat is explicitly in CODING_SCORES at 50.
   // With gap 8 need >= 58 → claude-sonnet-4 (80) qualifies.
   let result;
   for (let i = 0; i < 2; i++) {
@@ -410,7 +410,7 @@ test("Sticky intent — cambio task genuino tipo 'add dark theme' dopo 'create a
 test("_findEscalationModel picks the minimally sufficient higher model", () => {
   const home = freshEscalationHome();
   const { IntentTracker } = require("../lib/intent-escalation");
-  const { getIntelligenceScore } = require("../lib/model-capabilities");
+  const { getCodingScore } = require("../lib/model-capabilities");
 
   const providers = makeProviders();
   const tracker = new IntentTracker({
@@ -421,7 +421,7 @@ test("_findEscalationModel picks the minimally sufficient higher model", () => {
   // Find model better than deepseek-v4-flash (score 56.2, gap 8 → need >= 64.2)
   const result = tracker._findEscalationModel("deepseek-v4-flash", providers);
   assert.equal(result, "claude-sonnet-4");
-  assert.ok(getIntelligenceScore(result) >= 56.2 + 8);
+  assert.ok(getCodingScore(result) >= 56.2 + 8);
 });
 
 test("_findEscalationModel excludes models in the exclude list", () => {
@@ -478,7 +478,7 @@ test("_findEscalationModel con gap=30 fallisce con 86.2 ma trova sonnet con gap 
 test("_findEscalationModel picks the cheapest qualifying model (lowest intelligence above gap)", () => {
   const home = freshEscalationHome();
   const { IntentTracker } = require("../lib/intent-escalation");
-  const { getIntelligenceScore } = require("../lib/model-capabilities");
+  const { getCodingScore } = require("../lib/model-capabilities");
 
   // Add a third provider with a model between deepseek-v4-flash and claude-sonnet-4
   const providers = makeProviders({

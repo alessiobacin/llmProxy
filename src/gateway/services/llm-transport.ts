@@ -53,6 +53,7 @@ interface LocalProviderEntry {
   proxy_url?: string;
   proxy_api_key?: string;
   name?: string;
+  disabled?: boolean;
 }
 
 interface ProviderSelectionError {
@@ -136,6 +137,7 @@ function resolveProviderSelection({
   const localTokenStore = tokenStore as {
     getProvider?: (id: string) => LocalProviderEntry | null;
     listProviders?: () => LocalProviderEntry[];
+    getProviderOrder?: () => string[];
   };
 
   if (provider) {
@@ -248,6 +250,49 @@ function resolveProviderSelection({
         },
       },
     };
+  }
+
+  // Fallback: use token store providers when registry is empty
+  const tokenStoreProviders = localTokenStore.listProviders?.();
+  if (Array.isArray(tokenStoreProviders) && tokenStoreProviders.length > 0) {
+    const validProviders = tokenStoreProviders.filter((p) => p && p.access_token && !p.disabled);
+    if (validProviders.length > 0) {
+      // Sort by registry order (user-defined priority) before picking first
+      const providerOrder = localTokenStore.getProviderOrder?.() ?? [];
+      if (providerOrder.length > 0) {
+        validProviders.sort((a, b) => {
+          const aId = a.id || "";
+          const bId = b.id || "";
+          const aIdx = providerOrder.indexOf(aId);
+          const bIdx = providerOrder.indexOf(bId);
+          const aPos = aIdx === -1 ? Number.MAX_SAFE_INTEGER : aIdx;
+          const bPos = bIdx === -1 ? Number.MAX_SAFE_INTEGER : bIdx;
+          return aPos - bPos;
+        });
+      }
+      const first = validProviders[0]!;
+      return {
+        provider: provider && provider !== "auto" ? provider : "auto",
+        defaultModel: requestedModel && requestedModel.trim() ? requestedModel.trim() : (first.default_model || null),
+        source: "token-store",
+        providerCandidates: validProviders.map((p) => ({
+          id: p.id || p.provider || "unknown",
+          name: String(p.name || p.provider || "unknown"),
+          provider: String(p.provider || "copilot"),
+          access_token: String(p.access_token || ""),
+          auth_type: String(p.auth_type || (p.provider === "copilot" ? "oauth" : "api_key")),
+          token_type: String(p.token_type || (p.provider === "copilot" ? "bearer" : "api_key")),
+          scope: String(p.scope || (p.provider === "copilot" ? "read:user" : "api_key")),
+          default_model: p.default_model || "",
+          endpoint_variant: String(p.endpoint_variant || ""),
+          ...(p.vision === true || p.vision === false ? { vision: p.vision } : {}),
+          ...(p.free_model === true || p.free_model === false ? { free_model: p.free_model } : {}),
+          ...(p.proxy_rotation === true || p.proxy_rotation === false ? { proxy_rotation: p.proxy_rotation } : {}),
+          ...(p.proxy_url ? { proxy_url: String(p.proxy_url) } : {}),
+          ...(p.proxy_api_key ? { proxy_api_key: String(p.proxy_api_key) } : {}),
+        })),
+      };
+    }
   }
 
   return {

@@ -550,6 +550,26 @@ test("extractLastUserMessage handles content blocks", () => {
   assert.equal(extractLastUserMessage(messages), "create a user API endpoint");
 });
 
+test("extractLastUserMessage skips tool_result messages and finds real user message", () => {
+  const { extractLastUserMessage } = require("../lib/intent-escalation");
+  const messages = [
+    { role: "user", content: "ripristina tutti i fix" },
+    { role: "assistant", content: "ok, executing tools..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_1", content: "result" }] },
+    { role: "assistant", content: "more tools..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_2", content: "result" }] },
+  ];
+  assert.equal(extractLastUserMessage(messages), "ripristina tutti i fix");
+});
+
+test("extractLastUserMessage returns null when only tool_result messages exist", () => {
+  const { extractLastUserMessage } = require("../lib/intent-escalation");
+  const messages = [
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_1", content: "result" }] },
+  ];
+  assert.equal(extractLastUserMessage(messages), null);
+});
+
 test("extractLastUserMessage returns null on empty or invalid input", () => {
   const { extractLastUserMessage } = require("../lib/intent-escalation");
   assert.equal(extractLastUserMessage([]), null);

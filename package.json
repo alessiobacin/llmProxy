@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.93",
+  "version": "0.3.94",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {

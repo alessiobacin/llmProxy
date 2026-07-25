@@ -550,7 +550,7 @@ test("extractLastUserMessage handles content blocks", () => {
   assert.equal(extractLastUserMessage(messages), "create a user API endpoint");
 });
 
-test("extractLastUserMessage skips tool_result messages and finds real user message", () => {
+test("extractLastUserMessage returns null when last user message has tool_result", () => {
   const { extractLastUserMessage } = require("../lib/intent-escalation");
   const messages = [
     { role: "user", content: "ripristina tutti i fix" },
@@ -559,7 +559,7 @@ test("extractLastUserMessage skips tool_result messages and finds real user mess
     { role: "assistant", content: "more tools..." },
     { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_2", content: "result" }] },
   ];
-  assert.equal(extractLastUserMessage(messages), "ripristina tutti i fix");
+  assert.equal(extractLastUserMessage(messages), null);
 });
 
 test("extractLastUserMessage returns null when only tool_result messages exist", () => {
@@ -576,6 +576,74 @@ test("extractLastUserMessage returns null on empty or invalid input", () => {
   assert.equal(extractLastUserMessage(null), null);
   assert.equal(extractLastUserMessage(undefined), null);
   assert.equal(extractLastUserMessage([{ role: "assistant", content: "hi" }]), null);
+});
+
+// -- 5b. Multi-round: autonomous LLM requests must NOT increment intent -----
+
+test("multi-round: tool_result requests do not increment intent count", () => {
+  const homeDir = freshEscalationHome();
+  const { IntentTracker, extractLastUserMessage } = require("../lib/intent-escalation");
+  const tracker = new IntentTracker({ env: { ...process.env, HOME: homeDir, LLMPROXY_INTENT_ESCALATION: "5" } });
+  const providers = [{ id: "p1", default_model: "model-a" }];
+
+  // Simulate app.js flow: extractLastUserMessage → if (userMessage) → track()
+  function simulateRound(messages, currentModel) {
+    const userMessage = extractLastUserMessage(messages);
+    if (!userMessage) return { tracked: false, count: 0 };
+    const intent = userMessage.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim().split(/\s+/).slice(0, 3).join("-");
+    const result = tracker.track(intent, currentModel, providers);
+    return { tracked: true, count: result.count, intent };
+  }
+
+  // Round 1: real user message → must track, count=1
+  const r1 = simulateRound([
+    { role: "user", content: "ripristina tutti i fix" },
+  ], "model-a");
+  assert.equal(r1.tracked, true);
+  assert.equal(r1.count, 1);
+
+  // Round 2: LLM autonomous request (tool_result only) → must NOT track
+  const r2 = simulateRound([
+    { role: "user", content: "ripristina tutti i fix" },
+    { role: "assistant", content: "ok, executing tools..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_1", content: "file read" }] },
+  ], "model-a");
+  assert.equal(r2.tracked, false);
+
+  // Round 3: another autonomous tool_result → must NOT track
+  const r3 = simulateRound([
+    { role: "user", content: "ripristina tutti i fix" },
+    { role: "assistant", content: "ok, executing tools..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_1", content: "file read" }] },
+    { role: "assistant", content: "running command..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_2", content: "command output" }] },
+  ], "model-a");
+  assert.equal(r3.tracked, false);
+
+  // Round 4: real user message again (same intent) → must track, count=2
+  const r4 = simulateRound([
+    { role: "user", content: "ripristina tutti i fix" },
+    { role: "assistant", content: "ok, executing tools..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_1", content: "file read" }] },
+    { role: "assistant", content: "running command..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_2", content: "command output" }] },
+    { role: "assistant", content: "tests fixed, ready to commit" },
+    { role: "user", content: "ripristina tutti i fix" },
+  ], "model-a");
+  assert.equal(r4.tracked, true);
+  assert.equal(r4.count, 2);
+
+  // Round 5: more autonomous requests → must NOT track, count stays 2
+  const r5 = simulateRound([
+    { role: "user", content: "ripristina tutti i fix" },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_1", content: "result" }] },
+    { role: "assistant", content: "committing..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_2", content: "committed" }] },
+    { role: "assistant", content: "pushing..." },
+    { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_3", content: "pushed" }] },
+  ], "model-a");
+  assert.equal(r5.tracked, false);
 });
 
 // -- 6. Semi-integration: simulate the proxy's escalation flow directly -----

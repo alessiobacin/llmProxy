@@ -720,7 +720,7 @@ test("Intent escalation — simulate proxy flow con provider reali", {
   const userMessage = "create a paginated API for users";
   const currentModel = "deepseek-v4-flash-free"; // modello economico di partenza
 
-  console.log("  [real] Escalation da deepseek-v4-flash-free (score 50):");
+  console.log("  [real] Escalation da deepseek-v4-flash-free (score 56.2):");
   let lastResult;
   for (let i = 1; i <= 5; i++) {
     const { intent } = await tracker.extractIntent(userMessage, {});
@@ -729,14 +729,15 @@ test("Intent escalation — simulate proxy flow con provider reali", {
     lastResult = result;
   }
 
-  // deepseek-v4-flash-free (50) + gap 8 = serve >= 58
-  // I provider con score >= 58:
-  //   alibaba/qwen3.7-max (73), qwen3.7-plus (64), qwen3.7-max (66),
+  // deepseek-v4-flash-free (56.2) + gap 8 = serve >= 64.2
+  // I provider con score >= 64.2:
+  //   alibaba/qwen3.7-max (73), qwen3.7-max (66),
   //   kimi-k3 (76.2), deepseek-ai/deepseek-v4-pro (73)
-  // Il più economico (score minimo sopra soglia): qwen3.7-plus (64)
+  // qwen3.7-plus (64) è appena sotto — non qualifica
+  // Il più economico (score minimo sopra soglia): qwen3.7-max (66)
   assert.equal(lastResult.escalated, true);
-  assert.equal(lastResult.escalationModel, "qwen3.7-plus",
-    `Escalation dovrebbe scegliere qwen3.7-plus (più economico sopra soglia), scelto: ${lastResult.escalationModel}`);
+  assert.equal(lastResult.escalationModel, "qwen3.7-max",
+    `Escalation dovrebbe scegliere qwen3.7-max (score minimo >= soglia), scelto: ${lastResult.escalationModel}`);
   console.log("  [real] ✅ Escalation confermata coi provider reali →", lastResult.escalationModel);
 });
 
@@ -1026,6 +1027,202 @@ test("Full flow: extractIntent returns continuation='new' → track resetta coun
 
   const r2 = tracker.track(result.intent, "deepseek-v4-flash", providers, result.continuation);
   assert.equal(r2.count, 1, "continuation='new' → counter resettato");
+});
+
+// -- 9b. Under-escalation (de-escalation): reset escalation state --------------
+//
+// Under-escalation occurs when the user finishes an escalated task and starts
+// a new, simpler task. The system should reset to the original economical model.
+
+test("under-escalation: new genuine task after escalation resets escalationModel", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "3" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // Escalate on "create api"
+  let result;
+  for (let i = 0; i < 3; i++) {
+    result = tracker.track("create api", "deepseek-v4-flash", providers);
+  }
+  assert.equal(result.escalated, true);
+  assert.equal(result.escalationModel, "claude-sonnet-4");
+
+  // New genuine task → under-escalation: model resets to null
+  result = tracker.track("add dark theme", "deepseek-v4-flash", providers);
+  assert.equal(result.count, 1, "new task → counter resets to 1");
+  assert.equal(result.escalated, false, "new task → escalation reset");
+  assert.equal(result.escalationModel, null, "new task → escalationModel null");
+});
+
+test("under-escalation: new task with correction words stays escalated", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "3" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // Escalate on "create api"
+  for (let i = 0; i < 3; i++) {
+    tracker.track("create api", "deepseek-v4-flash", providers);
+  }
+
+  // "fix bug" is a correction → sticky → NOT under-escalation, count continues
+  const r = tracker.track("fix bug", "deepseek-v4-flash", providers);
+  assert.equal(r.count, 4, "correction → counter increments, does NOT reset");
+  assert.equal(r.escalated, true, "correction → still escalated");
+  assert.equal(r.escalationModel, "claude-sonnet-4", "correction → escalationModel preserved");
+});
+
+test("under-escalation: reset() clears escalation state completely", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "3" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // Escalate
+  for (let i = 0; i < 3; i++) {
+    tracker.track("create api", "deepseek-v4-flash", providers);
+  }
+
+  tracker.reset();
+
+  // After reset, everything starts fresh → under-escalation
+  const r = tracker.track("create api", "deepseek-v4-flash", providers);
+  assert.equal(r.count, 1, "after reset → counter starts at 1");
+  assert.equal(r.escalated, false, "after reset → no escalation");
+  assert.equal(r.escalationModel, null, "after reset → no escalationModel");
+});
+
+test("under-escalation: new task with continuation='new' resets escalation", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "3" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // Escalate on "create api"
+  for (let i = 0; i < 3; i++) {
+    tracker.track("create api", "deepseek-v4-flash", providers);
+  }
+
+  // continuation="new" + no correction words → under-escalation
+  const r = tracker.track("write tests", "deepseek-v4-flash", providers, "new");
+  assert.equal(r.count, 1, "continuation=new → counter resets");
+  assert.equal(r.escalated, false, "continuation=new → under-escalation");
+  assert.equal(r.escalationModel, null, "continuation=new → no escalationModel");
+});
+
+test("under-escalation: two level re-escalation then new task → full reset", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders({
+    extraProviders: [
+      {
+        id: "opus", provider: "openrouter", access_token: "tok-opus",
+        default_model: "claude-opus-4-6", disabled: false,
+      },
+    ],
+  });
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "3" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // Escalate: deepseek-v4-flash (56.2) → claude-sonnet-4 (80)
+  for (let i = 0; i < 3; i++) tracker.track("create api", "deepseek-v4-flash", providers);
+  // Re-escalate: claude-sonnet-4 (80) → claude-opus-4-6 (90+)
+  for (let i = 0; i < 3; i++) tracker.track("create api", "deepseek-v4-flash", providers);
+
+  // Now new task → full under-escalation
+  const r = tracker.track("add dark theme", "deepseek-v4-flash", providers);
+  assert.equal(r.count, 1);
+  assert.equal(r.escalated, false);
+  assert.equal(r.escalationModel, null);
+});
+
+// -- 9c. Escalation: cumulative counts after sticky corrections progress ------
+
+test("escalation: cumulative counts after consecutive sticky corrections reach threshold", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "5" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  // Initial task
+  tracker.track("create api", "deepseek-v4-flash", providers);
+  // 4 consecutive correction messages (sticky)
+  tracker.track("fix bug", "deepseek-v4-flash", providers);     // count=2
+  tracker.track("fix bug", "deepseek-v4-flash", providers);     // count=3
+  tracker.track("fix bug", "deepseek-v4-flash", providers);     // count=4
+  const r = tracker.track("fix bug", "deepseek-v4-flash", providers); // count=5 → threshold!
+  assert.equal(r.count, 5);
+  assert.equal(r.escalated, true);
+  assert.equal(r.escalationModel, "claude-sonnet-4");
+});
+
+test("escalation: keyword extraction for intent matching", () => {
+  const { extractKeywordsFingerprint } = require("../lib/intent-escalation");
+
+  const fp1 = extractKeywordsFingerprint("create a paginated API endpoint");
+  const fp2 = extractKeywordsFingerprint("create REST API with pagination");
+  // Both share keywords "api" and "create" (sorted alphabetically in fingerprint)
+  assert.match(fp1, /api/, "fingerprint contains 'api'");
+  assert.match(fp1, /create/, "fingerprint contains 'create'");
+  assert.match(fp2, /api/, "fingerprint contains 'api'");
+  assert.match(fp2, /create/, "fingerprint contains 'create'");
+  assert.notEqual(fp1, fp2, "fingerprints differ due to extra words (endpoint vs rest)");
+
+  const fp3 = extractKeywordsFingerprint("fix the login form styling");
+  assert.notEqual(fp1, fp3, "unrelated tasks have different fingerprints");
+});
+
+// -- 9d. Edge cases: threshold=0 (disabled), threshold=1 ---------------------
+
+test("escalation: threshold=0 disables escalation entirely", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "0" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  const r1 = tracker.track("create api", "deepseek-v4-flash", providers);
+  assert.equal(r1.count, 0, "threshold=0 → no tracking");
+  assert.equal(r1.escalated, false);
+  assert.equal(r1.escalationModel, null);
+
+  const r2 = tracker.track("create api", "deepseek-v4-flash", providers);
+  assert.equal(r2.count, 0, "threshold=0 → always 0");
+});
+
+test("escalation: threshold=1 escalates on first request", () => {
+  const home = freshEscalationHome();
+  const { IntentTracker } = require("../lib/intent-escalation");
+  const providers = makeProviders();
+  const tracker = new IntentTracker({
+    env: { ...process.env, LLMPROXY_HOME: home, LLMPROXY_INTENT_ESCALATION: "1" },
+    tokenStore: stubTokenStore(providers),
+  });
+
+  const r = tracker.track("create api", "deepseek-v4-flash", providers);
+  assert.equal(r.count, 1);
+  assert.equal(r.escalated, true);
+  assert.equal(r.escalationModel, "claude-sonnet-4");
 });
 
 // -- Manual test (to run with real providers) ---------------------------------

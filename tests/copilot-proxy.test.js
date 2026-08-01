@@ -161,6 +161,42 @@ test("probeApiKeyProviderModel retries qwen against the token-plan endpoint", as
   assert.deepEqual(urls, ["https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions"]);
 });
 
+test("probeApiKeyProviderModel uses max_completion_tokens for gpt-5 family models", async () => {
+  let sentBody = null;
+  const result = await probeApiKeyProviderModel({
+    provider: "openai",
+    apiKey: "sk-proj-test",
+    model: "gpt-5.6-luna",
+    fetchFn: async (url, opts) => {
+      sentBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, async text() { return ""; } };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(sentBody, "request body captured");
+  assert.equal(sentBody.model, "gpt-5.6-luna");
+  assert.equal(sentBody.max_tokens, undefined, "gpt-5 models must NOT receive max_tokens");
+  assert.equal(sentBody.max_completion_tokens, 16, "gpt-5 models must use max_completion_tokens");
+});
+
+test("probeApiKeyProviderModel keeps max_tokens for legacy OpenAI models", async () => {
+  let sentBody = null;
+  const result = await probeApiKeyProviderModel({
+    provider: "openai",
+    apiKey: "sk-proj-test",
+    model: "gpt-4o-mini",
+    fetchFn: async (url, opts) => {
+      sentBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, async text() { return ""; } };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(sentBody.max_tokens, 16, "legacy models keep max_tokens");
+  assert.equal(sentBody.max_completion_tokens, undefined);
+});
+
 test("parseProviderModelPreferences keeps mistral model names intact", () => {
   const parsed = parseProviderModelPreferences("mistral-large-latest");
   assert.deepEqual(parsed, [{ provider: null, model: "mistral-large-latest" }]);

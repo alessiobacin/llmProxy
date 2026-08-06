@@ -23,7 +23,7 @@ Questa cartella contiene tutto il necessario per provare gli endpoint HTTP di ll
 ## Prerequisiti
 
 1. Avvia llmProxy in locale. L'environment incluso punta al profilo installato/Docker su `http://127.0.0.1:7045`; se stai usando il server di sviluppo repo-local cambia `baseUrl` a `http://127.0.0.1:5045`.
-2. Per test LLM reali, assicurati che ci sia almeno un provider valido configurato. Copilot non e` obbligatorio: va bene anche un provider API-key.
+2. Per test LLM reali, assicurati che ci sia almeno un provider valido configurato. Copilot non e` obbligatorio: va bene anche un provider API-key (es. `openrouter`, `openai`, `kimi`, `meta`). Per `meta` (Meta AI Responses API, modello default `muse-spark-1.2`): `llmproxy provider:add meta --api-key "$MODEL_API_KEY" --model muse-spark-1.2 --vision true`.
 3. Per endpoint `/v1/llm/*`, fornisci un `HierarchyContext` valido.
 
 ## Billing context richiesto su /v1/llm/*

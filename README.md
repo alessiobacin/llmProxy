@@ -165,7 +165,16 @@ If you want an API-key provider instead, no `/login` is required:
 
 ```bash
 llmproxy provider:add openrouter --api-key "$OPENROUTER_API_KEY" --model openai/gpt-4o --vision true
+llmproxy provider:add meta --api-key "$MODEL_API_KEY" --model muse-spark-1.2 --vision true
 ```
+
+The `meta` provider talks to the Meta AI Responses API
+(`https://api.meta.ai/v1/responses`). Set your key via
+`export MODEL_API_KEY="<your-key>"`.
+
+> **Note (OpenAI `max_tokens`)**: current OpenAI models (e.g. `gpt-5.6-luna`)
+> reject `max_tokens`. llmProxy automatically sends `max_completion_tokens`
+> for every `openai` provider request and probe.
 
 ### 4. Start in foreground
 
@@ -988,7 +997,7 @@ Use it when you want a quick operator view of:
 Adds a provider identified by `<id>`. Behaviour depends on the provider type:
 
 - **Copilot OAuth providers** (unknown ids or `copilot`): starts the GitHub Copilot device flow.
-- **API-key providers** (e.g. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `zai`): stores the supplied `--api-key` directly without any browser flow. Requires `--vision <true|false>` to indicate whether the model supports image input.
+- **API-key providers** (e.g. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `meta`, `zai`): stores the supplied `--api-key` directly without any browser flow. Requires `--vision <true|false>` to indicate whether the model supports image input.
 
 The `--vision` flag is **mandatory** for API-key providers. When a request contains images, providers with `vision: false` are automatically skipped during fallback.
 
@@ -1009,6 +1018,7 @@ Known API-key providers:
 | `fireworks` | Fireworks AI |
 | `kimi` | Kimi (Moonshot) |
 | `zai` / `z.ai` | Z.ai |
+| `meta` | Meta AI (Responses API `api.meta.ai/v1/responses`, default model `muse-spark-1.2`) |
 
 `qwen` note: `llmproxy` automatically uses the Token Plan OpenAI-compatible endpoint for `sk-sp-...` keys and keeps using `dashscope-intl` for standard pay-as-you-go keys. If you want to force the choice during setup, use `--plan subscription` or `--plan payg`.
 
@@ -1018,6 +1028,7 @@ Example:
 llmproxy provider:add openrouter --api-key sk-or-... --model claude-sonnet-4 --vision true
 llmproxy provider:add groq --api-key gsk_... --model llama-3.3-70b-versatile --vision false
 llmproxy provider:add qwen --api-key sk-sp-... --model qwen3.7-plus --vision true --plan subscription
+llmproxy provider:add meta --api-key "$MODEL_API_KEY" --model muse-spark-1.2 --vision true
 llmproxy provider:add qwen --api-key sk-qwen-... --model qwen3.7-max --vision false --plan payg
 llmproxy provider:add deepseek --api-key sk-... --model deepseek-v4-pro --vision false
 llmproxy provider:add kimi --api-key sk-... --model kimi-k2.6 --vision true

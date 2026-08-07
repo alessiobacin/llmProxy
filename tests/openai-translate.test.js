@@ -310,3 +310,38 @@ test("translateResponse maps malformed minimax marker variant in plain text to t
     limit: "10",
   });
 });
+
+// ── Vision: Anthropic image block -> OpenAI image_url (requirement B) ────
+test("translateRequest converts Anthropic type:image block to OpenAI image_url", () => {
+  const { translateRequest } = require("../lib/openai-translate");
+  const body = {
+    model: "claude-sonnet-4.5",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: "what is this?" },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: "iVBORw0KGgo=" } },
+      ],
+    }],
+  };
+  const translated = translateRequest(body);
+  const blocks = translated.messages[0].content;
+  assert.ok(blocks.some((b) => b.type === "image_url"));
+  const imageBlock = blocks.find((b) => b.type === "image_url");
+  assert.equal(imageBlock.image_url.url, "data:image/png;base64,iVBORw0KGgo=");
+});
+
+test("translateRequest converts Anthropic image with url source (non-base64)", () => {
+  const { translateRequest } = require("../lib/openai-translate");
+  const body = {
+    model: "claude-sonnet-4.5",
+    messages: [{
+      role: "user",
+      content: [{ type: "image", source: { type: "url", url: "https://example.com/pic.png" } }],
+    }],
+  };
+  const translated = translateRequest(body);
+  const blocks = translated.messages[0].content;
+  const imageBlock = blocks.find((b) => b.type === "image_url");
+  assert.equal(imageBlock.image_url.url, "https://example.com/pic.png");
+});

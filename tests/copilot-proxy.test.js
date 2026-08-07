@@ -863,3 +863,40 @@ test("normalizeCopilotTooling resets named tool_choice when trimmed chat tool is
 // l'escalation anche quando TUTTI i candidati sono free.
 
 // Removed escalation tests - auto-escalation mechanism was removed in Task 8
+
+// ── Vision routing: image detection in BOTH formats (bug fix) ─────────────
+// Requirement: se la richiesta contiene un'immagine in QUALSIASI formato
+// (blocco Anthropic `type:"image"` O OpenAI `image_url`), il proxy deve
+// attivare il routing vision-capable. I detection helper devono vedere
+// entrambi i formati, in qualsiasi messaggio (non solo l'ultimo user).
+
+test("hasImageInOpenAiMessages detects Anthropic type:image blocks (not only image_url)", () => {
+  const messages = [
+    { role: "user", content: [{ type: "text", text: "look" }, { type: "image", source: { type: "base64", media_type: "image/png", data: "AAAA" } }] },
+  ];
+  assert.equal(hasImageInOpenAiMessages(messages), true);
+});
+
+test("hasImageInLastUserMessage detects Anthropic type:image blocks", () => {
+  const messages = [
+    { role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "BBBB" } }] },
+  ];
+  assert.equal(hasImageInLastUserMessage(messages), true);
+});
+
+test("hasImageInOpenAiMessages detects image_url in a NON-last user message", () => {
+  const messages = [
+    { role: "user", content: [{ type: "image_url", image_url: { url: "data:image/png;base64,CCCC" } }] },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: "follow-up text only" },
+  ];
+  assert.equal(hasImageInOpenAiMessages(messages), true);
+});
+
+test("hasImageInOpenAiMessages returns false for text-only messages", () => {
+  const messages = [
+    { role: "user", content: "plain text" },
+    { role: "assistant", content: [{ type: "text", text: "reply" }] },
+  ];
+  assert.equal(hasImageInOpenAiMessages(messages), false);
+});

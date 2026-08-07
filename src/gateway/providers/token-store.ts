@@ -16,6 +16,7 @@ interface ProviderToken {
   scope: string;
   default_model: string;
   endpoint_variant: string;
+  coding_score?: number;
   vision?: boolean;
   free_model?: boolean;
   proxy_url?: string;
@@ -53,6 +54,39 @@ interface FilePersistence {
   read: () => string | null;
   write: (data: string) => void;
   remove: () => void;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
+
+const ENC_PREFIX = "enc.v1:";
+
+function deriveKey(secret: string | null): Buffer | null {
+  if (!secret) return null;
+  return nodeCrypto.createHash("sha256").update(String(secret)).digest();
+}
+
+function encryptValue(plain: string, secret: string | null): string {
+  const key = deriveKey(secret);
+  if (!key) return plain;
+  const iv = nodeCrypto.randomBytes(12);
+  const cipher = nodeCrypto.createCipheriv("aes-256-gcm", key, iv);
+  const enc = Buffer.concat([cipher.update(String(plain), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return ENC_PREFIX + Buffer.concat([iv, tag, enc]).toString("base64");
+}
+
+function decryptValue(value: string, secret: string | null): string {
+  if (typeof value !== "string" || !value.startsWith(ENC_PREFIX)) return value;
+  const key = deriveKey(secret);
+  if (!key) return value;
+  const raw = Buffer.from(value.slice(ENC_PREFIX.length), "base64");
+  const iv = raw.subarray(0, 12);
+  const tag = raw.subarray(12, 28);
+  const data = raw.subarray(28);
+  const decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
 }
 
 function makeFilePersistence(filePath: string): FilePersistence {
@@ -143,6 +177,9 @@ function normalizeProvider(provider: Record<string, unknown> | null | undefined,
       .map((entry) => String(entry || "").trim())
       .filter((entry) => entry.length > 0);
   }
+  if (typeof provider?.coding_score === "number" && Number.isFinite(provider.coding_score)) {
+    token.coding_score = provider.coding_score;
+  }
   return token;
 }
 
@@ -183,12 +220,35 @@ function normalizeRegistry(data: Record<string, unknown> | null): ProviderRegist
   };
 }
 
-function createTokenStore(options: { filePath?: string; persistence?: FilePersistence } = {}): TokenStore {
+function createTokenStore(options: { filePath?: string; persistence?: FilePersistence; secret?: string | null } = {}): TokenStore {
   const persistence = options.persistence || makeFilePersistence(options.filePath || "copilot-token.json");
   const filePath = options.filePath || "copilot-token.json";
+  const secret = options.secret || null;
+
+  function encryptProviderSecrets(registry: ProviderRegistry): ProviderRegistry {
+    return {
+      ...registry,
+      providers: registry.providers.map((p) => ({
+        ...p,
+        access_token: encryptValue(p.access_token, secret),
+        ...(p.proxy_api_key ? { proxy_api_key: encryptValue(p.proxy_api_key, secret) } : {}),
+      })),
+    };
+  }
+
+  function decryptProviderSecrets(registry: ProviderRegistry): ProviderRegistry {
+    return {
+      ...registry,
+      providers: registry.providers.map((p) => ({
+        ...p,
+        access_token: decryptValue(p.access_token, secret),
+        ...(p.proxy_api_key ? { proxy_api_key: decryptValue(p.proxy_api_key, secret) } : {}),
+      })),
+    };
+  }
 
   function persistRegistry(registry: ProviderRegistry): ProviderRegistry {
-    persistence.write(JSON.stringify(registry, null, 2));
+    persistence.write(JSON.stringify(encryptProviderSecrets(registry), null, 2));
     return registry;
   }
 
@@ -196,7 +256,7 @@ function createTokenStore(options: { filePath?: string; persistence?: FilePersis
     const raw = persistence.read();
     if (!raw) return normalizeRegistry(null);
     try {
-      return normalizeRegistry(JSON.parse(raw));
+      return decryptProviderSecrets(normalizeRegistry(JSON.parse(raw)));
     } catch {
       return normalizeRegistry(null);
     }

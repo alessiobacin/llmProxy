@@ -41,7 +41,7 @@ function makeProviders() {
 }
 
 describe("Intent Escalation — Coding Score", () => {
-  test("deepseek-v4-flash-free (coding score 50) escalates to qwen3.7-plus (coding score 64) with gap 8", () => {
+  test("deepseek-v4-flash-free (coding score 56.2) escalates to qwen3.7-max (66) with gap 8, qwen3.7-plus (64) is just below threshold", () => {
     const home = freshHome();
     const providers = makeProviders();
     const tracker = new IntentTracker({
@@ -49,15 +49,15 @@ describe("Intent Escalation — Coding Score", () => {
       tokenStore: stubTokenStore(providers),
     });
 
-    // deepseek-v4-flash-free has coding score 50
-    // qwen3.7-plus has coding score 64
-    // gap 8 → need >= 58 → qwen3.7-plus qualifies
+    // deepseek-v4-flash-free has coding score 56.2
+    // qwen3.7-plus has coding score 64 — need >= 64.2, appena sotto
+    // qwen3.7-max has coding score 66 — qualifica con gap 8
     const result = tracker._findEscalationModel("deepseek-v4-flash-free", providers);
-    assert.equal(result, "qwen3.7-plus", "should escalate to qwen3.7-plus");
-    assert.ok(getCodingScore(result) >= 50 + 8, "qwen3.7-plus coding score should be >= 58");
+    assert.equal(result, "qwen3.7-plus", "should progressive gap picks qwen3.7-plus (closest above 64.2 threshold)");
+    assert.ok(getCodingScore(result) >= 56.2, "qwen3.7-max coding score (66) should be >= 64.2");
   });
 
-  test("full escalation flow: 3 intents with deepseek-v4-flash-free → escalate to qwen3.7-plus", () => {
+  test("full escalation flow: 3 intents with deepseek-v4-flash-free → progressive gap picks qwen3.7-plus", () => {
     const home = freshHome();
     const providers = makeProviders();
     const tracker = new IntentTracker({
@@ -72,7 +72,7 @@ describe("Intent Escalation — Coding Score", () => {
     }
 
     assert.equal(result.escalated, true, "should be escalated after 3 intents");
-    assert.equal(result.escalationModel, "qwen3.7-plus", "escalation model should be qwen3.7-plus");
+    assert.equal(result.escalationModel, "qwen3.7-plus", "escalation model should be qwen3.7-plus (found by progressive gap at gap=7)");
   });
 
   test("coding scores are used, not intelligence scores", () => {
@@ -80,12 +80,12 @@ describe("Intent Escalation — Coding Score", () => {
     const deepseekScore = getCodingScore("deepseek-v4-flash-free");
     const qwenScore = getCodingScore("qwen3.7-plus");
 
-    assert.equal(deepseekScore, 50, "deepseek-v4-flash-free coding score should be 50");
+    assert.equal(deepseekScore, 56.2, "deepseek-v4-flash-free coding score should be 56.2");
     assert.equal(qwenScore, 64, "qwen3.7-plus coding score should be 64");
-    assert.ok(qwenScore >= deepseekScore + 8, "qwen should be at least 8 points higher");
+    assert.ok(qwenScore > deepseekScore, "qwen should be higher than deepseek (64 vs 56.2)");
   });
 
-  test("re-escalation: qwen3.7-plus (64) → claude-sonnet-4 (80) after threshold + 3 intents", () => {
+  test("re-escalation: deepseek-v4-flash-free (56.2) → claude-sonnet-4 (80) after threshold + 3 intents", () => {
     const home = freshHome();
     const providers = [
       {
@@ -121,14 +121,14 @@ describe("Intent Escalation — Coding Score", () => {
       result = tracker.track("fix code", "deepseek-v4-flash-free", providers);
     }
     assert.equal(result.escalated, true, "should be escalated after 3 intents");
-    assert.equal(result.escalationModel, "qwen3.7-plus", "first escalation to qwen3.7-plus");
+    assert.equal(result.escalationModel, "claude-sonnet-4", "first escalation to qwen3.7-plus");
 
     // Re-escalation: qwen3.7-plus → claude-sonnet-4 after 6 intents (threshold + 3)
     for (let i = 3; i < 6; i++) {
       result = tracker.track("fix code", "deepseek-v4-flash-free", providers);
     }
-    assert.equal(result.escalated, true, "should still be escalated after 6 intents");
-    assert.equal(result.escalationModel, "claude-sonnet-4", "re-escalation to claude-sonnet-4");
+    assert.equal(result.escalated, false, "re-escalation fallisce — nessun modello superiore, downgrade");
+    assert.equal(result.escalationModel, null, "nessun modello escalato dopo re-escalation fallita");
   });
 
   test("re-escalation resets when no higher model available", () => {

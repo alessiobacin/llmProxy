@@ -112,3 +112,34 @@ test("parseProviderModelAtLabel extracts provider from model@provider syntax", (
   // model label starting with @ should still be treated as @provider
   assert.deepEqual(parseProviderModelAtLabel("@opencode-bacin"), { model: "", provider: "opencode-bacin" });
 });
+
+test("parseProviderModelAtLabel normalizes OpenRouter OpenAI instance labels", () => {
+  const { parseProviderModelAtLabel } = require("../lib/gateway/services/llm-transport");
+  assert.deepEqual(parseProviderModelAtLabel("deepseek-v4-flash-free@openrouter-openai"), {
+    model: "deepseek-v4-flash-free",
+    provider: "openrouter",
+  });
+});
+
+ test("resolveProviderSelection accepts an openrouter-openai local instance", () => {
+  const selection = resolveProviderSelection({
+    requestedProvider: "openrouter-openai",
+    requestedModel: "deepseek-v4-flash-free",
+    hierarchyContext: null,
+    traceId: "trace-openrouter-openai",
+    tokenStore: {
+      getProvider(id) {
+        return id === "openrouter-openai" ? {
+          id,
+          provider: "openrouter",
+          access_token: "sk-test",
+          default_model: "deepseek-v4-flash-free",
+        } : null;
+      },
+    },
+    providerRegistry: { resolveCandidates() { return []; } },
+  });
+  assert.equal(selection.source, "local");
+  assert.equal(selection.providerCandidates?.[0]?.provider, "openrouter");
+});
+

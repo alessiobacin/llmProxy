@@ -20,6 +20,10 @@ COPY lib ./lib
 COPY server.js ./server.js
 COPY manifest.json ./manifest.json
 
+USER node
+
 EXPOSE 7045
+
+# Keep the runtime process unprivileged.
 
 CMD ["node", "server.js"]

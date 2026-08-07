@@ -106,6 +106,10 @@ interface GatewayRequestParams {
  * "deepseek-v4-flash-free@opencode-bacin" -> { model, provider }.
  * Returns provider === null when no `@provider` suffix is present.
  */
+function normalizeProviderAlias(value: string): string {
+  return value === "openrouter-openai" ? "openrouter" : value;
+}
+
 function parseProviderModelAtLabel(value: unknown): { model: string; provider: string | null } {
   const raw = String(value || "").trim();
   const atIndex = raw.lastIndexOf("@");
@@ -114,7 +118,7 @@ function parseProviderModelAtLabel(value: unknown): { model: string; provider: s
   }
   return {
     model: raw.slice(0, atIndex).trim(),
-    provider: raw.slice(atIndex + 1).trim(),
+    provider: normalizeProviderAlias(raw.slice(atIndex + 1).trim()),
   };
 }
 
@@ -134,6 +138,7 @@ function resolveProviderSelection({
   providerRegistry: unknown;
 }): ProviderSelection | ProviderSelectionError {
   const provider = requestedProvider && requestedProvider !== "auto" ? requestedProvider : null;
+  const canonicalProvider = provider ? normalizeProviderAlias(provider) : null;
   const localTokenStore = tokenStore as {
     getProvider?: (id: string) => LocalProviderEntry | null;
     listProviders?: () => LocalProviderEntry[];
@@ -141,7 +146,7 @@ function resolveProviderSelection({
   };
 
   if (provider) {
-    const exactLocalProvider = localTokenStore.getProvider?.(provider);
+    const exactLocalProvider = localTokenStore.getProvider?.(provider) || (canonicalProvider ? localTokenStore.getProvider?.(canonicalProvider) : null);
     if (exactLocalProvider?.access_token) {
       return {
         provider,
@@ -168,8 +173,8 @@ function resolveProviderSelection({
     }
   }
 
-  if (provider && !SUPPORTED_PROVIDERS.includes(provider)) {
-    const localProvider = localTokenStore.getProvider?.(provider);
+  if (provider && !SUPPORTED_PROVIDERS.includes(canonicalProvider || provider)) {
+    const localProvider = localTokenStore.getProvider?.(provider) || (canonicalProvider ? localTokenStore.getProvider?.(canonicalProvider) : null);
     if (!localProvider) {
       return {
         error: {

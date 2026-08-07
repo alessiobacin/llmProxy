@@ -1,6 +1,6 @@
 {
   "name": "llmproxy",
-  "version": "0.3.111",
+  "version": "0.3.112",
   "description": "Standalone GitHub Copilot proxy CLI with native service management",
   "main": "server.js",
   "bin": {
@@ -34,7 +34,7 @@
     "@sendgrid/mail": "^8.1.6",
     "express": "^4.21.0",
     "mongodb": "^7.2.0",
-    "undici": "^6.21.0"
+    "undici": ">=6.21.2 <7"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

@@ -31,7 +31,7 @@ services:
       LLMPROXY_GLOBAL_SERVICE: "1"
       LLMPROXY_SHARED_PROVIDER_REGISTRY: "1"
       LLMPROXY_MODE: "platform"
-      LLMPROXY_HOME: "/root/.local/share/llmProxy"
+      LLMPROXY_HOME: "/home/node/.local/share/llmProxy"
       LLMPROXY_METERING_SINK: "dblayer"
       LLMPROXY_METERING_INLINE: "1"
       LLMPROXY_INFERENCE_INFO_INLINE: "1"
@@ -45,7 +45,7 @@ services:
     volumes:
       # Reuse host token store/logs so container has the same authenticated providers.
       # On macOS the default llmProxy home lives under ~/Library/Application Support/llmProxy.
-      - "${LLMPROXY_HOME:-${HOME:-/tmp}/Library/Application Support/llmProxy}:/root/.local/share/llmProxy"
+      - "${LLMPROXY_HOME:-${HOME:-/tmp}/Library/Application Support/llmProxy}:/home/node/.local/share/llmProxy"
       # Allow the proxy to read Claude settings and projects from the current host home
       # even when LLMPROXY_HOST_PROJECTS_ROOT is not explicitly exported.
       - "${LLMPROXY_HOST_PROJECTS_ROOT:-${HOME:-/tmp}}:${LLMPROXY_HOST_PROJECTS_ROOT:-${HOME:-/tmp}}:ro"

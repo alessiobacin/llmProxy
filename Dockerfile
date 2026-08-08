@@ -20,6 +20,11 @@ COPY lib ./lib
 COPY server.js ./server.js
 COPY manifest.json ./manifest.json
 
+# Data root for the non-root runtime user (node).
+ENV LLMPROXY_HOME=/home/node/.local/share/llmProxy
+RUN mkdir -p /home/node/.local/share/llmProxy \
+    && chown -R node:node /home/node/.local/share/llmProxy
+
 USER node
 
 EXPOSE 7045

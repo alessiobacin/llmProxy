@@ -31,6 +31,9 @@ services:
       LLMPROXY_GLOBAL_SERVICE: "1"
       LLMPROXY_SHARED_PROVIDER_REGISTRY: "1"
       LLMPROXY_MODE: "platform"
+      # Inbound API-key gate (production fails closed without it). Must match
+      # ANTHROPIC_AUTH_TOKEN used by local Claude Code clients.
+      LLMPROXY_API_KEY: "proxy-local"
       LLMPROXY_HOME: "/home/node/.local/share/llmProxy"
       LLMPROXY_METERING_SINK: "dblayer"
       LLMPROXY_METERING_INLINE: "1"

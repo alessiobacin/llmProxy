@@ -3830,6 +3830,17 @@ test("GET /v1/models returns OpenAI-compatible model list from provider defaults
     auth_type: "api_key",
     default_model: "qwen3.7-max",
   }, { name: "Qwen" });
+  tokenStore.saveProvider("openrouter-secondary", {
+    access_token: "sk-or-test-2",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-pro",
+  }, { name: "OpenRouter Secondary" });
+
+  // Provider-qualified IDs keep same model names distinct across providers.
+  // The unqualified alias remains covered by the single-model lookup test.
 
   const app = createApp({
     dataRoot: tempRoot,
@@ -3845,8 +3856,8 @@ test("GET /v1/models returns OpenAI-compatible model list from provider defaults
     assert.ok(Array.isArray(payload.data));
     assert.ok(payload.data.length >= 2);
     const ids = payload.data.map((m) => m.id);
-    assert.ok(ids.includes("deepseek-v4-flash"));
-    assert.ok(ids.includes("qwen3.7-max"));
+    assert.ok(ids.includes("openrouter:deepseek-v4-flash"));
+    assert.ok(ids.includes("qwen:qwen3.7-max"));
     for (const entry of payload.data) {
       assert.equal(entry.object, "model");
       assert.ok(typeof entry.created === "number");
@@ -3855,7 +3866,7 @@ test("GET /v1/models returns OpenAI-compatible model list from provider defaults
   });
 });
 
-test("GET /v1/models deduplicates models with same id", async () => {
+test("GET /v1/models keeps same model names distinct per provider", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-dedup-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
   tokenStore.saveProvider("a", {
@@ -3874,7 +3885,8 @@ test("GET /v1/models deduplicates models with same id", async () => {
   await withServer(app, async (baseUrl) => {
     const payload = await (await fetch(`${baseUrl}/v1/models`)).json();
     const ids = payload.data.map((m) => m.id);
-    assert.equal(ids.filter((id) => id === "deepseek-v4-flash").length, 1);
+    assert.ok(ids.includes("deepseek:deepseek-v4-flash"));
+    assert.ok(ids.includes("openrouter:deepseek-v4-flash"));
   });
 });
 

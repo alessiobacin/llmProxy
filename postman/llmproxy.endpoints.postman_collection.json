@@ -298,6 +298,14 @@
       "name": "03 - LLM Compatibility (Standalone-friendly)",
       "item": [
         {
+          "name": "GET /v1/models",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v1/models"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 without auth', function () {", "  pm.response.to.have.status(200);", "});", "pm.test('Body is an OpenAI model list', function () {", "  const body = pm.response.json();", "  pm.expect(body.object).to.eql('list');", "  pm.expect(body).to.have.property('data');", "});"] } }]
+        },
+        {
           "name": "POST /v1/messages",
           "request": {
             "method": "POST",

@@ -252,6 +252,14 @@ components:
               requests: {type: integer}
               tokens_input: {type: integer}
               tokens_output: {type: integer}
+    ModelObject:
+      type: object
+      required: [id, object, created, owned_by]
+      properties:
+        id: {type: string}
+        object: {type: string, enum: [model]}
+        created: {type: integer, description: "Unix timestamp (seconds) of catalog generation."}
+        owned_by: {type: string}
 paths:
   /health:
     get:
@@ -816,3 +824,52 @@ paths:
         "400": {description: Invalid query parameter, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
         "404": {description: Not available (proxy not in platform mode)}
         "500": {description: Failed to read metering JSONL file}
+  /v1/models:
+    get:
+      tags: [runtime]
+      summary: List available models (OpenAI-compatible catalog).
+      description: |
+        Public endpoint (no authentication required), following the OpenAI convention that
+        clients fetch the model catalog without credentials. Returns every configured provider
+        default model, deduplicated by model id.
+      responses:
+        "200":
+          description: Model catalog.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, data]
+                properties:
+                  object: {type: string, enum: [list]}
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModelObject'
+  /v1/models/{modelId}:
+    get:
+      tags: [runtime]
+      summary: Retrieve a single model by id (OpenAI-compatible lookup).
+      parameters:
+        - in: path
+          name: modelId
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Model details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelObject'
+        "404":
+          description: Model not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      message: {type: string}

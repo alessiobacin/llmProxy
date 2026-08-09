@@ -373,7 +373,7 @@ Esempio con override locale al progetto:
   "model": "llmProxy",
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:7045",
-    "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-4.5"
+    "ANTHROPIC_DEFAULT_MODEL": "kimi:kimi-k2.5"
   }
 }
 ```

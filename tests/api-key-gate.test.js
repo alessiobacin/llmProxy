@@ -64,3 +64,27 @@ test("api-key gate: without LLMPROXY_API_KEY, gate is not active (only provider 
     server.close();
   }
 });
+
+test("api-key gate: GET /v1/models is public (OpenAI convention, no auth required)", async () => {
+  const { server, baseUrl } = await startApp({ LLMPROXY_API_KEY: "secret-123" });
+  try {
+    const res = await fetch(`${baseUrl}/v1/models`);
+    const body = await res.json();
+    assert.strictEqual(res.status, 200, "model listing must not require the inbound key");
+    assert.strictEqual(body.object, "list", "returns OpenAI-style { object: 'list', data }");
+    assert.ok(Array.isArray(body.data), "data is an array");
+  } finally {
+    server.close();
+  }
+});
+
+test("api-key gate: GET /v1/models/:modelId is public when the key gate is active", async () => {
+  const { server, baseUrl } = await startApp({ LLMPROXY_API_KEY: "secret-123" });
+  try {
+    const res = await fetch(`${baseUrl}/v1/models/any-model`);
+    assert.notStrictEqual(res.status, 401, "model lookup must pass the gate");
+    assert.notStrictEqual(res.status, 503, "model lookup must pass the gate");
+  } finally {
+    server.close();
+  }
+});

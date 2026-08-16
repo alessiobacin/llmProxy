@@ -3760,6 +3760,54 @@ test("help prints a short description for each command", async () => {
   assert.match(stdout.toString(), /Problemi comuni:/);
 });
 
+test("bare CLI help stays local when the production proxy has no REST help endpoint", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-bare-help-"));
+  const stdout = createWritableBuffer();
+  let restCalled = false;
+
+  const exitCode = await runCli(["node", "llmp"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    restFetchFn: async () => {
+      restCalled = true;
+      throw new Error("REST help must not be attempted");
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(restCalled, false);
+  assert.match(stdout.toString(), /llmProxy CLI/);
+});
+
+test("management commands fall back locally when the production proxy has no REST control-plane route", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-rest-control-plane-fallback-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const calls = [];
+
+  const exitCode = await runCli(["node", "llmp", "provider:list"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+    restFetchFn: async (url) => {
+      calls.push(String(url));
+      if (String(url).endsWith("/health")) return { ok: true };
+      return {
+        ok: false,
+        status: 404,
+        async json() {
+          return { error: "NOT_FOUND", message: "Cannot GET /api/providers" };
+        },
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(calls, ["http://127.0.0.1:5045/health", "http://127.0.0.1:5045/api/providers"]);
+  assert.match(stdout.toString(), /Nessun provider configurato/);
+  assert.equal(stderr.toString(), "");
+});
+
 test("stop terminates only the dev foreground instance on port 5045", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-stop-dev-"));
   const stdout = createWritableBuffer();

@@ -1,4 +1,14 @@
 {
+  "0.3.118": {
+    "it": [
+      "Ripristina l'esecuzione locale dei comandi CLI quando il runtime platform non espone gli endpoint REST di controllo.",
+      "Propaga la chiave API del servizio nelle richieste REST CLI e mostra gli errori REST senza lasciare il prompt vuoto."
+    ],
+    "en": [
+      "Falls back to local CLI execution when the platform runtime does not expose REST control-plane endpoints.",
+      "Forwards the service API key in CLI REST requests and surfaces REST errors instead of returning an empty prompt."
+    ]
+  },
   "0.3.66": {
     "it": [
       "Preserva `proxy_rotation` nel token store locale quando un provider viene registrato con `--proxy` senza URL.",

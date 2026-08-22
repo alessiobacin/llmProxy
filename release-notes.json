@@ -1,4 +1,14 @@
 {
+  "0.3.119": {
+    "it": [
+      "Mantiene sincronizzata la chiave API inbound tra CLI, servizio e runtime Docker, usando `ANTHROPIC_AUTH_TOKEN` come fallback.",
+      "Rende `provider:test` compatibile con il gate API del servizio e conserva la configurazione HOME necessaria per risolvere i settings Claude nei container."
+    ],
+    "en": [
+      "Keeps the inbound API key synchronized across the CLI, service, and Docker runtime, using `ANTHROPIC_AUTH_TOKEN` as a fallback.",
+      "Makes `provider:test` compatible with the service API gate and preserves the HOME configuration needed to resolve Claude settings inside containers."
+    ]
+  },
   "0.3.118": {
     "it": [
       "Ripristina l'esecuzione locale dei comandi CLI quando il runtime platform non espone gli endpoint REST di controllo.",

@@ -1188,6 +1188,45 @@ test("provider:test treats NVIDIA HTTP 429 as a reachable provider", async () =>
   assert.match(stdout.toString(), /PASS - Visione correttamente disabilitata \(errore HTTP 429\)/i);
 });
 
+test("provider:test sends the inbound service API key to the local proxy", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-auth-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("opencode-otomatik", {
+    access_token: "sk-opencode-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "opencode",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash-free",
+    vision: false,
+  }, { name: "opencode-otomatik" });
+
+  const requests = [];
+  const exitCode = await runCli(["node", "llmproxy", "provider:test", "--provider", "opencode-otomatik"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    env: { LLMPROXY_API_KEY: "proxy-local-test" },
+    fetchFn: async (url, options = {}) => {
+      requests.push({ url: String(url), headers: options.headers || {} });
+      if (String(url).endsWith("/v1/messages")) {
+        return {
+          ok: true,
+          async json() {
+            return { content: [{ type: "text", text: "llmproxy-test-opencode-otomatik" }] };
+          },
+        };
+      }
+      return { ok: true, async json() { return { ok: true }; } };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  const request = requests.find((entry) => entry.url.endsWith("/v1/messages"));
+  assert.equal(request.headers["x-api-key"], "proxy-local-test");
+  assert.match(stdout.toString(), /PASS/);
+});
+
 test("provider:test default runs full text inference for every configured provider", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-test-default-text-"));
   const stdout = createWritableBuffer();

@@ -26,6 +26,9 @@ services:
     environment:
       PORT: "7045"
       HOST: "0.0.0.0"
+      # Keep Claude global/project settings resolvable from the host-mounted
+      # /Users tree. LLMPROXY_HOME remains the dedicated service data root.
+      HOME: "${LLMPROXY_HOST_HOME:-${HOME:-/tmp}}"
       NODE_ENV: "production"
       LLMPROXY_ENV: "production"
       LLMPROXY_GLOBAL_SERVICE: "1"

@@ -398,4 +398,190 @@ function anthropicResponseToOpenAI(anthropic: AnthropicResponse): OpenAIChatResp
 export {
   openAIRequestToAnthropic,
   anthropicResponseToOpenAI,
+  anthropicErrorToOpenAI,
+  createOpenAiStreamTranslator,
+  anthropicSseWriteToOpenAiChunks,
 };
+
+// ---------------------------------------------------------------------------
+// OpenAI-style error mapping (T2)
+// ---------------------------------------------------------------------------
+
+function anthropicErrorToOpenAI(payload: unknown): unknown {
+  const error = (payload as { error?: { type?: string; message?: string } } | null)?.error;
+  if (!error || typeof error !== "object") return payload;
+  const type = String(error.type ?? "api_error");
+  const message = String(error.message ?? "request failed");
+  const code = type === "authentication_error" ? "invalid_api_key" : type === "invalid_request_error" ? "invalid_request_error" : null;
+  return {
+    error: {
+      message,
+      type,
+      ...(code ? { code } : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Anthropic SSE → OpenAI chat.completion.chunk streaming translation (T1)
+// ---------------------------------------------------------------------------
+
+type OpenAiChunkState = {
+  id: string;
+  created: number;
+  model: string;
+  includeUsage: boolean;
+  sentFirstChunk: boolean;
+  finished: boolean;
+  toolCallIndex: number;
+  buffer: string;
+};
+
+function mapStopReasonToFinishReason(stopReason: unknown): string {
+  const reason = String(stopReason ?? "end_turn");
+  if (reason === "max_tokens") return "length";
+  if (reason === "tool_use") return "tool_calls";
+  return "stop";
+}
+
+function serializeChunk(chunk: unknown): string {
+  return `data: ${JSON.stringify(chunk)}\n\n`;
+}
+
+function createOpenAiStreamTranslator(options: { model: string; includeUsage?: boolean }): OpenAiChunkState {
+  return {
+    id: `chatcmpl-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`,
+    created: Math.floor(Date.now() / 1000),
+    model: String(options.model || "unknown"),
+    includeUsage: options.includeUsage === true,
+    sentFirstChunk: false,
+    finished: false,
+    toolCallIndex: 0,
+    buffer: "",
+  };
+}
+
+function buildOpenAiChunk(state: OpenAiChunkState, delta: unknown, finishReason: string | null): string {
+  return serializeChunk({
+    id: state.id,
+    object: "chat.completion.chunk",
+    created: state.created,
+    model: state.model,
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+  });
+}
+
+/**
+ * Consume one (possibly partial) raw SSE write from the Anthropic stream and
+ * return the OpenAI chunk payloads to forward. The translator keeps an internal
+ * buffer so events split across writes are handled correctly.
+ */
+function anthropicSseWriteToOpenAiChunks(state: OpenAiChunkState, rawWrite: string): string[] {
+  if (state.finished) return [];
+  state.buffer += String(rawWrite ?? "");
+  const events: string[] = [];
+
+  // Extract complete SSE events: "event: <name>\ndata: <json>\n\n"
+  let boundary = state.buffer.indexOf("\n\n");
+  while (boundary !== -1) {
+    const rawEvent = state.buffer.slice(0, boundary);
+    state.buffer = state.buffer.slice(boundary + 2);
+    boundary = state.buffer.indexOf("\n\n");
+
+    let dataLine: string | null = null;
+    for (const line of rawEvent.split("\n")) {
+      if (line.startsWith("data:")) {
+        dataLine = line.slice(5).trim();
+        break;
+      }
+    }
+    if (dataLine === null || dataLine === "[DONE]") continue;
+
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(dataLine);
+    } catch {
+      continue;
+    }
+
+    events.push(...handleAnthropicSseEvent(state, event));
+  }
+
+  return events;
+}
+
+function handleAnthropicSseEvent(state: OpenAiChunkState, event: Record<string, unknown>): string[] {
+  const type = String(event.type ?? "");
+
+  if (type === "message_start") {
+    const firstDelta = { role: "assistant", content: "" };
+    state.sentFirstChunk = true;
+    return [buildOpenAiChunk(state, firstDelta, null)];
+  }
+
+  if (type === "content_block_start") {
+    const block = event.content_block as { type?: string; id?: string; name?: string } | undefined;
+    if (block?.type === "tool_use") {
+      const toolCall = {
+        index: state.toolCallIndex,
+        type: "function",
+        id: String(block.id ?? `call_${state.toolCallIndex}`),
+        function: { name: String(block.name ?? "tool"), arguments: "" },
+      };
+      state.toolCallIndex += 1;
+      return [buildOpenAiChunk(state, { tool_calls: [toolCall] }, null)];
+    }
+    return [];
+  }
+
+  if (type === "content_block_delta") {
+    const delta = event.delta as { type?: string; text?: string; thinking?: string; partial_json?: string } | undefined;
+    if (!delta) return [];
+    if (delta.type === "text_delta" && typeof delta.text === "string" && delta.text.length > 0) {
+      return [buildOpenAiChunk(state, { content: delta.text }, null)];
+    }
+    if (delta.type === "thinking_delta" && typeof delta.thinking === "string" && delta.thinking.length > 0) {
+      // Not part of the OpenAI contract; exposed for reasoning-style clients.
+      return [buildOpenAiChunk(state, { reasoning_content: delta.thinking }, null)];
+    }
+    if (delta.type === "input_json_delta" && typeof delta.partial_json === "string" && delta.partial_json.length > 0) {
+      const toolCall = {
+        index: Math.max(0, state.toolCallIndex - 1),
+        function: { arguments: delta.partial_json },
+      };
+      return [buildOpenAiChunk(state, { tool_calls: [toolCall] }, null)];
+    }
+    return [];
+  }
+
+  if (type === "message_delta") {
+    const delta = event.delta as { stop_reason?: string } | undefined;
+    const usage = event.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    const finishReason = mapStopReasonToFinishReason(delta?.stop_reason);
+    const out = [buildOpenAiChunk(state, {}, finishReason)];
+    if (state.includeUsage && usage) {
+      const promptTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+      const completionTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+      out.push(serializeChunk({
+        id: state.id,
+        object: "chat.completion.chunk",
+        created: state.created,
+        model: state.model,
+        choices: [],
+        usage: {
+          prompt_tokens: promptTokens,
+          completion_tokens: completionTokens,
+          total_tokens: promptTokens + completionTokens,
+        },
+      }));
+    }
+    return out;
+  }
+
+  if (type === "message_stop") {
+    state.finished = true;
+    return ["data: [DONE]\n\n"];
+  }
+
+  return [];
+}

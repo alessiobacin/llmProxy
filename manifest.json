@@ -3,7 +3,7 @@
   "type": "tool",
   "slug": "llm-proxy",
   "name": "llmProxy",
-  "version": "0.2.73",
+  "version": "0.3.119",
   "architecture_version": "v8",
   "tool_id": 45,
   "category": "transport",
@@ -50,6 +50,21 @@
       "path": "/v1/llm/health",
       "method": "GET",
       "purpose": "Platform-facing health and capability descriptor."
+    },
+    "platform_provider_registry": {
+      "path": "/v1/llm/providers",
+      "method": "GET",
+      "purpose": "Platform-facing provider registry (provider-registry.json), separate from the local copilot-token.json credential store."
+    },
+    "platform_models": {
+      "path": "/v1/models",
+      "method": "GET",
+      "purpose": "Provider-qualified model catalog (OpenAI-convention list)."
+    },
+    "legacy_openai": {
+      "path": "/v1/chat/completions",
+      "method": "POST",
+      "purpose": "OpenAI-compatible Chat Completions (legacy)."
     },
     "control_plane_legacy": {
       "prefix": "/api",

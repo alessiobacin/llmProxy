@@ -3598,7 +3598,7 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
 
     const providerRemoveMissingResponse = await fetch(`${baseUrl}/api/providers/not-registered`, { method: "DELETE" });
     const providerRemoveMissingPayload = await providerRemoveMissingResponse.json();
-    assert.equal(providerRemoveMissingResponse.status, 400);
+    assert.equal(providerRemoveMissingResponse.status, 404);
     assert.equal(providerRemoveMissingPayload.success, false);
     assert.match(providerRemoveMissingPayload.data.error, /Provider non trovato/);
 

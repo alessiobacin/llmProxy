@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: llmProxy API
-  version: 0.3.119
+  version: 0.3.121
   description: |
     Deterministic LLM transport tool (architecture v11, tool #45).
 
@@ -731,6 +731,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+        "404":
+          description: Provider not found (CLI-style payload with success=false, Provider non trovato).
   /api/stats:
     get:
       tags: [control-plane]

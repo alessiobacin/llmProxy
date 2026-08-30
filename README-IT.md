@@ -433,6 +433,134 @@ Formato risposta standard degli endpoint REST runtime:
 
 `success=true` equivale a `exitCode=0`. In caso di errore applicativo, la risposta e` `400` con `success=false`.
 
+### API di query metering (platform mode)
+
+Quando il proxy gira in platform mode (`LLMPROXY_MODE=platform`), ogni richiesta proxata viene aggiunta come riga JSON al file del sink metering. Due endpoint HTTP permettono di interrogare questi dati senza dover parsare il file direttamente.
+
+#### `GET /v1/llm/metering` — lista paginata di record
+
+Restituisce i record metering grezzi. Ogni record e` uno snapshot audit-ready di una singola richiesta di inferenza:
+
+| Campo | Descrizione |
+|---|---|
+| `timestamp` | UTC ISO 8601, quando e` stata inviata la risposta |
+| `request_id` | ID univoco generato dal proxy (`req_<16 hex chars>`) |
+| `trace_id` | `X-Trace-Id` fornito dal chiamante, per correlazione |
+| `provider` / `model_used` | Chi ha effettivamente servito la richiesta |
+| `duration_ms` | Latenza wall-clock dalla ricezione alla risposta |
+| `success` / `error_code` | Esito |
+| `tokens_input` / `tokens_output` | Conteggio token |
+| `fallback_count` | Quanti provider sono stati tentati prima del successo |
+| `master_company` / `tenant_id` / `client_id` / `project_id` | Gerarchia di billing |
+| `scope_type` / `scope_id` | Scope di billing corrente |
+| `master_user_id` / `tenant_user_id` / `client_user_id` / `project_user_id` | ID utente per livello |
+| `caller_module` / `operation_id` / `custom_dimensions` | Dimensioni di contesto metering |
+| `agent` / `mansione` / `task_id` | Dimensioni a livello agente (da `custom_dimensions`) |
+
+**Contratto di emissione sulle richieste fallite:**
+
+- Un fallimento a **livello provider** (HTTP 4xx/5xx dal provider, o errore di rete nel trasporto) produce **sempre** un record metering con `success: false` e `error_code` corrispondente (`AUTH_REQUIRED`, `HTTP_<status>`, `NETWORK_ERROR`); quando nessun altro provider/modello/proxy puo` salvare la richiesta, il record terminale porta l'`error_code` dell'**ultimo tentativo** effettuato. `logs` e `GET /v1/llm/metering?success=false` riflettono questi record.
+- Se il loop dei provider termina **senza alcun tentativo** (es. richiesta con immagini e nessun provider vision-capable: tutti i provider vengono saltati), viene emesso un record `success: false` con `error_code: PROVIDER_FALLBACK_EXHAUSTED` — l'unico caso in cui quel codice compare.
+- Un rifiuto **pre-proxy** — richiesta respinta dal gate inbound `LLMPROXY_API_KEY` (401 `UNAUTHORIZED` / 503 `SERVICE_MISCONFIGURED`), dalla validazione del contesto hierarchy (`/v1/llm/messages`, 400), dal gate `LLMPROXY_LLM_STATS_API_KEY` mancante, o "nessun provider configurato" (401) — **non produce alcun record metering**: la richiesta non raggiunge alcun provider e non vi e` alcun consumo da attribuire.
+
+**Parametri di query** (tutti opzionali):
+
+| Parametro | Tipo | Descrizione |
+|---|---|---|
+| `limit` | integer 1–1000 | Record per pagina (default `100`) |
+| `offset` | integer ≥ 0 | Salta N record (default `0`) |
+| `order` | `desc` \| `asc` | Prima i piu` recenti (default) o i piu` vecchi |
+| `from` | ISO 8601 | Filtro: `timestamp >= from` |
+| `to` | ISO 8601 | Filtro: `timestamp <= to` |
+| `success` | `true` \| `false` | Filtro per esito |
+| `project_id` | string | Filtro match esatto |
+| `tenant_id` | string | Filtro match esatto |
+| `client_id` | string | Filtro match esatto |
+| `master_company` | string | Filtro match esatto |
+| `scope_type` | string | Filtro match esatto |
+| `scope_id` | string | Filtro match esatto |
+| `provider` | string | Filtro match esatto |
+| `master_user_id` / `tenant_user_id` / `client_user_id` / `project_user_id` / `user_id` | string | Filtro esatto per livello utente |
+| `request_id` | string | Cerca un singolo specifico request |
+
+**Esempio — ultime 20 richieste per un progetto:**
+
+```http
+GET /v1/llm/metering?project_id=p-1&limit=20&order=desc
+```
+
+**Esempio — richieste fallite in una finestra temporale:**
+
+```http
+GET /v1/llm/metering?success=false&from=2026-05-01T00:00:00Z&to=2026-05-01T23:59:59Z
+```
+
+**Forma della risposta:**
+
+```json
+{
+  "records": [ /* array di MeteringRecord */ ],
+  "total": 142,
+  "limit": 20,
+  "offset": 0,
+  "order": "desc"
+}
+```
+
+`total` e` il conteggio di tutti i record che corrispondono ai filtri (non solo la pagina corrente). Usa `offset` per la paginazione:
+
+```
+page 1: offset=0,  limit=20  → records 0–19
+page 2: offset=20, limit=20  → records 20–39
+```
+
+#### `GET /v1/llm/metering/stats` — statistiche aggregate
+
+Accetta gli stessi parametri di filtro dell'endpoint lista (i parametri di paginazione vengono ignorati). Restituisce statistiche aggregate sull'intero set di record filtrato:
+
+**Esempio — riepilogo costi per un progetto, mese corrente:**
+
+```http
+GET /v1/llm/metering/stats?project_id=p-1&from=2026-05-01T00:00:00Z
+```
+
+**Forma della risposta:**
+
+```json
+{
+  "filtered_total": 1284,
+  "total_requests": 1284,
+  "success_count": 1279,
+  "error_count": 5,
+  "total_tokens_input": 4820000,
+  "total_tokens_output": 612000,
+  "total_tokens": 5432000,
+  "avg_tokens_input": 3754,
+  "avg_tokens_output": 477,
+  "avg_duration_ms": 1823,
+  "p50_duration_ms": 1640,
+  "p95_duration_ms": 4210,
+  "earliest_timestamp": "2026-05-01T08:12:43.000Z",
+  "latest_timestamp": "2026-05-04T17:58:02.000Z",
+  "by_provider": {
+    "copilot": { "requests": 1001, "tokens_input": 3800000, "tokens_output": 490000 },
+    "openai":  { "requests":  283, "tokens_input": 1020000, "tokens_output": 122000 }
+  },
+  "by_scope_type": {
+    "project": { "requests": 1284, "tokens_input": 4820000, "tokens_output": 612000 }
+  },
+  "by_project_id": {
+    "p-1": { "requests": 1284, "tokens_input": 4820000, "tokens_output": 612000 }
+  }
+}
+```
+
+**Note:**
+- Entrambi gli endpoint rispondono `404` se il proxy non e` in platform mode.
+- Il file JSONL viene letto a ogni richiesta HTTP — non viene mantenuta alcuna cache in memoria.
+- I record vengono aggiunti in ordine cronologico; `order=desc` inverte la slice dopo il filtraggio.
+- I campi vengono redatti dei contenuti sensibili (corpo dei messaggi, API key) prima della scrittura su disco, quindi i record salvati non contengono il testo dei prompt.
+
 ### Health
 
 ```http
@@ -580,6 +708,8 @@ Note operative:
   }
 }
 ```
+
+- `DELETE /api/providers/{id}` risponde `200` in caso di successo e `404` (payload CLI-style, `success: false`, `Provider non trovato`) quando il provider non esiste.
 
 - Gate API-key in ingresso: quando `LLMPROXY_API_KEY` e` configurata (o in produzione), tutti gli endpoint tranne `/health`, `/auth/logout`, `/v1/llm/health`, `/v1/models` richiedono `Authorization: Bearer <key>` oppure `x-api-key: <key>`.
 
@@ -731,6 +861,17 @@ Usalo quando vuoi una vista rapida operativa di:
 - utilizzo per provider
 - utilizzo per modello
 
+### `llmproxy stats:reset`
+
+Azzera tutte le statistiche di utilizzo (tronca i record metering).
+
+```bash
+llmproxy stats:reset
+```
+
+- Il comando **non accetta flag**: qualsiasi flag (incluso il legacy `--hard`) viene rifiutato con exit code `1` e il messaggio `Flag non supportato per stats:reset: --<flag>`, e il file metering viene lasciato intatto.
+- Senza flag, tronca i record metering e stampa `Statistiche azzerate: metering.` (exit `0`); se non esiste alcun file di statistiche segnala `Nessun file di statistiche trovato` (exit `0`).
+
 ### `llmproxy provider:add <id> [--name <name>] [--api-key <key>] [--model <model>] [--vision <true|false>] [--plan <plan>]`
 
 Aggiunge un provider identificato da `<id>`. Il comportamento dipende dal tipo di provider:
@@ -849,6 +990,9 @@ Aggiorna il nome descrittivo di un provider senza cambiarne l'identificatore.
 ### `llmproxy provider:remove <id>`
 
 Rimuove il provider indicato dal registry locale.
+
+- Rimuovere un provider inesistente fallisce con exit code `1` e `Provider non trovato: <id>`.
+- L'alias REST `DELETE /api/providers/{id}` risponde `404` (payload CLI-style con `success: false`) per un provider sconosciuto — in linea con `DELETE /v1/llm/providers/{id}` — e `200` in caso di successo.
 
 ### `llmproxy provider:reorder`
 

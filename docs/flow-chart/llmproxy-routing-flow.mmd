@@ -1,0 +1,165 @@
+flowchart TD
+  %% ═══════════════════════════════════════════════════════════════
+  %% llmProxy — FLUSSO COMPLETO DI ROUTING
+  %% Variabili di setting + opzioni routing + entry points + provider
+  %% ═══════════════════════════════════════════════════════════════
+
+  START(["Client: Claude Code / copilot"]) --> GATE{"Inbound gate LLMPROXY_API_KEY set?"}
+
+  GATE -- "API key errata / non presente (prod fails-closed)" --> HF["FORBIDDEN 403 / auth/status public"]
+  GATE -- "OK o nessun key" --> ENTRY{"Entry point"}
+
+  subgraph ENTRYPOINTS["ENDPOINTS HTTP /v1"]
+    A1["POST /v1/messages"]
+    A2["POST /v1/llm/messages"]
+    O1["POST /v1/chat/completions"]
+    O2["POST /v1/llm/chat/completions"]
+    MOD["GET /v1/models e /v1/models/:modelId"]
+    PRV["GET/POST /v1/llm/providers + DELETE :id"]
+    MET["GET /v1/llm/metering e /stats (solo platform)"]
+    HLT["/health /auth/status /v1/llm/health /auth/logout"]
+  end
+
+  ENTRY -- "Anthropic" --> A1
+  ENTRY -- "Anthropic" --> A2
+  ENTRY -- "OpenAI" --> O1
+  ENTRY -- "OpenAI" --> O2
+  ENTRY -- "catalogo modelli" --> MOD
+  ENTRY -- "registry CRUD" --> PRV
+  ENTRY -- "metering" --> MET
+  ENTRY -- "system/health" --> HLT
+
+  A1 --> HIER{"enforceHierarchy? (canonical /v1/llm/*)"}
+  A2 --> HIER{"enforceHierarchy? (canonical /v1/llm/*)"}
+  HIER -- "sì → contesto multitenancy obbligatorio (billing)" --> HC{"Valid hierarchy: project→client→agency→user?"}
+  HC -- "mancante/invalido" --> HE["400 HIERARCHY_CONTEXT REQUIRED / INVALID"]
+  HC -- "valido / master:*" --> ANTH["Pipeline Anthropic handleMessages"]
+  HIER -- "no (legacy /v1/messages)" --> ANTH
+
+  O1 --> OPENAI["Traduci OpenAI → Anthropic openAIRequestToAnthropic"]
+  O2 --> OPENAI["Traduci OpenAI → Anthropic openAIRequestToAnthropic"]
+  OPENAI --> HIER
+  OPENAI --> STREAM{"Streaming?"}
+  STREAM -- "sì" --> S5["501 STREAM_NOT_IMPLEMENTED"]
+  STREAM -- "no" --> ANTH
+
+  ANTH --> MODELRES
+
+  %% ── Modello ────────────────────────────────────────────────────
+  subgraph MODELSEL["RISOLUZIONE MODELLO"]
+    MODELRES{"Seleziona modello"}
+    MODELRES -- "1. projectSettings.configuredModel (settings.json env)" --> P1
+    MODELRES -- "2. body.model (azzerato se label proxy: llmproxy / llm-proxy / proxy-local)" --> P2
+    MODELRES -- "3. provider.default_model" --> P3
+    P1["ANTHROPIC_DEFAULT_MODEL"] --> ALIAS["resolveSupportedModel fallback → DEFAULT_COPILOT_MODEL claude-sonnet-4.5"]
+    ALIAS -- "fallback ultimo: claude-sonnet-4.5" --> NOTE_FB["⚠ fallback hardcoded quando tutti e 3 gli step sono vuoti"]
+    P2["body.model | MODEL_MAP: sonnet→claude-sonnet-4.5, rimozione suffissi data"] --> ALIAS
+    P3["provider default_model"] --> ALIAS
+    ALIAS --> INTENT{"LLMPROXY_INTENT_ESCALATION > 0? intent escalation"}
+    INTENT -- "sì → score esecuzione modello" --> ISC["modelCodingScore = match(pattern→claude, coding tab)→ codingIndex\nLLMPROXY_INTENT_ESCALATION_GAP (default 8): gap soglia rispetto al modello migliore"]
+    ISC --> IGAP{"gap ≥ threshold?"}
+    IGAP -- "sì → override modello a escalationModel" --> PROVSEL
+    IGAP -- "no" --> PROVSEL
+    INTENT -- "no" --> PROVSEL
+    PROVSEL --- ILINE["LLMPROXY_INTENT_INFO_LINE=1 → riga info escalation in risposta"]
+  end
+
+  %% ── Provider ───────────────────────────────────────────────────
+  subgraph PROV["SELEZIONE PROVIDER"]
+    PROVSEL{"resolveProviderSelection — ordine sorgenti"}
+    PROVSEL -- "1. provider esplicito: body.provider o model@provider (deepseek@opencode-bacin)" --> S1["source: local — exact match in tokenStore"]
+    PROVSEL -- "2. registry resolveCandidates(scope, provider)" --> S2{"registry ha match?"}
+    S2 -- "provider copilot o IMPLEMENTED_API_KEY_PROVIDERS" --> S2A["source: registry"]
+    S2 -- "provider non implementato (es. meta)" --> S2B["501 PROVIDER_NOT_IMPLEMENTED"]
+    PROVSEL -- "3. registry vuoto → tokenStore ordinato getProviderOrder" --> S3["source: token-store"]
+    PROVSEL -- "4. default" --> S4["source: default — provider copilot"]
+  end
+
+  S1 --> SCOPE{"Scope match buildScopeMatchSet"}
+  S2A --> SCOPE{"Scope match buildScopeMatchSet"}
+  S3 --> SCOPE{"Scope match buildScopeMatchSet"}
+  S4 --> SCOPE{"Scope match buildScopeMatchSet"}
+  SCOPE --> SR["project→project_id | client→client_id | agency→tenant/agency | user→user_id + master:*"]
+  SR --> SORR["Rank SCOPE_PRIORITY: project4 > client3 > agency2 > user1 > master0"]
+  SORR --> UNK{"provider sconosciuto senza entry locale?"}
+  UNK -- "sì" --> U400["400 UNSUPPORTED_PROVIDER"]
+  UNK -- "no → provider scelto" --> REORD{"LLMPROXY_REORDERING set? price-power-speed"}
+  REORD -- "sì" --> REORDL["Ciclo ogni LLMPROXY_REORDERING_MINUTES (default 5) — price: costo cloudprice, power: coding_index, speed: probe latenza → setProviderOrder(tokenStore)"]
+  REORD -- "no → ordine manuale llmproxy provider:order" --> ROUTE
+  REORDL --> ROUTE
+
+  %% ── Routing upstream ───────────────────────────────────────────
+  ROUTE["Instrada all'upstream scelto"] --> RESP
+
+  subgraph PROVROUTE["ROUTING PER-PROVIDER (protocol)"]
+    RP1["openai-chat → chatCompletionsUrl Authorization: Bearer access_token — openrouter zai kimi qwen opencode openai deepseek groq mistral xai perplexity together fireworks commandcode nvidia vercel-ai-gateway"]
+    RP2["anthropic-messages → messagesUrl headers x-api-key + anthropic-version — anthropic opencode-go"]
+    RP3["copilot → GitHub Copilot chat, OAuth device flow copilot-auth (login/oauth/access_token)"]
+    RP4["endpoint_variant (qwen payg/responses), proxy_url, proxy_api_key, proxy_rotation"]
+    RPE["per-model override chat vs responses — copilot-endpoint-preferences.json"]
+  end
+
+  ROUTE -- "openai-chat" --> RP1
+  ROUTE -- "anthropic-messages" --> RP2
+  ROUTE -- "copilot" --> RP3
+  ROUTE -- "varie" --> RP4
+  ROUTE -- "copilot pref endpoint" --> RPE
+
+  RP1 --> RESP["Upstream risponde (Anthropic-shaped)"]
+  RP2 --> RESP
+  RP3 --> RESP
+  RP4 --> RESP
+  RPE --> RESP
+
+  RESP --> AUG{"Augmentazione inline per projectSettings"}
+  AUG --> AUG1["LLMPROXY_METERING_INLINE: metering/token"]
+  AUG --> AUG2["LLMPROXY_INFERENCE_INFO_INLINE: provider+modello (default 1)"]
+  AUG --> AUG3["LLMPROXY_PROVIDER_CREDIT_INLINE: credito/costo"]
+  AUG --> AUG4["LLMPROXY_SHORT_ANSWER: risposta breve + istruzione di sistema"]
+
+  AUG1 --> METER{"LLMPROXY_MODE"}
+  AUG2 --> METER{"LLMPROXY_MODE"}
+  AUG3 --> METER{"LLMPROXY_MODE"}
+  AUG4 --> METER{"LLMPROXY_MODE"}
+
+  subgraph METSINK["SINK METERING"]
+    M0["Auth stats: LLMPROXY_LLM_STATS_API_KEY (mandatoria per inference Claude Code)"]
+    M1["platform: db-layer DBLAYER_URL + event-bus EVENTBUS_URL — Warning header se irraggiungibile"]
+    M2["standalone: MongoDB LLMPROXY_MONGODB_CONNECTION_STRING o JSONL"]
+  end
+  METER -- "stats/api key" --> M0
+
+  METER -- "platform" --> M1
+  METER -- "standalone" --> M2
+
+  subgraph OUTCONV["FORMAT OUTPUT"]
+    OUTC["Anthropic → OpenAI: anthropicResponseToOpenAI"]
+  end
+
+  METER -- "formato" --> OUT1{"Output format"}
+  OUT1 -- "richiesta OpenAI" --> OUTC
+  OUT1 -- "richiesta Anthropic/Copilot" --> BACK["Response al client con augmentation inline"]
+  OUTC --> BACK["Response al client con augmentation inline"]
+  M1 --> BACK
+  M2 --> BACK
+
+  BACK --> ERRYES{"Upstream error?"}
+  ERRYES -- "sì" --> SENDRID["notifyProviderError — LLMPROXY_SENDGRID_API_KEY / _FROM / _TO\nLLMPROXY_SENDGRID_TO_MESSAGE_TYPE filtra tipi: provider_error, auto_escalation,\nprovider_credit_exhausted, service_unreachable, service_recovered, service_update"]
+  ERRYES -- "no → 200 OK" --> DONE(["Done"])
+
+  %% ═══════════════════════════════════════════════════════════
+  %% LOGICA DI ROUTING — RIEPILOGO PRIORITÀ
+  %% ═══════════════════════════════════════════════════════════
+  subgraph RLOG["📐 LOGICA DI ROUTING — RIPILOGO"]
+    direction TB
+    R1["1️⃣ RISOLUZIONE MODELLO\nprojectSettings.configuredModel → body.model → provider.default_model\n→ resolveSupportedModel fallback → claude-sonnet-4.5"]
+    R2["2️⃣ INTENT ESCALATION\nLLMPROXY_INTENT_ESCALATION>0 → modelCodingScore + gap vs LLMPROXY_INTENT_ESCALATION_GAP\n→ eventuale override a escalationModel"]
+    R3["3️⃣ SELEZIONE PROVIDER\nprovider esplicito (local) → registry cache (scope) → tokenStore ordinato → default copilot"]
+    R4["4️⃣ SCOPE MATCH\nproject→project_id · client→client_id · agency→tenant · user→user_id · master:*\nrank SCOPE_PRIORITY 4/3/2/1/0"]
+    R5["5️⃣ REORDERING\nLLMPROXY_REORDERING={price,power,speed} ogni N minuti → setProviderOrder\n(price: cloudprice, power: coding_index, speed: probe latenza)\nelse ordine manuale llmproxy provider:order"]
+    R6["6️⃣ PROTOCOLLO UPSTREAM\nopenai-chat Bearer · anthropic-messages x-api-key \n· copilot device-flow OAuth · endpoint_variant/proxy/rotation"]
+    R7["7️⃣ AUGMENTAZIONE INLINE\nmetering · inference_info · provider_credit · short_answer"]
+    R8["8️⃣ SINK+FORMATO\nMODE platform db-layer/event-bus | standalone MongoDB/JSONL\noutput OpenAI↔Anthropic conversion"]
+  end
+
+  DONE -. "riepilogo" .-> RLOG

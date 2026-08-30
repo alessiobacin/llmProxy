@@ -2,10 +2,16 @@
 
 // Contratto metering delle richieste fallite (R3 QA residui):
 // 1. Un fallimento a LIVELLO PROVIDER (401/4xx/5xx dal provider o network error)
-//    produce SEMPRE un record metering con success:false nel sink.
-// 2. Un rifiuto PRE-PROXY (gate inbound LLMPROXY_API_KEY 401/503) NON produce
+//    produce SEMPRE un record metering con success:false nel sink; il record
+//    terminale (nessun altro provider/modello/proxy in grado di salvare) porta
+//    l'error_code dell'ULTIMO tentativo (AUTH_REQUIRED/HTTP_<status>/
+//    NETWORK_ERROR).
+// 2. Quando il loop dei provider termina SENZA alcun tentativo (tutti i provider
+//    saltati, es. richiesta immagine senza provider vision-capable), viene
+//    emesso un record success:false con error_code PROVIDER_FALLBACK_EXHAUSTED.
+// 3. Un rifiuto PRE-PROXY (gate inbound LLMPROXY_API_KEY 401/503) NON produce
 //    alcun record metering: la richiesta non raggiunge mai un provider.
-// 3. Nessun provider configurato (401 "Nessun provider autenticato") non produce
+// 4. Nessun provider configurato (401 "Nessun provider autenticato") non produce
 //    record: non è stato tentato alcun provider.
 
 const test = require("node:test");
@@ -121,7 +127,7 @@ test("network failure at provider level is metered with success:false", async ()
   });
 });
 
-test("all providers exhausted is metered once with success:false PROVIDER_FALLBACK_EXHAUSTED", async () => {
+test("all providers exhausted carries the last provider's HTTP error code", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-meting-exhausted-"));
   const tokenStore = makeTokenStore(tempRoot, [
     ["openai", {
@@ -156,10 +162,59 @@ test("all providers exhausted is metered once with success:false PROVIDER_FALLBA
 
     assert.equal(response.status, 503);
     const records = meteringSink.inspect();
-    // One record for the exhausted fallback (per-provider failure 503 is folded
-    // into the final record when no further provider/model can rescue it).
-    assert.ok(records.length >= 1, "exhausted fallback must produce metering");
-    assert.ok(records.some((r) => r.success === false), "all records must be failures");
+    assert.equal(records.length, 1, "exhausted fallback must produce exactly one metering record");
+    assert.equal(records[0].success, false, "record must be success:false");
+    // The terminal record carries the error of the LAST provider attempt
+    // (no other provider/model/proxy can rescue it); PROVIDER_FALLBACK_EXHAUSTED
+    // is reserved for the loop-without-any-attempt path (see next test).
+    assert.equal(records[0].error_code, "HTTP_503", "terminal record must carry the last attempt's error code");
+    assert.equal(records[0].provider, "openai");
+  });
+});
+
+test("all providers skipped (no attempt) is metered with PROVIDER_FALLBACK_EXHAUSTED", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-meting-fallback-exhausted-"));
+  // Single provider, vision disabled, image request: the provider loop skips it
+  // without any request attempt, so the loop falls through to the exhausted
+  // terminal record instead of the in-loop error path.
+  const tokenStore = makeTokenStore(tempRoot, [
+    ["kimi", {
+      access_token: "tok-imageno", token_type: "api_key", scope: "api_key",
+      provider: "kimi", auth_type: "api_key", default_model: "kimi-k2.5", vision: false,
+    }, "Kimi"],
+  ]);
+  const meteringSink = createNoopMeteringSink();
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    providerRegistry: createProviderRegistry({ filePath: path.join(tempRoot, "provider-registry.json") }),
+    meteringSink,
+    fetchFn: async () => {
+      throw new Error("fetch must never be called when every provider is skipped");
+    },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "kimi-k2.5",
+        stream: false,
+        max_tokens: 8,
+        messages: [{
+          role: "user",
+          content: [{ type: "image", source: { type: "base64", media_type: "image/png", data: "AAAA" } }],
+        }],
+      }),
+    });
+
+    assert.equal(response.status, 502);
+    const records = meteringSink.inspect();
+    assert.equal(records.length, 1, "exhausted-without-attempt must produce one metering record");
+    assert.equal(records[0].success, false, "record must be success:false");
+    assert.equal(records[0].error_code, "PROVIDER_FALLBACK_EXHAUSTED");
+    assert.equal(records[0].provider, null);
   });
 });
 

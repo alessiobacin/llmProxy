@@ -624,7 +624,8 @@ Returns raw metering records. Each record is an audit-ready snapshot of a single
 
 **Contratto di emissione sulle richieste fallite:**
 
-- Un fallimento a **livello provider** (HTTP 4xx/5xx dal provider, o errore di rete nel trasporto) produce **sempre** un record metering con `success: false` e `error_code` corrispondente (`AUTH_REQUIRED`, `HTTP_<status>`, `NETWORK_ERROR`); quando tutti i provider/modeli/tentativi falliscono viene emesso un record finale `success: false` con `error_code: PROVIDER_FALLBACK_EXHAUSTED`. `logs` e `GET /v1/llm/metering?success=false` riflettono questi record.
+- Un fallimento a **livello provider** (HTTP 4xx/5xx dal provider, o errore di rete nel trasporto) produce **sempre** un record metering con `success: false` e `error_code` corrispondente (`AUTH_REQUIRED`, `HTTP_<status>`, `NETWORK_ERROR`); quando nessun altro provider/modello/proxy può salvare la richiesta, il record terminale porta l'`error_code` dell'**ultimo tentativo** effettuato. `logs` e `GET /v1/llm/metering?success=false` riflettono questi record.
+- Se il loop dei provider termina **senza alcun tentativo** (es. richiesta con immagini e nessun provider vision-capable: tutti i provider vengono saltati), viene emesso un record `success: false` con `error_code: PROVIDER_FALLBACK_EXHAUSTED` — l'unico caso in cui quel codice compare.
 - Un rifiuto **pre-proxy** — richiesta respinta dal gate inbound `LLMPROXY_API_KEY` (401 `UNAUTHORIZED` / 503 `SERVICE_MISCONFIGURED`), dalla validazione del contesto hierarchy (`/v1/llm/messages`, 400), dal gate `LLMPROXY_LLM_STATS_API_KEY` mancante, o "nessun provider configurato" (401) — **non produce alcun record metering**: la richiesta non raggiunge alcun provider e non vi è alcun consumo da attribuire.
 
 **Query parameters** (all optional):

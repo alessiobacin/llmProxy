@@ -211,8 +211,14 @@ llmproxy provider:rename kimi "Kimi Fallback"
 Puoi registrare proxy URL per usarli in rotazione quando `--proxy` viene passato senza valore:
 
 ```bash
-# Aggiungi un proxy
+# Aggiungi un proxy (l'id del proxy è il dominio/hostname dell'URL)
 llmproxy proxy:add http://user:pass@proxy.esempio.com:10001
+
+# --name è solo un'etichetta leggibile, non l'id: per rimuovere/riordinare usa il dominio
+llmproxy proxy:add http://user:pass@proxy.esempio.com:10001 --name "Proxy primario"
+
+# Riaggiungere lo stesso dominio sovrascrive l'URL esistente (upsert voluto)
+llmproxy proxy:add http://user:pass@proxy.esempio.com:9999 --name "Proxy primario"
 
 # Elenca proxy registrati
 llmproxy proxy:list
@@ -221,10 +227,10 @@ llmproxy proxy:list
 llmproxy proxy:test
 
 # Riordina proxy (primo = prioritario in failover)
-llmproxy proxy:reorder proxy-a.com proxy-b.com
+llmproxy proxy:reorder proxy.esempio.com proxy-b.com
 
-# Rimuovi un proxy
-llmproxy proxy:remove proxy-a.com
+# Rimuovi un proxy (per ID = dominio)
+llmproxy proxy:remove proxy.esempio.com
 ```
 
 **Usare la rotazione in un provider:**

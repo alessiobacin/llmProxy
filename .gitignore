@@ -15,3 +15,7 @@ graphify-out/
 memory/
 
 test_output.txt
+.worktrees/
+.pi/
+*.db
+*.db-journal

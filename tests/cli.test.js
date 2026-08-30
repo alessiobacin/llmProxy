@@ -4787,6 +4787,27 @@ test("stats:reset truncates metering records without extra flags", async () => {
   assert.equal(fs.readFileSync(path.join(runtimeRoot, "logs", "metering.jsonl"), "utf8"), "");
 });
 
+test("stats:reset rejects unknown flags like --hard without truncating metering", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-stats-reset-hard-reject-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  fs.mkdirSync(path.join(runtimeRoot, "logs"), { recursive: true });
+  const originalLine = JSON.stringify({ event: "request_in", model: "gpt-x" });
+  fs.writeFileSync(path.join(runtimeRoot, "logs", "metering.jsonl"), `${originalLine}\n`, "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "stats:reset", "--hard"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /flag non supportat|non supportat/i);
+  assert.match(stderr.toString(), /--hard/);
+  assert.doesNotMatch(stdout.toString(), /Statistiche azzerate/);
+  assert.equal(fs.readFileSync(path.join(runtimeRoot, "logs", "metering.jsonl"), "utf8"), `${originalLine}\n`, "metering must remain untouched");
+});
+
 test("proxy:add help documents that the id is the URL hostname and --name is only a label", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-proxy-add-"));
   const stdout = createWritableBuffer();

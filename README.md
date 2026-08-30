@@ -622,6 +622,12 @@ Returns raw metering records. Each record is an audit-ready snapshot of a single
 | `caller_module` / `operation_id` / `custom_dimensions` | Metering context dimensions |
 | `agent` / `mansione` / `task_id` | Agent-level dimensions (from `custom_dimensions`) |
 
+**Contratto di emissione sulle richieste fallite:**
+
+- Un fallimento a **livello provider** (HTTP 4xx/5xx dal provider, o errore di rete nel trasporto) produce **sempre** un record metering con `success: false` e `error_code` corrispondente (`AUTH_REQUIRED`, `HTTP_<status>`, `NETWORK_ERROR`); quando nessun altro provider/modello/proxy può salvare la richiesta, il record terminale porta l'`error_code` dell'**ultimo tentativo** effettuato. `logs` e `GET /v1/llm/metering?success=false` riflettono questi record.
+- Se il loop dei provider termina **senza alcun tentativo** (es. richiesta con immagini e nessun provider vision-capable: tutti i provider vengono saltati), viene emesso un record `success: false` con `error_code: PROVIDER_FALLBACK_EXHAUSTED` — l'unico caso in cui quel codice compare.
+- Un rifiuto **pre-proxy** — richiesta respinta dal gate inbound `LLMPROXY_API_KEY` (401 `UNAUTHORIZED` / 503 `SERVICE_MISCONFIGURED`), dalla validazione del contesto hierarchy (`/v1/llm/messages`, 400), dal gate `LLMPROXY_LLM_STATS_API_KEY` mancante, o "nessun provider configurato" (401) — **non produce alcun record metering**: la richiesta non raggiunge alcun provider e non vi è alcun consumo da attribuire.
+
 **Query parameters** (all optional):
 
 | Parameter | Type | Description |
@@ -861,6 +867,8 @@ Operational notes:
 }
 ```
 
+- `DELETE /api/providers/{id}` returns `200` on success and `404` (CLI-style payload, `success: false`, `Provider non trovato`) when the provider does not exist.
+
 - `POST /api/providers/{id}/api-key` sets an API-key credential for a known provider (non-Copilot):
 
 ```json
@@ -1044,6 +1052,17 @@ Use it when you want a quick operator view of:
 - per-provider usage
 - per-model usage
 
+### `llmproxy stats:reset`
+
+Resets all usage statistics (truncates the metering records).
+
+```bash
+llmproxy stats:reset
+```
+
+- The command accepts **no flags**: any flag (including the legacy `--hard`) is rejected with exit code `1` and the message `Flag non supportato per stats:reset: --<flag>`, and the metering file is left untouched.
+- Without flags, it truncates the metering records and prints `Statistiche azzerate: metering.` (exit `0`); if no statistics file exists it reports `Nessun file di statistiche trovato` (exit `0`).
+
 ### `llmproxy provider:add <id> [--name <name>] [--api-key <key>] [--model <model>] [--vision <true|false>] [--plan <plan>]`
 
 Adds a provider identified by `<id>`. Behaviour depends on the provider type:
@@ -1138,6 +1157,9 @@ Updates a provider display name without changing its identifier.
 ### `llmproxy provider:remove <id>`
 
 Removes the specified provider from the local registry.
+
+- Removing a provider that does not exist fails with exit code `1` and `Provider non trovato: <id>`.
+- The REST alias `DELETE /api/providers/{id}` returns `404` (CLI-style payload with `success: false`) for an unknown provider — aligned with `DELETE /v1/llm/providers/{id}` — and `200` on success.
 
 ### `llmproxy logs`
 

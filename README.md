@@ -211,8 +211,14 @@ llmproxy provider:rename kimi "Kimi Fallback"
 Puoi registrare proxy URL per usarli in rotazione quando `--proxy` viene passato senza valore:
 
 ```bash
-# Aggiungi un proxy
+# Aggiungi un proxy (l'id del proxy è il dominio/hostname dell'URL)
 llmproxy proxy:add http://user:pass@proxy.esempio.com:10001
+
+# --name è solo un'etichetta leggibile, non l'id: per rimuovere/riordinare usa il dominio
+llmproxy proxy:add http://user:pass@proxy.esempio.com:10001 --name "Proxy primario"
+
+# Riaggiungere lo stesso dominio sovrascrive l'URL esistente (upsert voluto)
+llmproxy proxy:add http://user:pass@proxy.esempio.com:9999 --name "Proxy primario"
 
 # Elenca proxy registrati
 llmproxy proxy:list
@@ -221,10 +227,10 @@ llmproxy proxy:list
 llmproxy proxy:test
 
 # Riordina proxy (primo = prioritario in failover)
-llmproxy proxy:reorder proxy-a.com proxy-b.com
+llmproxy proxy:reorder proxy.esempio.com proxy-b.com
 
-# Rimuovi un proxy
-llmproxy proxy:remove proxy-a.com
+# Rimuovi un proxy (per ID = dominio)
+llmproxy proxy:remove proxy.esempio.com
 ```
 
 **Usare la rotazione in un provider:**
@@ -741,6 +747,20 @@ GET /auth/status
 POST /auth/logout
 ```
 
+### Provider registry (`/v1/llm/providers`)
+
+Platform-facing provider registry, separate from the local `copilot-token.json` credential store. It is persisted in `provider-registry.json` inside the data root and is used by platform-mode routing; entries are not automatically mirrored to the CLI provider list.
+
+```http
+GET    /v1/llm/providers
+POST   /v1/llm/providers
+DELETE /v1/llm/providers/{id}
+```
+
+- `GET /v1/llm/providers` returns `{ entries: [...] }`, optionally filtered by `scope_type`, `scope_id` or `provider` query parameters.
+- `POST /v1/llm/providers` upserts an entry; in platform mode the HierarchyContext is required (`400 HIERARCHY_CONTEXT_REQUIRED` if missing) and tenant ownership is enforced (`403 AUTH_REQUIRED` if not admin/owner).
+- `DELETE /v1/llm/providers/{id}` removes an entry and returns `404 NOT_FOUND` when it does not exist.
+
 ### Runtime API (CLI via REST)
 
 The CLI progressively uses this REST control plane as its primary path when the local service is reachable. Bootstrap commands that may run before the service exists (`run`, `service:start`, install flows) keep a local fallback.
@@ -759,6 +779,7 @@ GET  /api/service/status
 POST /api/service/start
 POST /api/service/stop
 POST /api/service/restart
+POST /api/service/runtime
 
 GET  /api/logs
 GET  /api/logs/stream
@@ -766,13 +787,20 @@ GET  /api/models
 POST /api/model/set
 POST /api/test
 POST /api/claude/setup
+POST /api/pi/setup
+POST /api/vscode/chat/setup
+POST /api/vscode/claude/setup
 
 GET    /api/providers
+GET    /api/providers/available
 GET    /api/providers/status
+GET    /api/providers/usage
 POST   /api/providers/{id}/login
 POST   /api/providers/{id}/api-key
 POST   /api/providers/order
+POST   /api/providers/reorder
 POST   /api/providers/{id}/rename
+PATCH  /api/providers/{id}
 DELETE /api/providers/{id}
 
 GET    /api/stats
@@ -789,8 +817,12 @@ POST   /api/uninstall
 Operational notes:
 
 - `GET /api/logs` is a snapshot (static tail).
+- `GET /api/logs?follow=true` is **not supported**: it returns `400` with an explicit message. Use `GET /api/logs/stream` (SSE) for live tailing.
 - `GET /api/logs/stream` is live streaming via Server-Sent Events (SSE).
 - optional `intervalMs` query on `/api/logs/stream` (minimum 200ms).
+- `GET /api/config` and `GET /api/config/{key}` require a resolvable project path: pass `projectPath` (query/body) or the `x-project-path` header, otherwise the API returns `403 PROJECT_PATH_NOT_ALLOWED`.
+- Config keys are **scope-bound**: reading or writing a service-scope key (e.g. `LLMPROXY_ENV`) without `scope=service` fails with `400`. The same applies to `config:get <key>` on the CLI for service-scope keys: pass `--scope service`.
+- `POST /api/config/{key}` with a `restartRequired` key returns `"restarting": true` and schedules a service restart (200 ms); `DBLAYER_URL`, `EVENTBUS_URL`, `LLMPROXY_SENDGRID_*` and `LLMPROXY_REORDERING` are hot-reloadable and reconfigure sinks without restart.
 - `POST /api/claude/setup` accepts JSON body:
 
 ```json
@@ -817,6 +849,18 @@ Operational notes:
 }
 ```
 
+- `PATCH /api/providers/{id}` updates provider metadata and accepts an explicit `patch` envelope — flat fields are rejected with `400`:
+
+```json
+{
+  "patch": {
+    "vision": false,
+    "free_model": true,
+    "name": "My renamed provider"
+  }
+}
+```
+
 - `POST /api/providers/{id}/api-key` sets an API-key credential for a known provider (non-Copilot):
 
 ```json
@@ -825,6 +869,8 @@ Operational notes:
   "name": "My OpenRouter key"
 }
 ```
+
+- Inbound API-key gate: when `LLMPROXY_API_KEY` is configured (or in production), all endpoints except `/health`, `/auth/logout`, `/v1/llm/health`, `/v1/models` require `Authorization: Bearer <key>` or `x-api-key: <key>`.
 
 ### Anthropic-compatible proxy
 
@@ -874,6 +920,7 @@ x-project-path: /absolute/path/to/project
 | `llmproxy service:start` | `POST /api/service/start` |
 | `llmproxy service:stop` | `POST /api/service/stop` |
 | `llmproxy service:restart` | `POST /api/service/restart` |
+| `llmproxy service:runtime <runtime>` | `POST /api/service/runtime` |
 | `llmproxy logs` | `GET /api/logs` |
 | `llmproxy logs --follow` | `GET /api/logs/stream` |
 | `llmproxy models:list` | `GET /api/models` |
@@ -881,14 +928,19 @@ x-project-path: /absolute/path/to/project
 | `llmproxy test` | `POST /api/test` |
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
 | `llmproxy pi:setup` | `POST /api/pi/setup` |
+| `llmproxy vscode-chat:setup` | `POST /api/vscode/chat/setup` |
+| `llmproxy vscode-claude:setup` | `POST /api/vscode/claude/setup` |
 | `llmproxy provider:list` | `GET /api/providers` |
+| `llmproxy provider:available` | `GET /api/providers/available` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
+| `llmproxy provider:usage` | `GET /api/providers/usage` |
 | `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
 | `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
 | `llmproxy provider:reorder` | `POST /api/providers/reorder` |
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
+| `llmproxy provider:update <id> [--vision <t|f>] [--free-model <t|f>] [--name <n>]` | `PATCH /api/providers/{id}` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
 | `llmproxy config:list [--scope <project\|global\|service>]` | `GET /api/config` |
@@ -1171,57 +1223,22 @@ The command writes project-level files only, never touching `~/.pi/` global conf
 
 These commands expose the full supported configuration surface both from CLI and REST.
 
-- `--scope project` writes project variables into the current folder's `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL`, `LLMPROXY_PRICE_PERFORMANCE_ROUTING`, and `LLMPROXY_SHORT_ANSWER`.
+- `--scope project` writes project variables into the current folder's `.claude/settings.json`, such as `ANTHROPIC_DEFAULT_MODEL` and `LLMPROXY_SHORT_ANSWER`.
 - `--scope global` writes project-scope defaults into `~/.claude/settings.json`, so they become user-level fallbacks for every Claude project on the same machine.
 - `--scope service` writes service variables into the persistent llmProxy runtime config, such as `PORT`, `LLMPROXY_MODE`, and `LLMPROXY_SECRET`.
 - Effective precedence is `project` > `global` > `service`.
 - Scope mismatches are rejected both by CLI and REST. For example, `PORT` cannot be written with `--scope project`, and `LLMPROXY_MODE` cannot be written with `--scope global`.
 
-### Price/Performance Routing
+### Price/Performance Routing (legacy)
 
-`LLMPROXY_PRICE_PERFORMANCE_ROUTING` is the project-scoped routing control that remains available after the smart router removal.
+`LLMPROXY_PRICE_PERFORMANCE_ROUTING` and `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` are **legacy variables**: they were removed from the configuration catalog and are no longer read by the runtime. `llmproxy config:set` rejects them with `Variabile non supportata`, and existing values are stripped from project settings.
 
-#### How it works
+Use `LLMPROXY_REORDERING` instead (service scope, hot-reloadable):
 
-1. `llmProxy` starts from the configured provider order.
-2. If `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`, it reorders the first attempt to prefer:
-   - free providers first (`free_model=true`)
-   - otherwise the lowest estimated cost
-3. If more than one candidate has the same effective cost, `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` decides whether to prefer:
-   - `power`
-   - `speed`
+- `LLMPROXY_REORDERING=price` — free/lowest-cost providers first before the first attempt
+- `LLMPROXY_REORDERING=price-power` (or `price-speed`) — adds the tie-breaking preference for equal-cost candidates
 
-#### Configuration
-
-Add these variables to your project's `.claude/settings.json`:
-
-```json
-{
-  "model": "llmProxy",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:5045",
-    "API_TIMEOUT_MS": "3000000",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
-    "LLMPROXY_PRICE_PERFORMANCE_ROUTING": "1",
-    "LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER": "power"
-  }
-}
-```
-
-**Environment variables:**
-
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `LLMPROXY_PRICE_PERFORMANCE_ROUTING` | `0`, `1`, `false`, `true` | disabled | Enables cost-aware provider reordering before the first attempt |
-| `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` | `power`, `speed` | `power` | Chooses whether equal-cost candidates prefer stronger or faster models |
-
-#### Example behavior
-
-With providers `openai (gpt-5, free_model=false)`, `opencode (deepseek-v4-flash-free, free_model=true)`, and `nvidia (z-ai/glm-5.2, free_model=true)`:
-
-- with `LLMPROXY_PRICE_PERFORMANCE_ROUTING=0`, the manual provider order is used
-- with `LLMPROXY_PRICE_PERFORMANCE_ROUTING=1`, free providers are moved ahead of paid ones
-- with `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER=speed`, the faster free provider wins among the free candidates
+See [LLMPROXY_REORDERING](#llmproxy_reordering) for the full configuration.
 
 ### `llmproxy model:set <model>`
 
@@ -1390,7 +1407,7 @@ These variables are managed with `llmproxy config:*`. They take effect immediate
 llmproxy config:list                                      # lists effective project + global + service values
 llmproxy config:list --scope global                       # lists only ~/.claude/settings.json managed defaults
 llmproxy config:get ANTHROPIC_BASE_URL                    # reads a variable from its effective scope
-llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --scope project
+llmproxy config:set LLMPROXY_SHORT_ANSWER 1 --scope project
 llmproxy config:set LLMPROXY_LLM_STATS_API_KEY your-free-key --scope global
 llmproxy config:unset ANTHROPIC_DEFAULT_MODEL --scope project
 ```
@@ -1408,8 +1425,6 @@ llmproxy config:unset ANTHROPIC_DEFAULT_MODEL --scope project
 | `LLMPROXY_SENDGRID_TO_EMAIL` | unset | email | recipient address for project-scoped email notifications |
 | `LLMPROXY_SENDGRID_TO_MESSAGE_TYPE` | `service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update` | comma-separated list, `all`, `*` | which notification categories are enabled for the project |
 | `LLMPROXY_SHORT_ANSWER` | unset (`off`) | `0`, `1` | if `1`, enables short answer mode |
-| `LLMPROXY_PRICE_PERFORMANCE_ROUTING` | unset (`off`) | `0`, `1`, `false`, `true` | enables free-first / lower-cost provider reordering |
-| `LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER` | `power` | `power`, `speed` | tie-breaker used when multiple candidates have the same effective cost |
 
 Example project notification block:
 
@@ -1429,14 +1444,11 @@ Example project notification block:
 #### Esempi pratici — project scope
 
 ```bash
-# Attivare il routing price/performance (free provider first)
-llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_ROUTING 1 --scope project
-
-# Preferire la velocità come tiebreaker
-llmproxy config:set LLMPROXY_PRICE_PERFORMANCE_TIEBREAKER speed --scope project
-
 # Abilitare risposte brevi per un progetto
 llmproxy config:set LLMPROXY_SHORT_ANSWER 1 --scope project
+
+# Abilitare le statistiche metering inline nelle risposte
+llmproxy config:set LLMPROXY_METERING_INLINE 1 --scope project
 
 # Impostare un modello predefinito con catena di fallback
 llmproxy config:set ANTHROPIC_DEFAULT_MODEL "copilot:gpt-5.4,kimi:kimi-k2.5" --scope project
@@ -1450,7 +1462,7 @@ llmproxy config:set LLMPROXY_SENDGRID_TO_EMAIL ops@example.com --scope project
 llmproxy config:get LLMPROXY_SHORT_ANSWER --scope project
 
 # Rimuovere un'impostazione
-llmproxy config:unset LLMPROXY_PRICE_PERFORMANCE_ROUTING --scope project
+llmproxy config:unset LLMPROXY_SHORT_ANSWER --scope project
 ```
 
 ### Service-Scope (.env — richiede restart)
@@ -1482,6 +1494,7 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `DBLAYER_URL` | auto | full URL | optional explicit db-layer override. If absent, llmProxy derives `5001` dev, `6001` staging, `7001` production. The port is automatically corrected by `resolveServiceUrlForProfile` to match the runtime profile port prefix (5/6/7), so a dev URL with port `6001` would be overwritten to `5001` when running in development profile |
 | `EVENTBUS_URL` | auto | full URL | optional explicit event-bus override. If absent, llmProxy derives `5048` dev, `6048` staging, `7048` production. Same automatic port correction as `DBLAYER_URL`: port must match the active runtime profile prefix |
 | `LLMPROXY_SECRET` | unset | arbitrary string | optional HMAC secret for internal token signing |
+| `LLMPROXY_API_KEY` | unset | arbitrary string | inbound API-key gate: when set (or in production), requests must present `Authorization: Bearer <key>` or `x-api-key: <key>`, except public paths `/health`, `/auth/logout`, `/v1/llm/health`, `/v1/models`. In production a missing key returns `503 SERVICE_MISCONFIGURED` |
 | `LLMPROXY_SERVICE_RUNTIME` | auto | `native`, `docker` | persistent service runtime: `native` (LaunchAgent/systemd) or `docker` (Docker Compose) |
 | `LLMPROXY_DOCKER_COMPOSE_FILE` | auto | file path | Docker Compose file for docker runtime |
 | `LLMPROXY_DOCKER_SERVICE` | auto | service name | Docker service name in compose file |

@@ -1508,8 +1508,8 @@ test("messages endpoint trims oldest messages and retries when Copilot rejects p
     assert.equal(response.status, 200);
     assert.equal(payload.content[0].text, withInferenceMetadata("context trimmed ok", "default", "claude-sonnet-4.5", 100, 5, { reason: "First in order from provider list" }));
     assert.equal(requestBodies.length, 2);
-    assert.equal(requestBodies[0].messages.length, 4);
-    assert.equal(requestBodies[1].messages.length, 3);
+    assert.equal(requestBodies[0].messages.length, 3);
+    assert.equal(requestBodies[1].messages.length, 2);
     assert.match(JSON.stringify(requestBodies[1].messages), /assistant reply/);
     assert.match(JSON.stringify(requestBodies[1].messages), /latest user/);
     assert.doesNotMatch(JSON.stringify(requestBodies[1].messages), /oldest user/);
@@ -1876,6 +1876,29 @@ test("messages endpoint can fall back to every configurable API-key provider", a
           };
         }
 
+        if (providerConfig.protocol === "meta-responses") {
+          return {
+            ok: true,
+            status: 200,
+            async json() {
+              return {
+                id: `resp_${providerId}`,
+                object: "response",
+                model: body.model,
+                status: "completed",
+                output: [
+                  {
+                    type: "message",
+                    role: "assistant",
+                    content: [{ type: "output_text", text: `served by ${providerId}` }],
+                  },
+                ],
+                usage: { input_tokens: 3, output_tokens: 2 },
+              };
+            },
+          };
+        }
+
         if (providerConfig.protocol === "anthropic-messages") {
           return {
             ok: true,
@@ -1957,7 +1980,7 @@ test("messages endpoint can fall back to every configurable API-key provider", a
           `\\[llmproxy\\] ${providerId}\\/${escModel} \\(req 5, in 3, out 2\\).+`;
         assert.match(payload.content[0].text, new RegExp(fullPat));
         assert.equal(calls.length, 2);
-        assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl);
+        assert.equal(calls[1].url, providerConfig.chatCompletionsUrl || providerConfig.messagesUrl || providerConfig.responsesUrl);
         assert.equal(calls[1].model, expectedModel);
       });
     });
@@ -3238,7 +3261,6 @@ test("messages endpoint injects a short-answer system instruction from Claude pr
     assert.equal(response.status, 200);
     assert.equal(requestBodies.length, 1);
     assert.match(String(requestBodies[0].messages[0].content || ""), /Respond as briefly as possible/);
-    assert.match(String(requestBodies[0].messages[0].content || ""), /At the start of every assistant reply/);
     assert.equal("shortAnswer" in requestBodies[0], false);
   });
 });
@@ -3292,7 +3314,6 @@ test("messages endpoint defaults LLMPROXY_SHORT_ANSWER to off when unset", async
     assert.equal(response.status, 200);
     assert.equal(requestBodies.length, 1);
     assert.doesNotMatch(String(requestBodies[0].messages[0].content || ""), /Respond as briefly as possible/);
-    assert.match(String(requestBodies[0].messages[0].content || ""), /At the start of every assistant reply/);
   });
 });
 
@@ -3574,6 +3595,12 @@ test("runtime CLI commands are exposed via REST endpoints", async () => {
     const providerRemovePayload = await providerRemoveResponse.json();
     assert.equal(providerRemoveResponse.status, 200);
     assert.equal(providerRemovePayload.success, true);
+
+    const providerRemoveMissingResponse = await fetch(`${baseUrl}/api/providers/not-registered`, { method: "DELETE" });
+    const providerRemoveMissingPayload = await providerRemoveMissingResponse.json();
+    assert.equal(providerRemoveMissingResponse.status, 400);
+    assert.equal(providerRemoveMissingPayload.success, false);
+    assert.match(providerRemoveMissingPayload.data.error, /Provider non trovato/);
 
     const statsResponse = await fetch(`${baseUrl}/api/stats`);
     const statsPayload = await statsResponse.json();

@@ -460,6 +460,20 @@ GET /auth/status
 POST /auth/logout
 ```
 
+### Registry provider (`/v1/llm/providers`)
+
+Registry dei provider lato piattaforma, separato dallo store locale delle credenziali `copilot-token.json`. Viene persistito in `provider-registry.json` dentro il data root ed e` usato dal routing in platform mode; le entry non vengono rispecchiate automaticamente nella lista provider della CLI.
+
+```http
+GET    /v1/llm/providers
+POST   /v1/llm/providers
+DELETE /v1/llm/providers/{id}
+```
+
+- `GET /v1/llm/providers` restituisce `{ entries: [...] }`, filtrato opzionalmente dai parametri `scope_type`, `scope_id` o `provider`.
+- `POST /v1/llm/providers` fa upsert di una entry; in platform mode e` richiesta la HierarchyContext (`400 HIERARCHY_CONTEXT_REQUIRED` se assente) e viene applicata la proprieta` tenant (`403 AUTH_REQUIRED` se non si e` admin/owner).
+- `DELETE /v1/llm/providers/{id}` rimuove una entry e risponde `404 NOT_FOUND` quando non esiste.
+
 ### API runtime (CLI via REST)
 
 ```http
@@ -467,6 +481,7 @@ GET  /api/version
 GET  /api/help
 GET  /api/help?command=status
 GET  /api/setup
+GET  /api/release-notes
 
 POST /api/auth/login
 POST /api/auth/logout
@@ -475,27 +490,50 @@ GET  /api/service/status
 POST /api/service/start
 POST /api/service/stop
 POST /api/service/restart
+POST /api/service/runtime
 
 GET  /api/logs
 GET  /api/logs/stream
 GET  /api/models
+POST /api/model/set
 POST /api/test
 POST /api/claude/setup
+POST /api/pi/setup
+POST /api/vscode/chat/setup
+POST /api/vscode/claude/setup
 
 GET    /api/providers
+GET    /api/providers/available
 GET    /api/providers/status
+GET    /api/providers/usage
 POST   /api/providers/{id}/login
 POST   /api/providers/{id}/api-key
 POST   /api/providers/order
+POST   /api/providers/reorder
 POST   /api/providers/{id}/rename
+PATCH  /api/providers/{id}
 DELETE /api/providers/{id}
+
+GET    /api/stats
+
+GET    /api/config
+GET    /api/config/{key}
+POST   /api/config/{key}
+DELETE /api/config/{key}
+
+POST   /api/update
+POST   /api/uninstall
 ```
 
 Note operative:
 
 - `GET /api/logs` e` uno snapshot (tail statico).
+- `GET /api/logs?follow=true` **non e` supportato**: risponde `400` con un messaggio esplicito. Per il tail live usa `GET /api/logs/stream` (SSE).
 - `GET /api/logs/stream` e` streaming live via Server-Sent Events (SSE).
 - query opzionale `intervalMs` su `/api/logs/stream` (minimo 200ms).
+- `GET /api/config` e `GET /api/config/{key}` richiedono un project path risolvibile: passa `projectPath` (query/body) o l'header `x-project-path`, altrimenti l'API risponde `403 PROJECT_PATH_NOT_ALLOWED`.
+- Le chiavi di configurazione sono **scope-bound**: leggere o scrivere una chiave service-scope (es. `LLMPROXY_ENV`) senza `scope=service` fallisce con `400`. Vale anche per `config:get <key>` da CLI: passa `--scope service`.
+- `POST /api/config/{key}` con una chiave `restartRequired` risponde `"restarting": true` e pianifica un riavvio del servizio (200 ms); `DBLAYER_URL`, `EVENTBUS_URL`, `LLMPROXY_SENDGRID_*` e `LLMPROXY_REORDERING` sono hot-reloadable e riconfigurano i sink senza riavvio.
 - `POST /api/claude/setup` accetta body JSON con:
 
 ```json
@@ -530,6 +568,20 @@ Note operative:
   "name": "La mia chiave OpenRouter"
 }
 ```
+
+- `PATCH /api/providers/{id}` aggiorna i metadati del provider e richiede un envelope `patch` esplicito — i campi piatti vengono rifiutati con `400`:
+
+```json
+{
+  "patch": {
+    "vision": false,
+    "free_model": true,
+    "name": "Il mio provider rinominato"
+  }
+}
+```
+
+- Gate API-key in ingresso: quando `LLMPROXY_API_KEY` e` configurata (o in produzione), tutti gli endpoint tranne `/health`, `/auth/logout`, `/v1/llm/health`, `/v1/models` richiedono `Authorization: Bearer <key>` oppure `x-api-key: <key>`.
 
 ### Proxy Anthropic-compatible
 
@@ -586,13 +638,20 @@ x-project-path: /assoluto/percorso/del/progetto
 | `llmproxy model:set <model>` | `POST /api/model/set` |
 | `llmproxy test` | `POST /api/test` |
 | `llmproxy claude:setup --model <n>` | `POST /api/claude/setup` |
+| `llmproxy pi:setup` | `POST /api/pi/setup` |
+| `llmproxy vscode-chat:setup` | `POST /api/vscode/chat/setup` |
+| `llmproxy vscode-claude:setup` | `POST /api/vscode/claude/setup` |
 | `llmproxy provider:list` | `GET /api/providers` |
+| `llmproxy provider:available` | `GET /api/providers/available` |
 | `llmproxy provider:status` | `GET /api/providers/status` |
+| `llmproxy provider:usage` | `GET /api/providers/usage` |
 | `llmproxy provider:add <id> [--name <n>] [--vision <t|f>]` | `POST /api/providers/{id}/login` |
 | `llmproxy provider:add <id> --api-key <key> --vision <t|f>` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:key <id> --api-key <key> [--vision <t|f>]` | `POST /api/providers/{id}/api-key` |
 | `llmproxy provider:order <id> <position>` | `POST /api/providers/order` |
+| `llmproxy provider:reorder` | `POST /api/providers/reorder` |
 | `llmproxy provider:rename <id> <name>` | `POST /api/providers/{id}/rename` |
+| `llmproxy provider:update <id> [--vision <t|f>] [--free-model <t|f>] [--name <n>]` | `PATCH /api/providers/{id}` |
 | `llmproxy provider:remove <id>` | `DELETE /api/providers/{id}` |
 | `llmproxy stats` | `GET /api/stats` |
 | `llmproxy config:list [--scope <project\|global\|service>]` | `GET /api/config` |
@@ -907,7 +966,7 @@ Percorso esplicito in italiano per l'installazione persistente.
 Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
 
 ```bash
-ppnpm run install:persistent-it
+pnpm run install:persistent-it
 ```
 
 Se la CLI e` gia` installata globalmente, puoi usare:
@@ -927,7 +986,7 @@ Percorso esplicito in inglese per l'installazione persistente.
 Se stai lavorando dal checkout locale e non hai ancora `llmproxy` disponibile nel `PATH`, esegui:
 
 ```bash
-ppnpm run install:persistent-en
+pnpm run install:persistent-en
 ```
 
 Oppure:
@@ -1011,7 +1070,6 @@ All'interno del data root vengono creati:
 - `copilot-models.json`
 - `copilot-endpoints.json`
 - `provider-registry.json`
-- `smart-router.json`
 - `logs/service.out.log`
 - `logs/service.err.log`
 - `logs/requests-YYYY-MM-DD.jsonl`
@@ -1095,6 +1153,7 @@ Possono comunque essere sovrascritte anche nel campo `env` di `.claude/settings.
 | `DBLAYER_URL` | auto | URL completo | override esplicito opzionale del db-layer. Se assente, llmProxy deriva `5001` dev, `6001` staging, `7001` production |
 | `EVENTBUS_URL` | auto | URL completo | override esplicito opzionale dell'event-bus. Se assente, llmProxy deriva `5048` dev, `6048` staging, `7048` production |
 | `LLMPROXY_SECRET` | unset | stringa arbitraria | secret HMAC opzionale per la firma di token interni |
+| `LLMPROXY_API_KEY` | unset | stringa arbitraria | gate API-key in ingresso: se impostata (o in produzione), le richieste devono presentare `Authorization: Bearer <key>` o `x-api-key: <key>`, tranne i path pubblici `/health`, `/auth/logout`, `/v1/llm/health`, `/v1/models`. In produzione una chiave mancante risponde `503 SERVICE_MISCONFIGURED` |
 | `LLMPROXY_SERVICE_RUNTIME` | auto | `native`, `docker` | runtime del servizio persistente: `native` (LaunchAgent/systemd) o `docker` (Docker Compose) |
 | `LLMPROXY_DOCKER_COMPOSE_FILE` | auto | percorso file | file Docker Compose per il runtime docker |
 | `LLMPROXY_DOCKER_SERVICE` | auto | nome servizio | nome del servizio docker nel compose file |
@@ -1128,7 +1187,7 @@ Questo significa:
 - non richiede PM2
 - non parte prima del login dell'utente
 
-Se usi `ppnpm run install:persistent`, il comando installa prima la CLI globalmente e poi registra lo stesso `LaunchAgent`, quindi il riavvio continua a funzionare anche dopo reboot.
+Se usi `pnpm run install:persistent`, il comando installa prima la CLI globalmente e poi registra lo stesso `LaunchAgent`, quindi il riavvio continua a funzionare anche dopo reboot.
 
 ### Linux
 

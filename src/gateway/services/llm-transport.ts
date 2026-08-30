@@ -275,10 +275,15 @@ function resolveProviderSelection({
           return aPos - bPos;
         });
       }
-      const first = validProviders[0]!;
       return {
         provider: provider && provider !== "auto" ? provider : "auto",
-        defaultModel: requestedModel && requestedModel.trim() ? requestedModel.trim() : (first.default_model || null),
+        // Deliberately no top-level defaultModel here: when the caller did not
+        // ask for a specific model, pinning the FIRST provider's default model
+        // onto the whole request (app.js modelOverride) would force every
+        // fallback provider to try that model before its own default. The
+        // per-provider default_model in providerCandidates is what the retry
+        // loop uses.
+        defaultModel: requestedModel && requestedModel.trim() ? requestedModel.trim() : null,
         source: "token-store",
         providerCandidates: validProviders.map((p) => ({
           id: p.id || p.provider || "unknown",

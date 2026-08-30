@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: llmProxy API
-  version: 0.2.2
+  version: 0.3.119
   description: |
     Deterministic LLM transport tool (architecture v11, tool #45).
 
@@ -306,6 +306,216 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+  /api/version:
+    get:
+      tags: [control-plane]
+      summary: llmProxy version.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/help:
+    get:
+      tags: [control-plane]
+      summary: CLI help text, optionally for one command.
+      parameters:
+        - in: query
+          name: command
+          schema: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/setup:
+    get:
+      tags: [control-plane]
+      summary: Prepare runtime directories and show the service manager.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/auth/login:
+    post:
+      tags: [control-plane]
+      summary: Legacy login alias for the GitHub Copilot device flow.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/auth/logout:
+    post:
+      tags: [control-plane]
+      summary: Remove the Copilot token and provider registry.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/service/status:
+    get:
+      tags: [control-plane]
+      summary: Show service manager, runtime and active state.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/service/start:
+    post:
+      tags: [control-plane]
+      summary: Install and start the persistent service.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/service/stop:
+    post:
+      tags: [control-plane]
+      summary: Stop the persistent service.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/service/restart:
+    post:
+      tags: [control-plane]
+      summary: Restart the persistent service.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/logs:
+    get:
+      tags: [control-plane]
+      summary: Snapshot of the service logs (static tail).
+      parameters:
+        - in: query
+          name: follow
+          schema: {type: string, enum: ["true"]}
+          description: Not supported; when true the endpoint returns 400 with an explicit message. Use /api/logs/stream (SSE) for live tailing.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+        "400":
+          description: follow=true is not supported in polling JSON; use /api/logs/stream.
+  /api/logs/stream:
+    get:
+      tags: [control-plane]
+      summary: Live log streaming via Server-Sent Events.
+      parameters:
+        - in: query
+          name: intervalMs
+          schema: {type: integer, minimum: 200}
+      responses:
+        "200":
+          description: SSE stream emitting ready and log events.
+          content:
+            text/event-stream:
+              schema: {type: string}
+  /api/models:
+    get:
+      tags: [control-plane]
+      summary: List the configured providers and models.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/test:
+    post:
+      tags: [control-plane]
+      summary: Probe the active provider reachability.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/claude/setup:
+    post:
+      tags: [control-plane]
+      summary: Configure Claude Code to use llmProxy as local backend.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectPath: {type: string}
+                model: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/pi/setup:
+    post:
+      tags: [control-plane]
+      summary: Configure PI Agent to use llmProxy as its provider.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/vscode/chat/setup:
+    post:
+      tags: [control-plane]
+      summary: Configure VS Code chat language models to use llmProxy.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/vscode/claude/setup:
+    post:
+      tags: [control-plane]
+      summary: Configure Claude Code in VS Code to use llmProxy.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
   /api/model/set:
     post:
       tags: [control-plane]
@@ -349,6 +559,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers:
+    get:
+      tags: [control-plane]
+      summary: List configured providers with fallback order (same as provider:list).
+      parameters:
+        - in: query
+          name: projectPath
+          schema: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/status:
+    get:
+      tags: [control-plane]
+      summary: Show the active provider and a synthetic status summary.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
   /api/providers/available:
     get:
       tags: [control-plane]
@@ -371,6 +607,130 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/{id}/login:
+    post:
+      tags: [control-plane]
+      summary: Register a provider via OAuth device flow (Copilot login).
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/{id}/api-key:
+    post:
+      tags: [control-plane]
+      summary: Set an API-key credential for a known provider (non-Copilot).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [api_key]
+              properties:
+                api_key: {type: string}
+                name: {type: string}
+                model: {type: string}
+                vision: {type: boolean, default: true}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/order:
+    post:
+      tags: [control-plane]
+      summary: Move a provider to a new fallback position.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, position]
+              properties:
+                id: {type: string}
+                position: {type: integer}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/reorder:
+    post:
+      tags: [control-plane]
+      summary: Force an immediate provider reordering cycle.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/{id}/rename:
+    post:
+      tags: [control-plane]
+      summary: Update the display name of a provider.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+  /api/providers/{id}:
+    patch:
+      tags: [control-plane]
+      summary: Update provider metadata (vision, free_model, name).
+      description: The body must use an explicit patch envelope; flat fields are rejected with 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patch]
+              properties:
+                patch:
+                  type: object
+                  properties:
+                    vision: {type: boolean}
+                    free_model: {type: boolean}
+                    name: {type: string}
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
+        "400":
+          description: Empty patch envelope (no fields to update).
+    delete:
+      tags: [control-plane]
+      summary: Remove a configured provider.
+      responses:
+        "200":
+          description: CLI-style command response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CliCommandResponse'
   /api/stats:
     get:
       tags: [control-plane]
@@ -382,69 +742,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
-  /api/smart/add:
-    post:
-      tags: [control-plane]
-      summary: Configure the SMART classifier provider.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [provider, model, apiKey]
-              properties:
-                provider: {type: string}
-                model: {type: string}
-                apiKey: {type: string}
-      responses:
-        "200":
-          description: CLI-style command response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CliCommandResponse'
-  /api/smart/status:
-    get:
-      tags: [control-plane]
-      summary: Show SMART router status.
-      responses:
-        "200":
-          description: CLI-style command response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CliCommandResponse'
-  /api/smart/test:
-    post:
-      tags: [control-plane]
-      summary: Simulate SMART routing.
-      responses:
-        "200":
-          description: CLI-style command response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CliCommandResponse'
-  /api/smart/refresh:
-    post:
-      tags: [control-plane]
-      summary: Refresh SMART availability cache.
-      responses:
-        "200":
-          description: CLI-style command response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CliCommandResponse'
   /api/config:
     get:
       tags: [control-plane]
-      summary: List supported configuration values for project or service scope.
+      summary: List supported configuration values for project, global or service scope.
+      description: Requires a resolvable project path (projectPath query or x-project-path header).
       parameters:
         - in: query
           name: scope
-          schema: {type: string, enum: [project, service]}
+          schema: {type: string, enum: [project, global, service]}
         - in: query
           name: projectPath
           schema: {type: string}
@@ -455,10 +761,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+        "403":
+          description: PROJECT_PATH_NOT_ALLOWED when no project path can be resolved.
   /api/config/{key}:
     get:
       tags: [control-plane]
       summary: Read one supported configuration key.
+      description: Keys are scope-bound; service-scope keys (e.g. LLMPROXY_ENV, LLMPROXY_API_KEY) require scope=service, otherwise the API returns 400.
       parameters:
         - in: path
           name: key
@@ -466,7 +775,7 @@ paths:
           schema: {type: string}
         - in: query
           name: scope
-          schema: {type: string, enum: [project, service]}
+          schema: {type: string, enum: [project, global, service]}
         - in: query
           name: projectPath
           schema: {type: string}
@@ -477,9 +786,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+        "400":
+          description: Missing/invalid scope for a scope-bound key.
+        "403":
+          description: PROJECT_PATH_NOT_ALLOWED when no project path can be resolved.
     post:
       tags: [control-plane]
       summary: Set one supported configuration key.
+      description: Keys are scope-bound; restartRequired keys return restarting:true and schedule a service restart.
       parameters:
         - in: path
           name: key
@@ -494,7 +808,7 @@ paths:
               required: [value]
               properties:
                 value: {type: string}
-                scope: {type: string, enum: [project, service]}
+                scope: {type: string, enum: [project, global, service]}
                 projectPath: {type: string}
       responses:
         "200":
@@ -504,7 +818,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
         "400":
-          description: Unsupported key or invalid scope for the requested key.
+          description: Unsupported key, invalid scope for the requested key, or missing project path.
+        "403":
+          description: PROJECT_PATH_NOT_ALLOWED when no project path can be resolved.
     delete:
       tags: [control-plane]
       summary: Unset one supported configuration key.
@@ -520,7 +836,7 @@ paths:
             schema:
               type: object
               properties:
-                scope: {type: string, enum: [project, service]}
+                scope: {type: string, enum: [project, global, service]}
                 projectPath: {type: string}
       responses:
         "200":
@@ -529,6 +845,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+        "400":
+          description: Invalid scope for the requested key.
+        "403":
+          description: PROJECT_PATH_NOT_ALLOWED when no project path can be resolved.
   /api/update:
     post:
       tags: [control-plane]
@@ -551,6 +871,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CliCommandResponse'
+  /v1/chat/completions:
+    post:
+      tags: [runtime]
+      summary: OpenAI-compatible Chat Completions (legacy).
+      description: OpenAI-shaped endpoint; stream=true is not implemented and returns 501 STREAM_NOT_IMPLEMENTED. Not covered by the README as the Anthropic-compatible surface is the primary one.
+      responses:
+        "501":
+          description: STREAM_NOT_IMPLEMENTED when stream=true.
+        "200":
+          description: Chat completion response.
+  /v1/llm/chat/completions:
+    post:
+      tags: [platform]
+      summary: Platform-facing alias for /v1/chat/completions.
+      description: Requires HierarchyContext in platform mode, like /v1/llm/messages.
+      responses:
+        "200":
+          description: Chat completion response.
+        "400":
+          description: HIERARCHY_CONTEXT_REQUIRED when the hierarchy context is missing or invalid.
   /v1/messages:
     post:
       tags: [runtime]
@@ -606,6 +946,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/AnthropicMessagesResponse'
         "400": {description: HierarchyContext missing or invalid, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /v1/llm/providers:
+    get:
+      tags: [platform]
+      summary: List the platform-facing provider registry (provider-registry.json).
+      description: Separate registry from the local copilot-token.json credential store.
+      parameters:
+        - in: query
+          name: scope_type
+          schema: {type: string}
+        - in: query
+          name: scope_id
+          schema: {type: string}
+        - in: query
+          name: provider
+          schema: {type: string}
+      responses:
+        "200":
+          description: Provider registry entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries: {type: array, items: {type: object}}
+    post:
+      tags: [platform]
+      summary: Upsert a provider registry entry.
+      description: In platform mode the HierarchyContext is required (400 HIERARCHY_CONTEXT_REQUIRED) and tenant ownership is enforced (403 AUTH_REQUIRED).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, scope_type, scope_id]
+              properties:
+                provider: {type: string}
+                model: {type: string}
+                api_key: {type: string}
+                scope_type: {type: string}
+                scope_id: {type: string}
+      responses:
+        "201":
+          description: Entry upserted.
+        "400":
+          description: INVALID_SCOPE_TYPE or missing HierarchyContext.
+        "403":
+          description: AUTH_REQUIRED when the caller is not admin/owner.
+  /v1/llm/providers/{id}:
+    delete:
+      tags: [platform]
+      summary: Delete a provider registry entry.
+      responses:
+        "204":
+          description: Entry removed.
+        "404":
+          description: NOT_FOUND when the entry does not exist.
   /v1/llm/health:
     get:
       tags: [platform]

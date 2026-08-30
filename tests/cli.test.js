@@ -754,7 +754,18 @@ test("provider:add supports api-key providers like nvidia", async () => {
   const provider = tokenStore.getProvider("nvidia");
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(requestUrls, ["https://integrate.api.nvidia.com/v1/chat/completions"]);
+  // The live probe hits the provider endpoint first; the coding-score
+  // benchmark enrichment (cloudprice) is fire-and-forget, so wait briefly for
+  // it before asserting the full request list.
+  const deadline = Date.now() + 2000;
+  while (requestUrls.length < 3 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.deepEqual(requestUrls, [
+    "https://integrate.api.nvidia.com/v1/chat/completions",
+    "https://ai.cloudprice.net/api/v1/models/z-ai%2Fglm-5.2/benchmarks",
+    "https://ai.cloudprice.net/api/v1/models/glm-5.2/benchmarks",
+  ]);
   assert.ok(provider);
   assert.equal(provider.access_token, "nvapi-test");
   assert.equal(provider.auth_type, "api_key");
@@ -1561,6 +1572,43 @@ test("provider:rename updates the provider display name", async () => {
   assert.equal(exitCode, 0);
   assert.equal(reloaded.getProvider("backup").name, "New Backup Name");
   assert.match(stdout.toString(), /New Backup Name/);
+});
+
+test("provider:remove reports a missing provider as an error and does not print success", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-remove-missing-"));
+  const stdout = createWritableBuffer();
+  const stderr = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:remove", "does-not-exist"], {
+    dataRoot: runtimeRoot,
+    stdout,
+    stderr,
+  });
+
+  const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 1);
+  assert.match(stderr.toString(), /Provider non trovato: does-not-exist/);
+  assert.doesNotMatch(stdout.toString(), /Provider rimosso/);
+  assert.equal(reloaded.getProvider("backup").id, "backup");
+});
+
+test("provider:remove deletes an existing provider", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-remove-"));
+  const stdout = createWritableBuffer();
+  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
+
+  const exitCode = await runCli(["node", "llmproxy", "provider:remove", "backup"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
+  assert.equal(exitCode, 0);
+  assert.equal(reloaded.getProvider("backup"), null);
+  assert.match(stdout.toString(), /Provider rimosso: backup/);
 });
 
 test("provider:status shows ordered providers and identifies the active one", async () => {
@@ -2431,7 +2479,7 @@ test("test sends a fixed inference prompt to the local proxy and prints the assi
 
   const body = JSON.parse(requests[1].options.body);
   assert.equal(body.stream, false);
-  assert.equal(body.max_tokens, 256);
+  assert.equal(body.max_tokens, 1024);
   assert.equal(body.model, "claude-sonnet-4.5");
   assert.equal(body.messages[0].role, "user");
   assert.equal(body.messages[0].content[0].text, "Rispondi solo: llmproxy-test-auto");
@@ -4692,6 +4740,96 @@ test("help covers release-notes and provider subcommands", async () => {
     assert.equal(exitCode, 0, `help ${command} should succeed`);
     assert.match(stdout.toString(), expectedPattern, `help ${command} should mention its purpose`);
   }
+});
+
+test("help for stats:reset does not promise smart-router/auto-rank resets that do not exist", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-stats-reset-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "stats:reset"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /azzera/i);
+  assert.doesNotMatch(stdout.toString(), /smart.?router/i);
+  assert.doesNotMatch(stdout.toString(), /auto.?rank/i);
+});
+
+test("help overview for stats:reset drops the smart-router and auto-rank reset claims", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-stats-reset-overview-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.doesNotMatch(stdout.toString(), /stats:reset.*smart.?router/i);
+  assert.doesNotMatch(stdout.toString(), /stats:reset.*auto.?rank/i);
+});
+
+test("stats:reset truncates metering records without extra flags", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-stats-reset-"));
+  const stdout = createWritableBuffer();
+  fs.mkdirSync(path.join(runtimeRoot, "logs"), { recursive: true });
+  fs.writeFileSync(path.join(runtimeRoot, "logs", "metering.jsonl"), `${JSON.stringify({ event: "request_in" })}\n`, "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "stats:reset"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /Statistiche azzerate: metering/);
+  assert.equal(fs.readFileSync(path.join(runtimeRoot, "logs", "metering.jsonl"), "utf8"), "");
+});
+
+test("proxy:add help documents that the id is the URL hostname and --name is only a label", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-help-proxy-add-"));
+  const stdout = createWritableBuffer();
+
+  const exitCode = await runCli(["node", "llmproxy", "help", "proxy:add"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.toString(), /dominio/i);
+  assert.match(stdout.toString(), /--name/i);
+  assert.match(stdout.toString(), /sovrascriv/i);
+});
+
+test("proxy:add with the same hostname upserts the existing proxy (id is the hostname)", async () => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-proxy-add-upsert-"));
+  const stdout = createWritableBuffer();
+
+  const firstRun = await runCli(["node", "llmproxy", "proxy:add", "http://user:pass@proxy-a.com:10001", "--name", "Primo"], {
+    dataRoot: runtimeRoot,
+    stdout,
+  });
+  assert.equal(firstRun, 0);
+
+  const secondStdout = createWritableBuffer();
+  const secondRun = await runCli(["node", "llmproxy", "proxy:add", "http://other:key@proxy-a.com:9999", "--name", "Secondo"], {
+    dataRoot: runtimeRoot,
+    stdout: secondStdout,
+  });
+  assert.equal(secondRun, 0);
+  assert.match(secondStdout.toString(), /proxy-a\.com/);
+
+  const listStdout = createWritableBuffer();
+  const listRun = await runCli(["node", "llmproxy", "proxy:list"], {
+    dataRoot: runtimeRoot,
+    stdout: listStdout,
+  });
+  assert.equal(listRun, 0);
+  const listOutput = listStdout.toString();
+  assert.match(listOutput, /proxy-a\.com/);
+  assert.doesNotMatch(listOutput, /10001/);
+  assert.match(listOutput, /9999/);
 });
 
 test("help install prints English guidance for the English install command", async () => {

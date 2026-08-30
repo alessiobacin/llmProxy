@@ -193,8 +193,8 @@ test("probeApiKeyProviderModel keeps max_tokens for legacy OpenAI models", async
   });
 
   assert.equal(result.ok, true);
-  assert.equal(sentBody.max_tokens, 16, "legacy models keep max_tokens");
-  assert.equal(sentBody.max_completion_tokens, undefined);
+  assert.equal(sentBody.max_tokens, undefined, "OpenAI rejects max_tokens for all current models");
+  assert.equal(sentBody.max_completion_tokens, 16, "OpenAI providers must use max_completion_tokens");
 });
 
 test("parseProviderModelPreferences keeps mistral model names intact", () => {

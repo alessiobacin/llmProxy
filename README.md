@@ -914,6 +914,84 @@ To improve logging for the calling project, add this header when possible:
 x-project-path: /absolute/path/to/project
 ```
 
+### OpenAI-compatible provider (for generic clients)
+
+`llmProxy` exposes an OpenAI-compatible surface so any client that speaks the OpenAI Chat Completions protocol (opencode, OpenRouter/z.ai/Moonshot-style SDKs, LangChain, generic curl scripts) can use it as a custom provider. Nothing is Anthropic-specific on this surface: request/response bodies, streaming chunks and errors follow the OpenAI shapes.
+
+#### Base URL and auth
+
+- Base URL: `http://127.0.0.1:5045/v1` (`6045` staging, `7045` production).
+- Auth: when the inbound gate is active (`LLMPROXY_API_KEY` configured, or production), send `Authorization: Bearer <LLMPROXY_API_KEY>` (an `x-api-key: <key>` header works too). `GET /v1/models` stays public even with the gate active, so clients can always fetch the catalog first.
+
+#### `GET /v1/models` — qualified model catalog
+
+Returns an OpenAI list where each model id is qualified as `provider:model` (from the configured providers' default models):
+
+```http
+GET /v1/models
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "openai:gpt-4o-mini", "object": "model", "created": 1796112000, "owned_by": "openai" }
+  ]
+}
+```
+
+Point the client at `data[].id` values: `openai:gpt-4o-mini` routes to the `openai` provider's default model; a bare model id falls back to the normal provider/fallback order.
+
+#### `POST /v1/chat/completions` — streaming and non-streaming
+
+Standard OpenAI Chat Completions request with `stream: true` or `stream: false`:
+
+```bash
+curl http://127.0.0.1:5045/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $LLMPROXY_API_KEY" \
+  -d '{
+    "model": "openai:gpt-4o-mini",
+    "stream": true,
+    "stream_options": { "include_usage": true },
+    "messages": [{ "role": "user", "content": "Ciao dal proxy" }]
+  }'
+```
+
+- **Streaming** (`stream: true`): responds `Content-Type: text/event-stream` and emits OpenAI `chat.completion.chunk` SSE events — first chunk carries `delta: {"role":"assistant"}`, text deltas carry `delta: {"content": ...}`, the final chunk carries `finish_reason` (`stop`, `length` or `tool_calls`) and, when `stream_options.include_usage` is `true`, an extra `choices: []` chunk with `usage` right before `data: [DONE]`.
+- **Reasoning models**: thinking deltas are forwarded as `delta: {"reasoning_content": ...}` (extension used by DeepSeek-R1/Kimi-style clients; plain OpenAI clients simply reach `content` afterwards).
+- **Tool calls**: OpenAI `tools`/`tool_choice` are translated to the upstream protocol; streamed tool calls arrive as `delta: {"tool_calls":[{"index":0,"type":"function","id":...,"function":{"name":...,"arguments":...}}]}` with `finish_reason: "tool_calls"`.
+- **Errors**: failures return the OpenAI error envelope — `{"error": {"message": ..., "type": ..., "code": ...}}` (e.g. `401` → `type: "authentication_error"`, `code: "invalid_api_key"`) — never the Anthropic-style `{"type":"error",...}` envelope.
+
+Non-streaming responses are plain OpenAI `chat.completion` objects (the `model` field echoes the upstream model actually used).
+
+#### Example — register llmProxy as a custom OpenAI provider
+
+In any client that supports custom OpenAI endpoints (opencode-style provider schema), configure:
+
+```json
+{
+  "provider": {
+    "llmproxy": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LLMProxy (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:5045/v1",
+        "apiKey": "<LLMPROXY_API_KEY>"
+      },
+      "models": { "gpt-4o-mini": { "name": "openai:gpt-4o-mini" } }
+    }
+  }
+}
+```
+
+The `models` ids come from `GET /v1/models` (`data[].id`, qualified `provider:model`). Equivalent setup in LangChain: `ChatOpenAI(base_url="http://127.0.0.1:5045/v1", api_key="<LLMPROXY_API_KEY>", model="openai:gpt-4o-mini")`.
+
+#### Limits
+
+- `POST /v1/llm/chat/completions` (hierarchy-attributed variant) requires platform mode with db-layer/event-bus reachable; in standalone mode it is not available.
+- Tool calls are supported at a base level (definition mapping + streamed deltas); provider-side features beyond the base protocol depend on the upstream provider.
+
 ### CLI -> REST mapping (runtime)
 
 | CLI | REST |

@@ -916,16 +916,18 @@ x-project-path: /absolute/path/to/project
 
 ### OpenAI-compatible provider (for generic clients)
 
-`llmProxy` exposes an OpenAI-compatible surface so any client that speaks the OpenAI Chat Completions protocol (opencode, OpenRouter/z.ai/Moonshot-style SDKs, LangChain, generic curl scripts) can use it as a custom provider. Nothing is Anthropic-specific on this surface: request/response bodies, streaming chunks and errors follow the OpenAI shapes.
+`llmProxy` exposes an OpenAI-compatible surface. Any client that accepts a custom OpenAI **Chat Completions** base URL can use it as a provider: VS Code Copilot Chat, OpenCode, OpenAI-compatible SDKs, LangChain and generic scripts. Nothing is Anthropic-specific on this surface: request/response bodies, streaming chunks and errors follow the OpenAI shapes.
+
+This means “OpenAI-compatible” at the Chat Completions layer, not a promise to implement every OpenAI product API (such as Assistants, Responses, embeddings, files, batches, or fine-tuning).
 
 #### Base URL and auth
 
 - Base URL: `http://127.0.0.1:5045/v1` (`6045` staging, `7045` production).
 - Auth: when the inbound gate is active (`LLMPROXY_API_KEY` configured, or production), send `Authorization: Bearer <LLMPROXY_API_KEY>` (an `x-api-key: <key>` header works too). `GET /v1/models` stays public even with the gate active, so clients can always fetch the catalog first.
 
-#### `GET /v1/models` — qualified model catalog
+#### `GET /v1/models` — live model catalog
 
-Returns an OpenAI list where each model id is qualified as `provider:model` (from the configured providers' default models):
+Returns an OpenAI list with the virtual dynamic-routing model `llmproxy` plus one qualified `provider:model` id for each configured provider default:
 
 ```http
 GET /v1/models
@@ -935,12 +937,18 @@ GET /v1/models
 {
   "object": "list",
   "data": [
+    { "id": "llmproxy", "object": "model", "created": 1796112000, "owned_by": "llmproxy" },
     { "id": "openai:gpt-4o-mini", "object": "model", "created": 1796112000, "owned_by": "openai" }
   ]
 }
 ```
 
-Point the client at `data[].id` values: `openai:gpt-4o-mini` routes to the `openai` provider's default model; a bare model id falls back to the normal provider/fallback order.
+Choose the id according to the desired behavior:
+
+- `llmproxy`: dynamic routing. LLMProxy picks from the current provider order, applies its routing rules, and falls back when needed. This is the recommended default model for a client.
+- `provider:model`: pins the request to that configured provider/model pair, for example `openai:gpt-4o-mini`.
+
+The endpoint is live: adding or removing a provider immediately changes the API catalog. Clients that cache models need to refresh their cache or model list.
 
 #### `POST /v1/chat/completions` — streaming and non-streaming
 
@@ -951,7 +959,7 @@ curl http://127.0.0.1:5045/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $LLMPROXY_API_KEY" \
   -d '{
-    "model": "openai:gpt-4o-mini",
+    "model": "llmproxy",
     "stream": true,
     "stream_options": { "include_usage": true },
     "messages": [{ "role": "user", "content": "Ciao dal proxy" }]
@@ -985,7 +993,31 @@ In any client that supports custom OpenAI endpoints (opencode-style provider sch
 }
 ```
 
-The `models` ids come from `GET /v1/models` (`data[].id`, qualified `provider:model`). Equivalent setup in LangChain: `ChatOpenAI(base_url="http://127.0.0.1:5045/v1", api_key="<LLMPROXY_API_KEY>", model="openai:gpt-4o-mini")`.
+The `models` ids come from `GET /v1/models`. Use `llmproxy` for dynamic routing, or a qualified `provider:model` id to pin a provider. Equivalent setup in LangChain: `ChatOpenAI(base_url="http://127.0.0.1:5045/v1", api_key="<LLMPROXY_API_KEY>", model="llmproxy")`.
+
+#### VS Code Copilot Chat
+
+Run this once to add the custom provider named `llmProxy` to the default VS Code Chat picker:
+
+```bash
+llmproxy vscode-chat:setup
+```
+
+It writes explicit model entries because Copilot Chat does not reliably discover a custom endpoint's live catalog. The picker shows `llmProxy · Auto` (the `llmproxy` dynamic-routing model) and the individually selectable provider models.
+
+#### Other static model pickers
+
+The same catalog can be generated for three widely used clients with documented, file-based OpenAI-compatible providers:
+
+```bash
+llmproxy opencode:setup  # ~/.config/opencode/opencode.json or .jsonc
+llmproxy continue:setup  # ~/.continue/config.yaml
+llmproxy zed:setup       # ~/.config/zed/settings.json
+```
+
+Each command preserves unrelated settings and writes `llmProxy · Auto` plus the configured `provider:model` entries. OpenCode and Continue include the local `proxy-local` key in their provider config. Zed intentionally keeps API keys out of `settings.json`; enter `proxy-local` in Zed’s provider UI/keychain or start Zed with `LLMPROXY_API_KEY=proxy-local`.
+
+Once any of these clients (or VS Code Chat) is configured, `llmproxy provider:remove <id>` (or `llmp p:rm <id>`) automatically rewrites its static catalog, so the removed provider disappears from its picker. If a client has its model menu already open, reload its window to refresh the displayed list.
 
 #### Limits
 
@@ -1238,6 +1270,7 @@ Removes the specified provider from the local registry.
 
 - Removing a provider that does not exist fails with exit code `1` and `Provider non trovato: <id>`.
 - The REST alias `DELETE /api/providers/{id}` returns `404` (CLI-style payload with `success: false`) for an unknown provider — aligned with `DELETE /v1/llm/providers/{id}` — and `200` on success.
+- If `llmProxy` has already been configured in VS Code Chat, OpenCode, Continue, or Zed, the command also refreshes its explicit picker catalog; the removed provider/model is no longer listed.
 
 ### `llmproxy logs`
 

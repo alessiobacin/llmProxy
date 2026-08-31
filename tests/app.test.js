@@ -3883,6 +3883,7 @@ test("GET /v1/models returns OpenAI-compatible model list from provider defaults
     assert.ok(Array.isArray(payload.data));
     assert.ok(payload.data.length >= 2);
     const ids = payload.data.map((m) => m.id);
+    assert.ok(ids.includes("llmproxy"));
     assert.ok(ids.includes("openrouter:deepseek-v4-flash"));
     assert.ok(ids.includes("qwen:qwen3.7-max"));
     for (const entry of payload.data) {
@@ -3931,6 +3932,12 @@ test("GET /v1/models/:modelId returns single model or 404", async () => {
   });
 
   await withServer(app, async (baseUrl) => {
+    const auto = await fetch(`${baseUrl}/v1/models/llmproxy`);
+    assert.equal(auto.status, 200);
+    const autoBody = await auto.json();
+    assert.equal(autoBody.id, "llmproxy");
+    assert.equal(autoBody.owned_by, "llmproxy");
+
     const found = await fetch(`${baseUrl}/v1/models/deepseek-v4-flash`);
     assert.equal(found.status, 200);
     const body = await found.json();

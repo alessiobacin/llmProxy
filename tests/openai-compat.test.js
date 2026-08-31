@@ -135,6 +135,44 @@ test("/v1/chat/completions accepts the qualified provider:model from GET /v1/mod
   });
 });
 
+test("/v1/chat/completions accepts llmproxy auto and delegates routing to the proxy", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-oai-auto-"));
+  const calls = [];
+  const app = makeApp(tempRoot, async (_url, opts) => {
+    calls.push(JSON.parse(String(opts.body || "{}")));
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          model: calls[calls.length - 1].model,
+          choices: [{ message: { content: "ok" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        };
+      },
+    };
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const modelsRes = await fetch(`${baseUrl}/v1/models`);
+    const catalog = await modelsRes.json();
+    assert.ok(catalog.data.some((model) => model.id === "llmproxy"), "catalog exposes auto model");
+
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "llmproxy",
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 20,
+      }),
+    });
+    assert.equal(res.status, 200);
+    assert.ok(calls.length >= 1, "provider received a request");
+    assert.equal(calls[0].model, "gpt-4o-mini", "dynamic routing resolves the concrete provider model");
+  });
+});
+
 test("openAIRequestToAnthropic maps tools and tool_choice (unit contract)", () => {
   const out = openAIRequestToAnthropic({
     model: "openai:gpt-4o-mini",

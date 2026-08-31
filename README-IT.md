@@ -747,6 +747,84 @@ Per migliorare il logging del progetto chiamante, aggiungi se possibile:
 x-project-path: /assoluto/percorso/del/progetto
 ```
 
+### Provider OpenAI-compatible (per client generici)
+
+`llmProxy` espone una superficie OpenAI-compatible cosi` qualsiasi client che parla il protocollo OpenAI Chat Completions (opencode, SDK openrouter/z.ai/Moonshot-style, LangChain, script curl generici) puo` usarlo come provider custom. Nulla di Anthropic-specific su questa superficie: body di richiesta/risposta, chunk di streaming ed errori seguono le forme OpenAI.
+
+#### Base URL e auth
+
+- Base URL: `http://127.0.0.1:5045/v1` (`6045` staging, `7045` production).
+- Auth: quando il gate in ingresso e` attivo (`LLMPROXY_API_KEY` configurata, o produzione), invia `Authorization: Bearer <LLMPROXY_API_KEY>` (funziona anche `x-api-key: <key>`). `GET /v1/models` resta pubblico anche col gate attivo, cosi` i client possono sempre recuperare prima il catalogo.
+
+#### `GET /v1/models` — catalogo modelli qualificato
+
+Restituisce una lista OpenAI in cui ogni model id e` qualificato come `provider:model` (dai modelli di default dei provider configurati):
+
+```http
+GET /v1/models
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "openai:gpt-4o-mini", "object": "model", "created": 1796112000, "owned_by": "openai" }
+  ]
+}
+```
+
+Punta il client agli `id` in `data[]`: `openai:gpt-4o-mini` instrada verso il modello di default del provider `openai`; un model id bare usa il normale ordine provider/fallback.
+
+#### `POST /v1/chat/completions` — streaming e non-streaming
+
+Richiesta standard OpenAI Chat Completions con `stream: true` oppure `stream: false`:
+
+```bash
+curl http://127.0.0.1:5045/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $LLMPROXY_API_KEY" \
+  -d '{
+    "model": "openai:gpt-4o-mini",
+    "stream": true,
+    "stream_options": { "include_usage": true },
+    "messages": [{ "role": "user", "content": "Ciao dal proxy" }]
+  }'
+```
+
+- **Streaming** (`stream: true`): risponde `Content-Type: text/event-stream` ed emette eventi SSE OpenAI `chat.completion.chunk` — il primo chunk porta `delta: {"role":"assistant"}`, i text delta portano `delta: {"content": ...}`, il chunk finale porta `finish_reason` (`stop`, `length` o `tool_calls`) e, con `stream_options.include_usage` a `true`, un ulteriore chunk `choices: []` con `usage` subito prima di `data: [DONE]`.
+- **Modelli reasoning**: i thinking delta vengono inoltrati come `delta: {"reasoning_content": ...}` (estensione usata da client DeepSeek-R1/Kimi-style; i client OpenAI puri raggiungono comunque `content` dopo).
+- **Tool calls**: `tools`/`tool_choice` OpenAI vengono tradotti verso il protocollo upstream; i tool call in streaming arrivano come `delta: {"tool_calls":[{"index":0,"type":"function","id":...,"function":{"name":...,"arguments":...}}]}` con `finish_reason: "tool_calls"`.
+- **Errori**: i fallimenti restituiscono l'error envelope OpenAI — `{"error": {"message": ..., "type": ..., "code": ...}}` (es. `401` → `type: "authentication_error"`, `code: "invalid_api_key"`) — mai l'envelope Anthropic-style `{"type":"error",...}`.
+
+Le risposte non-streaming sono oggetti OpenAI `chat.completion` standard (il campo `model` riporta il modello upstream effettivamente usato).
+
+#### Esempio — registrare llmProxy come provider custom OpenAI
+
+In qualsiasi client che supporta endpoint OpenAI custom (schema provider opencode-style), configura:
+
+```json
+{
+  "provider": {
+    "llmproxy": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LLMProxy (locale)",
+      "options": {
+        "baseURL": "http://127.0.0.1:5045/v1",
+        "apiKey": "<LLMPROXY_API_KEY>"
+      },
+      "models": { "gpt-4o-mini": { "name": "openai:gpt-4o-mini" } }
+    }
+  }
+}
+```
+
+Gli `id` dei `models` arrivano da `GET /v1/models` (`data[].id`, qualificati `provider:model`). Setup equivalente in LangChain: `ChatOpenAI(base_url="http://127.0.0.1:5045/v1", api_key="<LLMPROXY_API_KEY>", model="openai:gpt-4o-mini")`.
+
+#### Limiti
+
+- `POST /v1/llm/chat/completions` (variante con attribuzione hierarchy) richiede platform mode con db-layer/event-bus raggiungibili; in standalone mode non e` disponibile.
+- I tool call sono supportati a livello base (mapping definizioni + delta in streaming); le feature lato provider oltre il protocollo base dipendono dal provider upstream.
+
 ### Mappa CLI -> REST (runtime)
 
 | CLI | REST |

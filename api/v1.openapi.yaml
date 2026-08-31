@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: llmProxy API
-  version: 0.3.121
+  version: 0.3.122
   description: |
     Deterministic LLM transport tool (architecture v11, tool #45).
 
@@ -56,6 +56,19 @@ components:
       schema:
         type: string
   schemas:
+    OpenAIErrorResponse:
+      type: object
+      description: OpenAI-style error envelope used by /v1/chat/completions and /v1/llm/chat/completions (never the Anthropic-style {type:error} envelope).
+      properties:
+        error:
+          type: object
+          properties:
+            message: {type: string}
+            type: {type: string, description: e.g. authentication_error, invalid_request_error, api_error}
+            code:
+              type: string
+              nullable: true
+              description: e.g. invalid_api_key for authentication_error, invalid_request_error for invalid_request_error.
     HierarchyContext:
       type: object
       properties:
@@ -876,21 +889,84 @@ paths:
   /v1/chat/completions:
     post:
       tags: [runtime]
-      summary: OpenAI-compatible Chat Completions (legacy).
-      description: OpenAI-shaped endpoint; stream=true is not implemented and returns 501 STREAM_NOT_IMPLEMENTED. Not covered by the README as the Anthropic-compatible surface is the primary one.
+      summary: OpenAI-compatible Chat Completions.
+      description: |
+        OpenAI-shaped endpoint for generic clients (opencode, OpenRouter/z.ai/Moonshot-style, LangChain).
+        Request and response bodies, streaming chunks and errors follow the OpenAI shapes. The `model`
+        id is qualified as `provider:model` (see `GET /v1/models`); a bare model id falls back to the
+        normal provider/fallback order. Errors use the OpenAI envelope
+        `{error: {message, type, code}}` (e.g. 401 → type `authentication_error`, code `invalid_api_key`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, messages]
+              properties:
+                model:
+                  type: string
+                  description: Qualified model id `provider:model` (from GET /v1/models) or bare model id.
+                messages:
+                  type: array
+                  description: OpenAI chat messages (system/user/assistant/tool roles are translated to the upstream protocol).
+                  items: {type: object}
+                stream:
+                  type: boolean
+                  default: false
+                  description: "When true the response is an SSE stream of OpenAI chat.completion.chunk events ending with `data: [DONE]`."
+                stream_options:
+                  type: object
+                  properties:
+                    include_usage:
+                      type: boolean
+                      default: false
+                      description: When true (with stream=true), a final chunk with choices:[] and usage is emitted right before [DONE].
+                tools:
+                  type: array
+                  description: OpenAI tool definitions, translated to the upstream protocol (base tool_calls support).
+                  items: {type: object}
+                tool_choice:
+                  description: OpenAI tool_choice (auto/required/function mapping).
       responses:
-        "501":
-          description: STREAM_NOT_IMPLEMENTED when stream=true.
         "200":
-          description: Chat completion response.
+          description: |
+            Chat completion. With stream=true the content type is text/event-stream and the body is
+            OpenAI chat.completion.chunk SSE events (first chunk carries delta {role:assistant}, text
+            deltas carry delta {content}, thinking deltas carry delta {reasoning_content}, tool calls
+            carry delta {tool_calls:[...]}, final chunk carries finish_reason stop/length/tool_calls,
+            optional usage chunk with choices:[] when stream_options.include_usage=true, then data: [DONE]).
+          content:
+            application/json:
+              schema:
+                type: object
+                description: OpenAI chat.completion object (model echoes the upstream model used).
+            text/event-stream:
+              schema:
+                type: string
+                description: "SSE stream of OpenAI chat.completion.chunk events, terminated by `data: [DONE]`."
+        "400":
+          description: Invalid request (OpenAI error envelope).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIErrorResponse'
+        "401":
+          description: Provider authentication failure or missing inbound API key (OpenAI error envelope).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIErrorResponse'
   /v1/llm/chat/completions:
     post:
       tags: [platform]
       summary: Platform-facing alias for /v1/chat/completions.
-      description: Requires HierarchyContext in platform mode, like /v1/llm/messages.
+      description: |
+        Requires HierarchyContext in platform mode, like /v1/llm/messages. Requires platform mode
+        (db-layer/event-bus reachable); not available in standalone mode.
       responses:
         "200":
-          description: Chat completion response.
+          description: Chat completion (same shapes as /v1/chat/completions, streaming included).
         "400":
           description: HIERARCHY_CONTEXT_REQUIRED when the hierarchy context is missing or invalid.
   /v1/messages:

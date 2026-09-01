@@ -178,6 +178,7 @@ test("vscode-chat:setup writes the proxy config to standard and Insiders profile
     env: {
       HOME: tempHome,
       LLMPROXY_PLATFORM_OVERRIDE: "darwin",
+      LLMPROXY_API_KEY: "service-secret",
     },
     fetchFn: async (url) => {
       if (String(url).endsWith("/v1/models")) {
@@ -213,7 +214,7 @@ test("vscode-chat:setup writes the proxy config to standard and Insiders profile
     assert.equal(entry.vendor, "customendpoint");
     assert.equal(entry.apiType, "chat-completions");
     assert.equal("url" in entry, false);
-    assert.equal(entry.apiKey, "proxy-local");
+    assert.equal(entry.apiKey, "${input:chat.lm.secret.llmproxy}");
     assert.equal(entry.models.length, 2);
     assert.equal(entry.models[0].id, "llmproxy");
     assert.equal(entry.models[0].name, "llmProxy · Auto");
@@ -225,6 +226,33 @@ test("vscode-chat:setup writes the proxy config to standard and Insiders profile
     assert.equal(entry.models[1].toolCalling, true);
   }
   assert.match(stdout.toString(), /Code - Insiders|Code\/User|chatLanguageModels/);
+});
+
+test("vscode-chat:setup preserves VS Code's existing secret input reference", async () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-vscode-secret-home-"));
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-vscode-secret-project-"));
+  const userDir = path.join(tempHome, "Library", "Application Support", "Code", "User");
+  const modelsFile = path.join(userDir, "chatLanguageModels.json");
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.writeFileSync(modelsFile, JSON.stringify([{
+    name: "llmProxy",
+    vendor: "customendpoint",
+    apiKey: "${input:chat.lm.secret.-existing-secret}",
+    apiType: "chat-completions",
+    models: [],
+  }]), "utf8");
+
+  const exitCode = await runCli(["node", "llmproxy", "vscode-chat:setup"], {
+    cwd: tempRoot,
+    stdout: createWritableBuffer(),
+    env: { HOME: tempHome, LLMPROXY_PLATFORM_OVERRIDE: "darwin" },
+    fetchFn: async () => ({ ok: false }),
+  });
+
+  const config = JSON.parse(fs.readFileSync(modelsFile, "utf8"));
+  const entry = config.find((candidate) => candidate && candidate.name === "llmProxy");
+  assert.equal(exitCode, 0);
+  assert.equal(entry.apiKey, "${input:chat.lm.secret.-existing-secret}");
 });
 
 test("static-client setup commands preserve existing configuration and add llmProxy models", async () => {

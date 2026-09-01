@@ -1005,6 +1005,10 @@ llmproxy vscode-chat:setup
 
 It writes explicit model entries because Copilot Chat does not reliably discover a custom endpoint's live catalog. The picker shows `llmProxy · Auto` (the `llmproxy` dynamic-routing model) and the individually selectable provider models.
 
+The generated `chatLanguageModels.json` does not contain the proxy key. It uses VS Code's secure input reference `${input:chat.lm.secret.llmproxy}`. Open **Chat: Manage Language Models**, configure `llmProxy`, and enter the same value configured as the proxy's inbound `LLMPROXY_API_KEY`; VS Code stores it in its secret storage and sends it as `Authorization: Bearer <key>`. No `.claude/settings.json` is required for VS Code Chat.
+
+For a persistent/production service, keep the authoritative inbound key in llmProxy's service configuration, not in a project file: `llmproxy config:set LLMPROXY_API_KEY '<key>' --scope service`, then restart the service. Enter that same key once in VS Code's `llmProxy` configuration. The service key and the VS Code secret are intentionally two separate stores; VS Code cannot expose its secret storage to the proxy.
+
 #### Other static model pickers
 
 The same catalog can be generated for three widely used clients with documented, file-based OpenAI-compatible providers:

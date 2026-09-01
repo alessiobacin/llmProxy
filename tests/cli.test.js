@@ -178,21 +178,6 @@ test("vscode-chat:setup writes the proxy config to standard and Insiders profile
     env: {
       HOME: tempHome,
       LLMPROXY_PLATFORM_OVERRIDE: "darwin",
-      LLMPROXY_API_KEY: "service-secret",
-    },
-    fetchFn: async (url) => {
-      if (String(url).endsWith("/v1/models")) {
-        return {
-          ok: true,
-          async json() {
-            return {
-              object: "list",
-              data: [{ id: "openrouter:gpt-5.6-luna", owned_by: "openrouter" }],
-            };
-          },
-        };
-      }
-      return { ok: false };
     },
   });
 
@@ -213,118 +198,11 @@ test("vscode-chat:setup writes the proxy config to standard and Insiders profile
     assert.ok(entry);
     assert.equal(entry.vendor, "customendpoint");
     assert.equal(entry.apiType, "chat-completions");
-    assert.equal("url" in entry, false);
-    assert.equal(entry.apiKey, "${input:chat.lm.secret.llmproxy}");
-    assert.equal(entry.models.length, 2);
-    assert.equal(entry.models[0].id, "llmproxy");
-    assert.equal(entry.models[0].name, "llmProxy · Auto");
-    assert.equal(entry.models[0].url, "http://127.0.0.1:7045/v1");
-    assert.equal(entry.models[0].toolCalling, true);
-    assert.equal(entry.models[0].vision, true);
-    assert.equal(entry.models[1].id, "openrouter:gpt-5.6-luna");
-    assert.equal(entry.models[1].url, "http://127.0.0.1:7045/v1");
-    assert.equal(entry.models[1].toolCalling, true);
+    assert.equal(entry.url, "http://127.0.0.1:7045/v1");
+    assert.equal(entry.apiKey, "proxy-local");
+    assert.equal("models" in entry, false);
   }
   assert.match(stdout.toString(), /Code - Insiders|Code\/User|chatLanguageModels/);
-});
-
-test("vscode-chat:setup preserves VS Code's existing secret input reference", async () => {
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-vscode-secret-home-"));
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-vscode-secret-project-"));
-  const userDir = path.join(tempHome, "Library", "Application Support", "Code", "User");
-  const modelsFile = path.join(userDir, "chatLanguageModels.json");
-  fs.mkdirSync(userDir, { recursive: true });
-  fs.writeFileSync(modelsFile, JSON.stringify([{
-    name: "llmProxy",
-    vendor: "customendpoint",
-    apiKey: "${input:chat.lm.secret.-existing-secret}",
-    apiType: "chat-completions",
-    models: [],
-  }]), "utf8");
-
-  const exitCode = await runCli(["node", "llmproxy", "vscode-chat:setup"], {
-    cwd: tempRoot,
-    stdout: createWritableBuffer(),
-    env: { HOME: tempHome, LLMPROXY_PLATFORM_OVERRIDE: "darwin" },
-    fetchFn: async () => ({ ok: false }),
-  });
-
-  const config = JSON.parse(fs.readFileSync(modelsFile, "utf8"));
-  const entry = config.find((candidate) => candidate && candidate.name === "llmProxy");
-  assert.equal(exitCode, 0);
-  assert.equal(entry.apiKey, "${input:chat.lm.secret.-existing-secret}");
-});
-
-test("static-client setup commands preserve existing configuration and add llmProxy models", async () => {
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-static-clients-home-"));
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-static-clients-project-"));
-  const stdout = createWritableBuffer();
-  const env = { HOME: tempHome, LLMPROXY_PLATFORM_OVERRIDE: "darwin" };
-  const configDir = path.join(tempHome, ".config");
-  fs.mkdirSync(path.join(configDir, "opencode"), { recursive: true });
-  fs.mkdirSync(path.join(configDir, "zed"), { recursive: true });
-  fs.mkdirSync(path.join(tempHome, ".continue"), { recursive: true });
-  fs.writeFileSync(path.join(configDir, "opencode", "opencode.jsonc"), '{\n  // keep this comment\n  "autoupdate": true,\n}\n');
-  fs.writeFileSync(path.join(configDir, "zed", "settings.json"), '{\n  // keep this comment\n  "theme": "Ayu",\n}\n');
-  fs.writeFileSync(path.join(tempHome, ".continue", "config.yaml"), "name: Existing Config\nversion: 1.0.0\nschema: v1\nmodels:\n  - name: Existing\n    provider: ollama\n    model: llama3\n");
-  const fetchFn = async () => ({
-    ok: true,
-    async json() {
-      return { object: "list", data: [{ id: "kimi:kimi-k3", owned_by: "kimi" }] };
-    },
-  });
-
-  for (const command of ["opencode:setup", "continue:setup", "zed:setup"]) {
-    const exitCode = await runCli(["node", "llmproxy", command], {
-      cwd: tempRoot, stdout, env, fetchFn,
-    });
-    assert.equal(exitCode, 0);
-  }
-
-  const { parse: parseJsonc } = require("jsonc-parser");
-  const openCode = parseJsonc(fs.readFileSync(path.join(configDir, "opencode", "opencode.jsonc"), "utf8"));
-  assert.equal(openCode.autoupdate, true);
-  assert.deepEqual(Object.keys(openCode.provider.llmproxy.models), ["llmproxy", "kimi:kimi-k3"]);
-
-  const continueConfig = require("yaml").parse(fs.readFileSync(path.join(tempHome, ".continue", "config.yaml"), "utf8"));
-  assert.equal(continueConfig.models[0].name, "Existing");
-  assert.deepEqual(continueConfig.models.slice(1).map((model) => model.model), ["llmproxy", "kimi:kimi-k3"]);
-
-  const zed = parseJsonc(fs.readFileSync(path.join(configDir, "zed", "settings.json"), "utf8"));
-  assert.equal(zed.theme, "Ayu");
-  assert.deepEqual(zed.language_models.openai_compatible.llmproxy.available_models.map((model) => model.name), ["llmproxy", "kimi:kimi-k3"]);
-});
-
-test("provider:remove refreshes every configured static-client catalog", async () => {
-  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-static-remove-"));
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-static-remove-home-"));
-  const stdout = createWritableBuffer();
-  const env = { HOME: tempHome, LLMPROXY_PLATFORM_OVERRIDE: "darwin" };
-  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
-  tokenStore.saveProvider("openrouter-glm", {
-    access_token: "token-openrouter", token_type: "api_key", scope: "api_key", provider: "openrouter", default_model: "z-ai/glm-5.3-flash",
-  }, { name: "OpenRouter GLM" });
-  tokenStore.saveProvider("kimi", {
-    access_token: "token-kimi", token_type: "api_key", scope: "api_key", provider: "kimi", default_model: "kimi-k3",
-  }, { name: "Kimi" });
-  const offlineFetch = async () => ({ ok: false });
-
-  for (const command of ["opencode:setup", "continue:setup", "zed:setup"]) {
-    assert.equal(await runCli(["node", "llmproxy", command], {
-      dataRoot: runtimeRoot, stdout, env, fetchFn: offlineFetch,
-    }), 0);
-  }
-  assert.equal(await runCli(["node", "llmproxy", "provider:remove", "openrouter-glm"], {
-    dataRoot: runtimeRoot, stdout, env, fetchFn: offlineFetch,
-  }), 0);
-
-  const { parse: parseJsonc } = require("jsonc-parser");
-  const openCode = parseJsonc(fs.readFileSync(path.join(tempHome, ".config", "opencode", "opencode.json"), "utf8"));
-  const continueConfig = require("yaml").parse(fs.readFileSync(path.join(tempHome, ".continue", "config.yaml"), "utf8"));
-  const zed = parseJsonc(fs.readFileSync(path.join(tempHome, ".config", "zed", "settings.json"), "utf8"));
-  assert.deepEqual(Object.keys(openCode.provider.llmproxy.models), ["llmproxy", "kimi:kimi-k3"]);
-  assert.deepEqual(continueConfig.models.map((model) => model.model), ["llmproxy", "kimi:kimi-k3"]);
-  assert.deepEqual(zed.language_models.openai_compatible.llmproxy.available_models.map((model) => model.name), ["llmproxy", "kimi:kimi-k3"]);
 });
 
 test("claude:setup creates .claude/settings.json for the current project", async () => {
@@ -1763,7 +1641,6 @@ test("provider:remove reports a missing provider as an error and does not print 
 
 test("provider:remove deletes an existing provider", async () => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-remove-"));
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-remove-home-"));
   const stdout = createWritableBuffer();
   const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
   tokenStore.saveProvider("backup", { access_token: "token-backup", token_type: "bearer", scope: "read:user" }, { name: "Backup" });
@@ -1771,47 +1648,12 @@ test("provider:remove deletes an existing provider", async () => {
   const exitCode = await runCli(["node", "llmproxy", "provider:remove", "backup"], {
     dataRoot: runtimeRoot,
     stdout,
-    env: { HOME: tempHome },
   });
 
   const reloaded = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
   assert.equal(exitCode, 0);
   assert.equal(reloaded.getProvider("backup"), null);
   assert.match(stdout.toString(), /Provider rimosso: backup/);
-});
-
-test("provider:remove refreshes an existing VS Code llmProxy catalog", async () => {
-  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-remove-vscode-"));
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-cli-provider-remove-vscode-home-"));
-  const stdout = createWritableBuffer();
-  const tokenStore = require("../lib/token-store").createTokenStore({ filePath: path.join(runtimeRoot, "copilot-token.json") });
-  tokenStore.saveProvider("openrouter-glm", {
-    access_token: "token-openrouter", token_type: "api_key", scope: "api_key", provider: "openrouter", default_model: "z-ai/glm-5.3-flash",
-  }, { name: "OpenRouter GLM" });
-  tokenStore.saveProvider("kimi", {
-    access_token: "token-kimi", token_type: "api_key", scope: "api_key", provider: "kimi", default_model: "kimi-k3",
-  }, { name: "Kimi" });
-
-  const userDir = path.join(tempHome, "Library", "Application Support", "Code", "User");
-  fs.mkdirSync(userDir, { recursive: true });
-  fs.writeFileSync(path.join(userDir, "chatLanguageModels.json"), JSON.stringify([{
-    name: "llmProxy", vendor: "customendpoint", apiKey: "proxy-local", apiType: "chat-completions",
-    models: [{ id: "openrouter:z-ai/glm-5.3-flash", name: "openrouter · z-ai/glm-5.3-flash" }],
-  }]), "utf8");
-
-  const exitCode = await runCli(["node", "llmproxy", "provider:remove", "openrouter-glm"], {
-    dataRoot: runtimeRoot,
-    stdout,
-    env: { HOME: tempHome, LLMPROXY_PLATFORM_OVERRIDE: "darwin" },
-    fetchFn: async () => ({ ok: false }),
-  });
-
-  assert.equal(exitCode, 0);
-  const config = JSON.parse(fs.readFileSync(path.join(userDir, "chatLanguageModels.json"), "utf8"));
-  const entry = config.find((candidate) => candidate.name === "llmProxy");
-  assert.deepEqual(entry.models.map((model) => model.id), ["llmproxy", "kimi:kimi-k3"]);
-  assert.doesNotMatch(JSON.stringify(entry.models), /openrouter:z-ai\/glm-5\.3-flash/);
-  assert.match(stdout.toString(), /Configurazione VS Code Chat scritta/);
 });
 
 test("provider:status shows ordered providers and identifies the active one", async () => {

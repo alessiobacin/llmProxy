@@ -950,6 +950,8 @@ Choose the id according to the desired behavior:
 
 The endpoint is live: adding or removing a provider immediately changes the API catalog. Clients that cache models need to refresh their cache or model list.
 
+For **Codex CLI ≥ 0.152**, `GET /v1/models` also returns a catalog decoded with the strict `ModelInfo` schema (`codex-rs/protocol/src/openai_models.rs`): every entry carries the mandatory fields (`truncation_policy`, `model_messages.instructions_template`, `service_tiers` with `priority`/`flex`, `shell_type`, reasoning levels, …) so Codex refreshes the model list without `missing field` decode errors or client-side metadata fallback.
+
 #### `POST /v1/chat/completions` — streaming and non-streaming
 
 Standard OpenAI Chat Completions request with `stream: true` or `stream: false`:
@@ -994,17 +996,25 @@ curl http://127.0.0.1:5045/v1/responses \
 - **Mapping**: `instructions` → system prompt, `max_output_tokens` → upstream `max_tokens`, `function_call_output` input items → `tool` messages, `tools`/`tool_choice` → upstream tool protocol.
 - **Errors**: same OpenAI error envelope as `/v1/chat/completions` — `{"error": {"message": ..., "type": ..., "code": ...}}`.
 
-To use it from Codex CLI, configure a custom provider pointing at the proxy:
+To use it from Codex CLI, configure a custom provider pointing at the proxy. In this repository the dedicated profile is already set up — just run `codex -p llmproxy` (no `LLMPROXY_API_KEY` export needed, auth is a static `Authorization: Bearer proxy-local` header in `.codex/llmproxy.config.toml`):
 
 ```toml
 model_provider = "llmproxy"
-model = "meta:muse-spark-1.2"   # or any id from GET /v1/models
+model = "llmproxy"   # or any id from GET /v1/models
 
 [model_providers.llmproxy]
 name = "LLMProxy (local)"
 base_url = "http://127.0.0.1:7045/v1"
-env_key = "LLMPROXY_API_KEY"
+wire_api = "responses"   # required by Codex >= 0.152
+# Static auth matches the proxy's default inbound gate key (proxy-local);
+# it avoids the "Missing environment variable: LLMPROXY_API_KEY" failure
+# when the variable is not exported. For a different gate key, comment the
+# header and set env_key = "LLMPROXY_API_KEY" + export the variable instead.
+http_headers = { Authorization = "Bearer proxy-local" }
+# env_key = "LLMPROXY_API_KEY"
 ```
+
+`wire_api = "responses"` is mandatory for Codex ≥ 0.152 (the client speaks the Responses protocol).
 
 #### Example — register llmProxy as a custom OpenAI provider
 

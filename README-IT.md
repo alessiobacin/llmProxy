@@ -783,6 +783,8 @@ Scegli l'id in base al comportamento desiderato:
 
 L'endpoint e` live: aggiungere o rimuovere un provider cambia subito il catalogo API. I client che mettono in cache i modelli devono aggiornare cache o elenco.
 
+Per **Codex CLI ≥ 0.152**, `GET /v1/models` restituisce anche un catalogo decodificato con lo schema strict `ModelInfo` (`codex-rs/protocol/src/openai_models.rs`): ogni entry porta i campi obbligatori (`truncation_policy`, `model_messages.instructions_template`, `service_tiers` con `priority`/`flex`, `shell_type`, livelli di reasoning, …) cosi` Codex aggiorna l'elenco modelli senza errori di decode `missing field` ne` fallback di metadata lato client.
+
 #### `POST /v1/chat/completions` — streaming e non-streaming
 
 Richiesta standard OpenAI Chat Completions con `stream: true` oppure `stream: false`:
@@ -805,6 +807,48 @@ curl http://127.0.0.1:5045/v1/chat/completions \
 - **Errori**: i fallimenti restituiscono l'error envelope OpenAI — `{"error": {"message": ..., "type": ..., "code": ...}}` (es. `401` → `type: "authentication_error"`, `code: "invalid_api_key"`) — mai l'envelope Anthropic-style `{"type":"error",...}`.
 
 Le risposte non-streaming sono oggetti OpenAI `chat.completion` standard (il campo `model` riporta il modello upstream effettivamente usato).
+
+#### `POST /v1/responses` — OpenAI Responses API (Codex CLI ≥ 0.152)
+
+Endpoint in forma OpenAI Responses per client che parlano il protocollo Responses (Codex CLI ≥ 0.152, OpenAI Agents SDK). La richiesta usa gli item Responses (array `input` con item `input_text` / `function_call` / `function_call_output`, `instructions`, `max_output_tokens`, `tools`, `tool_choice`, `stream`):
+
+```bash
+curl http://127.0.0.1:5045/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $LLMPROXY_API_KEY" \
+  -d '{
+    "model": "llmproxy",
+    "instructions": "Rispondi in modo conciso.",
+    "max_output_tokens": 64,
+    "input": [{ "role": "user", "content": [{ "type": "input_text", "text": "Ciao dal proxy" }] }]
+  }'
+```
+
+- **Non-streaming**: restituisce un oggetto Responses — `object: "response"`, `status: "completed"`, `output[]` con item `message` (`content[].type: "output_text"`) o `function_call`, `usage` con `input_tokens` / `output_tokens` / `total_tokens`.
+- **Streaming** (`stream: true`): risponde `Content-Type: text/event-stream` ed emette eventi SSE Responses — `response.created`, `response.output_item.added`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed` — terminati da `data: [DONE]`.
+- **Mapping**: `instructions` → system prompt, `max_output_tokens` → `max_tokens` upstream, gli input item `function_call_output` → messaggi `tool`, `tools`/`tool_choice` → protocollo tool upstream.
+- **Errori**: stesso error envelope OpenAI di `/v1/chat/completions` — `{"error": {"message": ..., "type": ..., "code": ...}}`.
+
+Per usarlo dalla Codex CLI, configura un provider custom che punta al proxy. In questo repository il profilo dedicato e` gia` pronto — basta lanciare `codex -p llmproxy` (nessun export di `LLMPROXY_API_KEY` necessario: l'auth e` un header statico `Authorization: Bearer proxy-local` in `.codex/llmproxy.config.toml`):
+
+```toml
+model_provider = "llmproxy"
+model = "llmproxy"   # oppure un qualsiasi id da GET /v1/models
+
+[model_providers.llmproxy]
+name = "LLMProxy (local)"
+base_url = "http://127.0.0.1:7045/v1"
+wire_api = "responses"   # richiesto da Codex >= 0.152
+# L'auth statico corrisponde alla chiave di default del gate in ingresso del
+# proxy (proxy-local); evita il fallimento "Missing environment variable:
+# LLMPROXY_API_KEY" quando la variabile non e` esportata. Per una chiave di
+# gate diversa, commenta l'header e imposta env_key = "LLMPROXY_API_KEY"
+# esportando la variabile nella shell.
+http_headers = { Authorization = "Bearer proxy-local" }
+# env_key = "LLMPROXY_API_KEY"
+```
+
+`wire_api = "responses"` e` obbligatorio per Codex ≥ 0.152 (il client parla il protocollo Responses).
 
 #### Esempio — registrare llmProxy come provider custom OpenAI
 

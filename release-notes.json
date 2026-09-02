@@ -1,4 +1,16 @@
 {
+  "0.3.128": {
+    "it": [
+      "Rende il payload di `GET /v1/models` conforme allo schema `ModelInfo` di Codex CLI >= 0.152 (tutti i campi obbligatori: `truncation_policy`, `model_messages.instructions_template`, `service_tiers` con `priority`/`flex`, `shell_type`, livelli di reasoning, ecc.): Codex aggiorna il catalogo modelli senza errori di decode `missing field` e senza piu` fallback di metadata lato client.",
+      "Aggiunge il profilo Codex dedicato `.codex/llmproxy.config.toml` senza `env_key` obbligatoria: l'auth verso il gate del proxy usa un header statico `Authorization: Bearer proxy-local`, eliminando l'errore \"Missing environment variable: LLMPROXY_API_KEY\" quando la variabile non e` esportata; `wire_api = \"responses\"` richiesto da Codex >= 0.152.",
+      "Aggiunge i test di contratto del catalogo modelli (`tests/codex-models-contract.test.js`): envelope `data` + `models`, invarianti ModelInfo per ogni entry, modello virtuale + provider, e getter single-model."
+    ],
+    "en": [
+      "Makes the `GET /v1/models` payload conform to the Codex CLI >= 0.152 `ModelInfo` schema (all mandatory fields: `truncation_policy`, `model_messages.instructions_template`, `service_tiers` with `priority`/`flex`, `shell_type`, reasoning levels, etc.): Codex refreshes the model catalog without `missing field` decode errors and without client-side metadata fallback.",
+      "Adds the dedicated Codex profile `.codex/llmproxy.config.toml` without a mandatory `env_key`: auth to the proxy gate uses a static `Authorization: Bearer proxy-local` header, removing the \"Missing environment variable: LLMPROXY_API_KEY\" error when the variable is not exported; `wire_api = \"responses\"` required by Codex >= 0.152.",
+      "Adds the model catalog contract tests (`tests/codex-models-contract.test.js`): `data` + `models` envelope, ModelInfo invariants per entry, virtual + provider models, and single-model getter."
+    ]
+  },
   "0.3.126": {
     "it": [
       "Aggiunge l'endpoint OpenAI-compatible `POST /v1/responses` (Responses API) per client come Codex CLI >= 0.152 e OpenAI Agents SDK, con traduzione bidirezionale Responses <-> Anthropic Messages e streaming SSE (`response.created`, `response.output_item.added`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed`, `[DONE]`).",

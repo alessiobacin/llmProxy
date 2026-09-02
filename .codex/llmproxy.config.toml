@@ -15,8 +15,13 @@ model_provider = "llmproxy"
 [model_providers.llmproxy]
 name = "llmProxy"
 base_url = "http://127.0.0.1:7045/v1"
-env_key = "LLMPROXY_API_KEY"
 wire_api = "responses"
+# Static auth: llmProxy's inbound api-key gate expects "proxy-local" (see
+# docker-compose production env LLMPROXY_API_KEY). A static header avoids the
+# EnvVar failure when LLMPROXY_API_KEY is not exported in the shell. To
+# override, comment the header and uncomment env_key instead.
+http_headers = { Authorization = "Bearer proxy-local" }
+# env_key = "LLMPROXY_API_KEY"
 
 [shell_environment_policy.set]
 ANTHROPIC_BASE_URL = "http://127.0.0.1:7045"

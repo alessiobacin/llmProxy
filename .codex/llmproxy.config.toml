@@ -1,0 +1,34 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# llmProxy — Codex CLI (profilo dedicato per questo progetto)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Uso:  codex -p llmproxy
+# (Codex carica $CODEX_HOME/llmproxy.config.toml sopra la config base)
+#
+# Variabili replicate da .claude/settings.json (configurazione Claude Code
+# esistente). Le LLMPROXY_* client-side vengono comunque lette dal proxy
+# dal .claude/settings.json del progetto a runtime.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+model = "llmproxy"
+model_provider = "llmproxy"
+
+[model_providers.llmproxy]
+name = "llmProxy"
+base_url = "http://127.0.0.1:7045/v1"
+env_key = "LLMPROXY_API_KEY"
+wire_api = "responses"
+
+[shell_environment_policy.set]
+ANTHROPIC_BASE_URL = "http://127.0.0.1:7045"
+ANTHROPIC_API_KEY = "proxy-local"
+API_TIMEOUT_MS = "3000000"
+LLMPROXY_SENDGRID_API_KEY = ""
+LLMPROXY_SENDGRID_FROM_EMAIL = ""
+LLMPROXY_SENDGRID_TO_EMAIL = ""
+LLMPROXY_SENDGRID_TO_MESSAGE_TYPE = "service_unreachable,service_recovered,provider_error,auto_escalation,provider_credit_exhausted,service_update"
+LLMPROXY_INFERENCE_INFO_INLINE = "1"
+LLMPROXY_METERING_INLINE = "0"
+LLMPROXY_PROVIDER_CREDIT_INLINE = "1"
+LLMPROXY_SHORT_ANSWER = "0"
+LLMPROXY_INTENT_ESCALATION = "3"
+LLMPROXY_INTENT_ESCALATION_GAP = "8"

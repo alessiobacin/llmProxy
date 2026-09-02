@@ -3918,6 +3918,82 @@ test("GET /v1/models keeps same model names distinct per provider", async () => 
   });
 });
 
+test("GET /v1/models exposes Codex-compatible `models` array alongside OpenAI `data`", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-codex-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("openrouter", {
+    access_token: "sk-or-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "openrouter",
+    auth_type: "api_key",
+    default_model: "deepseek-v4-flash",
+  }, { name: "OpenRouter" });
+  tokenStore.saveProvider("qwen", {
+    access_token: "sk-qwen-test",
+    token_type: "api_key",
+    scope: "api_key",
+    provider: "qwen",
+    auth_type: "api_key",
+    default_model: "qwen3.7-max",
+  }, { name: "Qwen" });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async () => { throw new Error("fetch should not run"); },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/v1/models`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    // Codex models-manager decodes `{"models":[...]}` — missing field `models`
+    // aborts the models refresh with "failed to decode models response".
+    assert.ok(Array.isArray(payload.models), "response must expose a `models` array for Codex");
+    assert.ok(payload.models.length >= 2);
+    const ids = payload.models.map((m) => m.id);
+    assert.ok(ids.includes("llmproxy"));
+    assert.ok(ids.includes("openrouter:deepseek-v4-flash"));
+    assert.ok(ids.includes("qwen:qwen3.7-max"));
+    for (const entry of payload.models) {
+      assert.equal(entry.object, "model");
+      assert.ok(typeof entry.created === "number");
+      assert.ok(typeof entry.owned_by === "string");
+      // Codex models-manager decodes each entry with a `slug` field — missing
+      // field `slug` aborts the models refresh (iterative decode, next error
+      // after `models` was added).
+      assert.equal(entry.slug, entry.id, "each Codex model entry must expose `slug` equal to its id");
+      // Remaining fields confirmed in the Codex 0.152.1 binary schema.
+      assert.ok(typeof entry.display_name === "string");
+      assert.ok(typeof entry.description === "string");
+      assert.ok(typeof entry.default_reasoning_level === "string");
+      assert.ok(Array.isArray(entry.supported_reasoning_levels));
+      assert.ok(typeof entry.shell_type === "string");
+      assert.ok(typeof entry.visibility === "string");
+      assert.equal(typeof entry.supported_in_api, "boolean");
+      assert.ok(typeof entry.priority === "number");
+      assert.ok(Array.isArray(entry.additional_speed_tiers));
+      assert.ok(Array.isArray(entry.service_tiers));
+      assert.ok(typeof entry.context_window === "number");
+      assert.ok(typeof entry.max_context_window === "number");
+      assert.ok(Array.isArray(entry.input_modalities));
+      assert.equal(typeof entry.supports_search_tool, "boolean");
+      assert.equal(typeof entry.use_responses_lite, "boolean");
+      assert.ok("tool_mode" in entry);
+      assert.ok("multi_agent_version" in entry);
+      // Codex 0.152.1 binary schema also requires `support_verbosity` (bool) —
+      // missing field aborts the models refresh (iterative decode, next error
+      // after `slug` was added).
+      assert.equal(typeof entry.support_verbosity, "boolean");
+    }
+    // OpenAI-compatible clients keep working unchanged.
+    assert.equal(payload.object, "list");
+    assert.ok(Array.isArray(payload.data));
+    assert.deepEqual(payload.models.map((m) => m.id), payload.data.map((m) => m.id));
+  });
+});
+
 test("GET /v1/models/:modelId returns single model or 404", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-single-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

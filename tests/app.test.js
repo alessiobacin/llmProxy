@@ -3994,6 +3994,44 @@ test("GET /v1/models exposes Codex-compatible `models` array alongside OpenAI `d
   });
 });
 
+test("GET /v1/models advertises input_modalities including image for vision-capable models, text-only for non-vision", async () => {
+  // BUG (segnalato dall'utente): input_modalities era hardcoded a ["text"]
+  // per OGNI model entry, incluso il modello virtuale "llmproxy" (che
+  // internamente fa fallback dinamico a un provider con vision) e i
+  // provider realmente vision-capable. Un client Codex/OpenAI-compatible
+  // (es. pi) che legge questo campo per decidere se allegare un'immagine
+  // concludeva sempre "nessun modello supporta le immagini" e ometteva il
+  // paste PRIMA che la richiesta raggiungesse il router lato server (che
+  // instrada correttamente verso provider vision-capable, vedi
+  // tests/e2e-vision-routing.test.js).
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-vision-"));
+  const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });
+  tokenStore.saveProvider("opencode-bacin", {
+    access_token: "sk-test", provider: "opencode", default_model: "deepseek-v4-flash", vision: false,
+  }, { name: "opencode-bacin" });
+  tokenStore.saveProvider("openrouter-openai", {
+    access_token: "sk-test", provider: "openrouter", default_model: "gpt-5.6-luna", vision: true,
+  }, { name: "openrouter-openai" });
+
+  const app = createApp({
+    dataRoot: tempRoot,
+    tokenStore,
+    fetchFn: async () => { throw new Error("fetch should not run"); },
+  });
+
+  await withServer(app, async (baseUrl) => {
+    const payload = await (await fetch(`${baseUrl}/v1/models`)).json();
+    const byId = Object.fromEntries(payload.data.map((m) => [m.id, m]));
+
+    assert.deepEqual(byId["opencode:deepseek-v4-flash"].input_modalities, ["text"],
+      "non-vision provider must advertise text-only input_modalities");
+    assert.deepEqual(byId["openrouter:gpt-5.6-luna"].input_modalities, ["text", "image"],
+      "vision-capable provider must advertise image input_modalities");
+    assert.deepEqual(byId["llmproxy"].input_modalities, ["text", "image"],
+      "the auto-routing llmproxy model must advertise image support since it dynamically falls back to a vision-capable provider");
+  });
+});
+
 test("GET /v1/models/:modelId returns single model or 404", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llmproxy-app-v1-models-single-"));
   const tokenStore = createTokenStore({ filePath: path.join(tempRoot, "copilot-token.json") });

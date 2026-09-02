@@ -1,0 +1,110 @@
+flowchart TD
+  %% ═══════════════════════════════════════════════════════════════════════
+  %% llmProxy — FLUSSO LOGICO ESSENZIALE (v0.3.127)
+  %% Ingresso richieste → traduzione protocollo → provider selection →
+  %% fallback chain → risposta/streaming → metering.
+  %% Per il routing dettagliato (scope, reordering, endpoint upstream,
+  %% augmentation inline) vedi docs/flow-chart/llmproxy-routing-flow.mmd
+  %% ═══════════════════════════════════════════════════════════════════════
+
+  IN(["Client: Claude Code / Codex CLI / OpenAI-compatible"]) --> GATE
+
+  GATE{"Gate in ingresso: LLMPROXY_API_KEY<br>(static header su /v1/llm/*, 403 su chiave errata)"}
+  GATE -- "non autorizzato" --> AUTHERR["401/403 — auth/public paths esclusi<br>(/health, /v1/models, /v1/llm/health)"]
+  GATE -- "autorizzato" --> ENTRY{"Entry point HTTP /v1"}
+
+  subgraph ENTRIES["INGRESSO RICHIESTE — lib/app.js"]
+    E1["POST /v1/messages<br>(Anthropic, format: anthropic)"]
+    E2["POST /v1/chat/completions<br>(OpenAI, format: openai)"]
+    E3["POST /v1/responses<br>(Responses API — Codex CLI ≥ 0.152)"]
+    E4["Alias /v1/llm/messages · /v1/llm/chat/completions · /v1/llm/responses<br>(enforceHierarchy: true, billing)"]
+    CAT["GET /v1/models / /v1/models/:modelId<br>(catalogo live, pubblico — ModelInfo per Codex 0.152+)"]
+  end
+
+  ENTRY -- "Anthropic" --> E1
+  ENTRY -- "OpenAI Chat" --> E2
+  ENTRY -- "Responses (Codex ≥ 0.152)" --> E3
+  ENTRY -- "platform alias" --> E4
+  ENTRY -- "catalogo modelli" --> CAT
+
+  E2 --> T1["openAIRequestToAnthropic<br>(traduzione OpenAI → Anthropic + capture OpenAI)"]
+  E3 --> T2["responsesRequestToOpenAIChat → openAIRequestToAnthropic<br>(traduzione Responses → Anthropic + capture Responses)"]
+  E1 --> HIER
+  T1 --> HIER{"enforceHierarchy?"}
+  T2 --> HIER
+  E4 --> HIER
+  HIER -- "sì → hierarchy non valida" --> HE["400 HIERARCHY_CONTEXT REQUIRED/INVALID"]
+  HIER -- "no / valida" --> HM["handleMessages (pipeline comune)"]
+
+  subgraph MODRES["RISOLUZIONE MODELLO — handleMessages"]
+    M1["1. projectSettings.configuredModel (settings.json)"]
+    M2["2. body.model (azzerato se label proxy: llmproxy / proxy-local)"]
+    M3["3. provider default_model"]
+    M1 --> MA["resolveSupportedModel — fallback: claude-sonnet-4.5"]
+    M2 --> MA
+    M3 --> MA
+    MA --> IE{"LLMPROXY_INTENT_ESCALATION > 0?"}
+    IE -- "sì → score + gap (default 8)" --> IE2{"gap ≥ soglia?"}
+    IE2 -- "sì" --> IEOV["override model → escalationModel"]
+    IE2 -- "no" --> PSEL
+    IEOV --> PSEL
+    IE -- "no" --> PSEL
+  end
+
+  HM --> MODRES
+
+  subgraph PROVSELB["PROVIDER SELECTION — resolveProviderSelection<br>(lib/ts-build/gateway/services/llm-transport.js)"]
+    P1["1. provider esplicito: body.provider o model@provider<br>→ match esatto tokenStore (source: local)"]
+    P2["2. registry resolveCandidates(scope, provider)<br>→ provider implementati (source: registry)"]
+    P3["3. registry vuoto → tokenStore ordinato getProviderOrder (source: token-store)"]
+    P4["4. default → provider copilot (source: default)"]
+    P1 --> PC["providerCandidates ordinati per priorità<br>(default_model per-provider per il retry loop)"]
+    P2 --> PC
+    P3 --> PC
+    P4 --> PC
+    PSEL{"provider = auto o esplicito?"}
+    PSEL -- "esplicito sconosciuto" --> U400["400 UNSUPPORTED_PROVIDER"]
+    PSEL -- "provider non implementato" --> N501["501 PROVIDER_NOT_IMPLEMENTED"]
+    PSEL -- "valid" --> PC
+  end
+
+  PSEL --> PROVSELB
+
+  subgraph FALLBACK["FALLBACK CHAIN — executeGatewayRequest (lib/copilot-proxy.js)"]
+    F0["buildProviderCandidates (filtra implementati)"]
+    F0 --> F1["provider preferito dal modello richiesto (provider#model / provider:model)"]
+    F1 --> F2["Loop providers (providerIndex)"]
+    F2 --> F3["Loop modelCandidates (modelIndex)<br>buildProviderModelCandidates: richiesti + default_model"]
+    F3 --> F4["proxyLoop (URL proxy configurati)"]
+    F4 --> F5["Endpoint copilot: chat ↔ responses (switch su errore)<br>+ api-key URL variants / context trim (limite contesto)"]
+    F5 --> F6{"successo? 2xx + body valido"}
+    F6 -- "no (status != 2xx o errore rete)" --> FB["shouldFallbackToNextProvider<br>→ demoteProxy + prossimo proxy / modello / provider"]
+    FB --> F6
+    F6 -- "sì" --> OUT
+    FB -- "esaurita la catena" --> FERR["502 api_error / 401 authentication_error<br>+ metering successo:false"]
+  end
+
+  PC --> FALLBACK
+
+  OUT{"Streaming?"} --> OUTS["SSE: chat.completion.chunk<br>(openai) o response.* (responses) + [DONE]"]
+  OUT -- "no" --> OUTJ["JSON: chat.completion / response<br>(conversione Anthropic → formato richiesto)"]
+  OUTS --> EXTRA["Augmentation inline: metering / inference info / provider credit / short answer"]
+  OUTJ --> EXTRA
+
+  subgraph MET["METERING SINK — metering.js / metering-db / metering-dblayer"]
+    MF["LLMPROXY_MODE"]
+    MF -- "stats/api key" --> M0["LLMPROXY_LLM_STATS_API_KEY (statistiche auth)"]
+    MF -- "platform" --> M1["db-layer DBLAYER_URL + event-bus EVENTBUS_URL"]
+    MF -- "standalone" --> M2["MongoDB LLMPROXY_MONGODB_CONNECTION_STRING o JSONL"]
+  end
+
+  EXTRA --> MET
+  MET --> ERR{"Errore upstream?"}
+  ERR -- "sì" --> SN["notifyProviderError — SendGrid<br/>(provider_error, auto_escalation, …)"]
+  ERR -- "no" --> DONE(["200 OK — turn.completed"])
+
+  style GATE fill:#f9f,stroke:#333
+  style CAT fill:#d4e6f1,stroke:#333
+  style PROVSELB fill:#fdf2ce,stroke:#333
+  style FALLBACK fill:#e2efda,stroke:#333
+  style MET fill:#d9e2f3,stroke:#333

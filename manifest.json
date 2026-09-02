@@ -3,11 +3,11 @@
   "type": "tool",
   "slug": "llm-proxy",
   "name": "llmProxy",
-  "version": "0.3.123",
+  "version": "0.3.126",
   "architecture_version": "v8",
   "tool_id": 45,
   "category": "transport",
-  "description": "Deterministic transport tool for LLM provider calls. Anthropic-compatible /v1/messages endpoint, multi-provider fallback, audit logging and metering hooks. Not an AI module: contains no agents, prompts or LLM-driven reasoning.",
+  "description": "Deterministic transport tool for LLM provider calls. Anthropic-compatible /v1/messages endpoint, OpenAI-compatible /v1/chat/completions and /v1/responses endpoints, multi-provider fallback, audit logging and metering hooks. Not an AI module: contains no agents, prompts or LLM-driven reasoning.",
   "llm_required": false,
   "deterministic": true,
   "stateful": false,
@@ -65,6 +65,16 @@
       "path": "/v1/chat/completions",
       "method": "POST",
       "purpose": "OpenAI-compatible Chat Completions (legacy)."
+    },
+    "openai_responses": {
+      "path": "/v1/responses",
+      "method": "POST",
+      "purpose": "OpenAI-compatible Responses API (Codex CLI >= 0.152, OpenAI Agents SDK)."
+    },
+    "platform_responses_alias": {
+      "path": "/v1/llm/responses",
+      "method": "POST",
+      "purpose": "Platform-facing alias for /v1/responses. Requires HierarchyContext in platform mode."
     },
     "control_plane_legacy": {
       "prefix": "/api",

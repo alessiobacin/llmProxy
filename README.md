@@ -530,7 +530,7 @@ In addition to the core endpoints (`/health`, `/auth/status`, `/auth/logout`, `/
 
 ### Billing attribution context for `/v1/llm/*`
 
-For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`) the caller must provide a hierarchy context for chargeback attribution.
+For platform-facing endpoints (`/v1/llm/messages`, `/v1/llm/chat/completions`, `/v1/llm/responses`) the caller must provide a hierarchy context for chargeback attribution.
 
 Always required in `X-Hierarchy-Context`:
 
@@ -973,6 +973,39 @@ curl http://127.0.0.1:5045/v1/chat/completions \
 
 Non-streaming responses are plain OpenAI `chat.completion` objects (the `model` field echoes the upstream model actually used).
 
+#### `POST /v1/responses` — OpenAI Responses API (Codex CLI ≥ 0.152)
+
+OpenAI Responses-shaped endpoint for clients that speak the Responses protocol (Codex CLI ≥ 0.152, OpenAI Agents SDK). The request uses Responses items (`input` array with `input_text` / `function_call` / `function_call_output` items, `instructions`, `max_output_tokens`, `tools`, `tool_choice`, `stream`):
+
+```bash
+curl http://127.0.0.1:5045/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $LLMPROXY_API_KEY" \
+  -d '{
+    "model": "llmproxy",
+    "instructions": "Rispondi in modo conciso.",
+    "max_output_tokens": 64,
+    "input": [{ "role": "user", "content": [{ "type": "input_text", "text": "Ciao dal proxy" }] }]
+  }'
+```
+
+- **Non-streaming**: returns a Responses object — `object: "response"`, `status: "completed"`, `output[]` with `message` items (`content[].type: "output_text"`) or `function_call` items, `usage` with `input_tokens` / `output_tokens` / `total_tokens`.
+- **Streaming** (`stream: true`): responds `Content-Type: text/event-stream` and emits Responses SSE events — `response.created`, `response.output_item.added`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed` — terminated by `data: [DONE]`.
+- **Mapping**: `instructions` → system prompt, `max_output_tokens` → upstream `max_tokens`, `function_call_output` input items → `tool` messages, `tools`/`tool_choice` → upstream tool protocol.
+- **Errors**: same OpenAI error envelope as `/v1/chat/completions` — `{"error": {"message": ..., "type": ..., "code": ...}}`.
+
+To use it from Codex CLI, configure a custom provider pointing at the proxy:
+
+```toml
+model_provider = "llmproxy"
+model = "meta:muse-spark-1.2"   # or any id from GET /v1/models
+
+[model_providers.llmproxy]
+name = "LLMProxy (local)"
+base_url = "http://127.0.0.1:7045/v1"
+env_key = "LLMPROXY_API_KEY"
+```
+
 #### Example — register llmProxy as a custom OpenAI provider
 
 In any client that supports custom OpenAI endpoints (opencode-style provider schema), configure:
@@ -1026,6 +1059,7 @@ Once any of these clients (or VS Code Chat) is configured, `llmproxy provider:re
 #### Limits
 
 - `POST /v1/llm/chat/completions` (hierarchy-attributed variant) requires platform mode with db-layer/event-bus reachable; in standalone mode it is not available.
+- `POST /v1/llm/responses` (hierarchy-attributed variant) requires platform mode with db-layer/event-bus reachable; in standalone mode it is not available.
 - Tool calls are supported at a base level (definition mapping + streamed deltas); provider-side features beyond the base protocol depend on the upstream provider.
 
 ### CLI -> REST mapping (runtime)

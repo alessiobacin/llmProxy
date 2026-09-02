@@ -1,4 +1,14 @@
 {
+  "0.3.126": {
+    "it": [
+      "Aggiunge l'endpoint OpenAI-compatible `POST /v1/responses` (Responses API) per client come Codex CLI >= 0.152 e OpenAI Agents SDK, con traduzione bidirezionale Responses <-> Anthropic Messages e streaming SSE (`response.created`, `response.output_item.added`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed`, `[DONE]`).",
+      "Aggiunge l'alias platform `POST /v1/llm/responses` con enforcement della HierarchyContext per l'attribuzione dei costi."
+    ],
+    "en": [
+      "Adds the OpenAI-compatible `POST /v1/responses` endpoint (Responses API) for clients such as Codex CLI >= 0.152 and the OpenAI Agents SDK, with bidirectional Responses <-> Anthropic Messages translation and SSE streaming (`response.created`, `response.output_item.added`, `response.output_text.delta`, `response.function_call_arguments.delta`, `response.completed`, `[DONE]`).",
+      "Adds the platform alias `POST /v1/llm/responses` with HierarchyContext enforcement for cost attribution."
+    ]
+  },
   "0.3.119": {
     "it": [
       "Mantiene sincronizzata la chiave API inbound tra CLI, servizio e runtime Docker, usando `ANTHROPIC_AUTH_TOKEN` come fallback.",

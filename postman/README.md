@@ -100,9 +100,11 @@ Endpoint non equivalenti alla CLI (solo API runtime/platform):
 - `GET /api/logs/stream` (SSE)
 - `POST /v1/messages`
 - `POST /v1/chat/completions`
+- `POST /v1/responses`
 - `GET /v1/llm/health`
 - `POST /v1/llm/messages`
 - `POST /v1/llm/chat/completions`
+- `POST /v1/llm/responses`
 - `GET/POST/DELETE /v1/llm/providers`
 
 ## Note operative

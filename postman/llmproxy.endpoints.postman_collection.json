@@ -336,6 +336,22 @@
             "url": "{{baseUrl}}/v1/chat/completions"
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /v1/responses",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{llmProxyModel}}\",\n  \"instructions\": \"Rispondi in modo conciso.\",\n  \"max_output_tokens\": 64,\n  \"input\": [\n    { \"role\": \"user\", \"content\": [ { \"type\": \"input_text\", \"text\": \"Hello from Postman (Responses API)\" } ] }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/responses"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});", "if (pm.response.code === 200) {", "  const body = pm.response.json();", "  pm.test('Responses shape', function () {", "    pm.expect(body.object).to.eql('response');", "    pm.expect(body.status).to.eql('completed');", "    pm.expect(body.output[0].type).to.eql('message');", "  });", "}"] } }]
         }
       ]
     },
@@ -427,6 +443,39 @@
               "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"expect hierarchy error\" }\n  ]\n}"
             },
             "url": "{{baseUrl}}/v1/llm/chat/completions"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', function () {", "  pm.response.to.have.status(400);", "});", "pm.test('Error code is HIERARCHY_CONTEXT_REQUIRED', function () {", "  pm.expect(pm.response.json().error.code).to.eql('HIERARCHY_CONTEXT_REQUIRED');", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/responses (valid billing context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Hierarchy-Context", "value": "{{hierarchyContextProject}}" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"max_output_tokens\": 64,\n  \"input\": [\n    { \"role\": \"user\", \"content\": [ { \"type\": \"input_text\", \"text\": \"responses platform ping\" } ] }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/responses"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status 200 or 401', function () {", "  pm.expect([200, 401]).to.include(pm.response.code);", "});"] } }]
+        },
+        {
+          "name": "POST /v1/llm/responses (missing hierarchy context)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "{{traceId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"copilot\",\n  \"model\": \"gpt-4.1\",\n  \"input\": [\n    { \"role\": \"user\", \"content\": [ { \"type\": \"input_text\", \"text\": \"expect hierarchy error\" } ] }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/v1/llm/responses"
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Status is 400', function () {", "  pm.response.to.have.status(400);", "});", "pm.test('Error code is HIERARCHY_CONTEXT_REQUIRED', function () {", "  pm.expect(pm.response.json().error.code).to.eql('HIERARCHY_CONTEXT_REQUIRED');", "});"] } }]
         },

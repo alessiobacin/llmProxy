@@ -80,8 +80,10 @@
 | E-03 | `POST /auth/logout` | README §Local logout; app.js | 200 `{ok:true}`; clear tokens | sì | downstream: E-02, E-17, C-10, C-25 |
 | E-04 | `POST /v1/messages` | README §Anthropic proxy; openapi; manifest | Anthropic Messages; fallback; shortAnswer; streaming; metadata inline; 200/400/401/503; x-project-path header | sì (metering+request logs+demote) | — |
 | E-05 | `POST /v1/chat/completions` | app.js (legacy); openapi: assente | OpenAI-shaped; `stream:true` → **501 STREAM_NOT_IMPLEMENTED** | sì (idem E-04) | non in README/openapi |
+| E-05b | `POST /v1/responses` | app.js (legacy); openapi; README | OpenAI Responses-shaped (Codex CLI ≥ 0.152); `stream:true` → SSE `response.*` events + `[DONE]`; non-streaming → `object:"response"` | sì (idem E-04) | — |
 | E-06 | `POST /v1/llm/messages` | README §Billing; openapi; manifest | come E-04 + **HierarchyContext obbligatoria** (400 se assente/invalida) | sì (idem) | — |
 | E-07 | `POST /v1/llm/chat/completions` | app.js (canonical) | come E-05 + enforce hierarchy | sì (idem) | non in openapi |
+| E-07b | `POST /v1/llm/responses` | app.js (canonical); openapi | come E-05b + enforce hierarchy | sì (idem) | — |
 | E-08 | `GET /v1/llm/health` | manifest; openapi | 200 `{ok,mode,authenticated,providers[],manifest_version:"v11"}` | no | — |
 | E-09 | `GET /v1/llm/providers` | app.js (codice) | 200 `{entries:[…]}`; filter scope_type/scope_id/provider | no | non in openapi |
 | E-10 | `POST /v1/llm/providers` | app.js (codice) | 201 entry; platform: HC richiesta (400) + admin/owner (403 AUTH_REQUIRED) | sì (provider-registry.json) | non in openapi |

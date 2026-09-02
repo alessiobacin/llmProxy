@@ -969,6 +969,90 @@ paths:
           description: Chat completion (same shapes as /v1/chat/completions, streaming included).
         "400":
           description: HIERARCHY_CONTEXT_REQUIRED when the hierarchy context is missing or invalid.
+  /v1/responses:
+    post:
+      tags: [runtime]
+      summary: OpenAI-compatible Responses API.
+      description: |
+        OpenAI Responses-shaped endpoint for clients that speak the Responses protocol (Codex CLI >= 0.152,
+        OpenAI Agents SDK). The request body uses Responses items (`input` array with `input_text` /
+        `function_call` / `function_call_output` items, `instructions`, `max_output_tokens`, `tools`,
+        `tool_choice`, `stream`). The response is a Responses object (`object: "response"`, `status:
+        "completed"`, `output[]` with `message`/`function_call` items, `usage` with
+        input_tokens/output_tokens/total_tokens). With `stream: true` the response is an SSE stream of
+        Responses events (`response.created`, `response.output_item.added`, `response.output_text.delta`,
+        `response.function_call_arguments.delta`, `response.completed`) terminated by `data: [DONE]`.
+        Errors use the OpenAI envelope `{error: {message, type, code}}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, input]
+              properties:
+                model:
+                  type: string
+                  description: Qualified model id `provider:model` (from GET /v1/models) or bare model id.
+                instructions:
+                  type: string
+                  description: System-level instructions, mapped to the upstream system prompt.
+                input:
+                  type: array
+                  description: Responses input items (role-based messages with `input_text` content, `function_call`, `function_call_output`).
+                  items: {type: object}
+                max_output_tokens:
+                  type: integer
+                  description: Maximum output tokens, mapped to the upstream max_tokens.
+                stream:
+                  type: boolean
+                  default: false
+                  description: "When true the response is an SSE stream of Responses events ending with `data: [DONE]`."
+                tools:
+                  type: array
+                  description: OpenAI tool definitions, translated to the upstream protocol.
+                  items: {type: object}
+                tool_choice:
+                  description: OpenAI tool_choice (auto/required/function mapping).
+      responses:
+        "200":
+          description: |
+            Responses object. With stream=true the content type is text/event-stream and the body is
+            Responses SSE events (response.created, response.output_item.added, response.output_text.delta,
+            response.function_call_arguments.delta, response.completed) terminated by data: [DONE].
+          content:
+            application/json:
+              schema:
+                type: object
+                description: OpenAI Responses object (model echoes the upstream model used).
+            text/event-stream:
+              schema:
+                type: string
+                description: "SSE stream of Responses events, terminated by `data: [DONE]`."
+        "400":
+          description: Invalid request (OpenAI error envelope).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIErrorResponse'
+        "401":
+          description: Provider authentication failure or missing inbound API key (OpenAI error envelope).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIErrorResponse'
+  /v1/llm/responses:
+    post:
+      tags: [platform]
+      summary: Platform-facing alias for /v1/responses.
+      description: |
+        Requires HierarchyContext in platform mode, like /v1/llm/messages. Requires platform mode
+        (db-layer/event-bus reachable); not available in standalone mode.
+      responses:
+        "200":
+          description: Responses object (same shapes as /v1/responses, streaming included).
+        "400":
+          description: HIERARCHY_CONTEXT_REQUIRED when the hierarchy context is missing or invalid.
   /v1/messages:
     post:
       tags: [runtime]

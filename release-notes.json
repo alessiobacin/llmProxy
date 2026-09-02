@@ -1,5 +1,5 @@
 {
-  "0.3.127": {
+  "0.3.128": {
     "it": [
       "Rende il payload di `GET /v1/models` conforme allo schema `ModelInfo` di Codex CLI >= 0.152 (tutti i campi obbligatori: `truncation_policy`, `model_messages.instructions_template`, `service_tiers` con `priority`/`flex`, `shell_type`, livelli di reasoning, ecc.): Codex aggiorna il catalogo modelli senza errori di decode `missing field` e senza piu` fallback di metadata lato client.",
       "Aggiunge il profilo Codex dedicato `.codex/llmproxy.config.toml` senza `env_key` obbligatoria: l'auth verso il gate del proxy usa un header statico `Authorization: Bearer proxy-local`, eliminando l'errore \"Missing environment variable: LLMPROXY_API_KEY\" quando la variabile non e` esportata; `wire_api = \"responses\"` richiesto da Codex >= 0.152.",

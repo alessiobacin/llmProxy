@@ -1,4 +1,12 @@
 {
+  "0.3.131": {
+    "it": [
+      "Corregge le probe OpenCode Go su modelli OpenAI-compatible inoltrando `x-opencode-session`, evitando l'errore `MissingSessionID`."
+    ],
+    "en": [
+      "Fixes OpenCode Go probes for OpenAI-compatible models by forwarding `x-opencode-session`, avoiding `MissingSessionID` errors."
+    ]
+  },
   "0.3.130": {
     "it": [
       "Corregge OpenCode Go per instradare i modelli Anthropic-native su `/messages` e i modelli OpenAI-compatible, come DeepSeek, su `/chat/completions`."

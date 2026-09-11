@@ -1,4 +1,12 @@
 {
+  "0.3.133": {
+    "it": [
+      "Allinea il benchmark di `provider:list` al routing dinamico OpenCode Go, eliminando gli errori falsi su modelli Messages, Chat Completions e Responses."
+    ],
+    "en": [
+      "Aligns the `provider:list` benchmark with dynamic OpenCode Go routing, removing false failures for Messages, Chat Completions, and Responses models."
+    ]
+  },
   "0.3.132": {
     "it": [
       "Completa il routing OpenCode Go per i modelli Responses API, inclusi `muse-spark-1.3-contributor`, con endpoint `/zen/go/v1/responses`."

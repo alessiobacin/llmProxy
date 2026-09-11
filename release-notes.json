@@ -1,4 +1,12 @@
 {
+  "0.3.130": {
+    "it": [
+      "Corregge OpenCode Go per instradare i modelli Anthropic-native su `/messages` e i modelli OpenAI-compatible, come DeepSeek, su `/chat/completions`."
+    ],
+    "en": [
+      "Fixes OpenCode Go routing by sending Anthropic-native models to `/messages` and OpenAI-compatible models such as DeepSeek to `/chat/completions`."
+    ]
+  },
   "0.3.129": {
     "it": [
       "Aggiunge il provider API-key `opencode-go` per OpenCode Go, con endpoint Anthropic Messages dedicato e supporto al requisito `x-opencode-session` per routing e prompt caching."

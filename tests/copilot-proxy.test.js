@@ -107,7 +107,7 @@ test("API_KEY_PROVIDER_CONFIGS.opencode-go accepts only OpenCode Go messages mod
   assert.equal(typeof opencodeGo.supportsModel, "function");
   assert.equal(opencodeGo.supportsModel("minimax-m3"), true);
   assert.equal(opencodeGo.supportsModel("qwen3.7-max"), true);
-  assert.equal(opencodeGo.supportsModel("deepseek-v4-flash"), false);
+  assert.equal(opencodeGo.supportsModel("deepseek-v4-flash"), true);
 });
 
 test("getApiKeyProviderRequestUrls routes qwen token-plan keys to the token-plan endpoint first", () => {
@@ -126,9 +126,16 @@ test("getApiKeyProviderRequestUrls honors an explicit qwen payg plan", () => {
 });
 
 test("getApiKeyProviderRequestUrls returns the OpenCode Go messages endpoint", () => {
-  const urls = getApiKeyProviderRequestUrls({ provider: "opencode-go", access_token: "sk-opencode-test" });
+  const urls = getApiKeyProviderRequestUrls({ provider: "opencode-go", access_token: "sk-opencode-test" }, undefined, "minimax-m3");
   assert.deepEqual(urls, [
     "https://opencode.ai/zen/go/v1/messages",
+  ]);
+});
+
+test("getApiKeyProviderRequestUrls routes OpenCode Go chat models to chat completions", () => {
+  const urls = getApiKeyProviderRequestUrls({ provider: "opencode-go", access_token: "sk-opencode-test" }, undefined, "deepseek-v4-flash");
+  assert.deepEqual(urls, [
+    "https://opencode.ai/zen/go/v1/chat/completions",
   ]);
 });
 

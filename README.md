@@ -1226,7 +1226,7 @@ llmproxy stats:reset
 Adds a provider identified by `<id>`. Behaviour depends on the provider type:
 
 - **Copilot OAuth providers** (unknown ids or `copilot`): starts the GitHub Copilot device flow.
-- **API-key providers** (e.g. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `meta`, `zai`): stores the supplied `--api-key` directly without any browser flow. Requires `--vision <true|false>` to indicate whether the model supports image input.
+- **API-key providers** (e.g. `openrouter`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `meta`, `zai`, `opencode`, `opencode-go`): stores the supplied `--api-key` directly without any browser flow. Requires `--vision <true|false>` to indicate whether the model supports image input.
 
 The `--vision` flag is **mandatory** for API-key providers. When a request contains images, providers with `vision: false` are automatically skipped during fallback.
 
@@ -1248,6 +1248,8 @@ Known API-key providers:
 | `kimi` | Kimi (Moonshot) |
 | `zai` / `z.ai` | Z.ai |
 | `meta` | Meta AI (Responses API `api.meta.ai/v1/responses`, default model `muse-spark-1.2`) |
+| `opencode` | OpenCode Zen (pay-as-you-go) |
+| `opencode-go` | OpenCode Go |
 
 `qwen` note: `llmproxy` automatically uses the Token Plan OpenAI-compatible endpoint for `sk-sp-...` keys and keeps using `dashscope-intl` for standard pay-as-you-go keys. If you want to force the choice during setup, use `--plan subscription` or `--plan payg`.
 

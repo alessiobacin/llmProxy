@@ -1035,7 +1035,7 @@ llmproxy stats:reset
 Aggiunge un provider identificato da `<id>`. Il comportamento dipende dal tipo di provider:
 
 - **Provider Copilot OAuth** (id sconosciuti o `copilot`): avvia il device flow di GitHub Copilot.
-- **Provider con API-key** (es. `openrouter`, `qwen`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `meta`, `zai`): salva direttamente la `--api-key` fornita, senza flusso browser. Richiede `--vision <true|false>` per indicare se il modello supporta l'input di immagini.
+- **Provider con API-key** (es. `openrouter`, `qwen`, `groq`, `anthropic`, `openai`, `deepseek`, `mistral`, `xai`, `perplexity`, `together`, `fireworks`, `kimi`, `meta`, `zai`, `opencode`, `opencode-go`): salva direttamente la `--api-key` fornita, senza flusso browser. Richiede `--vision <true|false>` per indicare se il modello supporta l'input di immagini.
 
 Il flag `--vision` è **obbligatorio** per i provider API-key. Quando una richiesta contiene immagini, i provider con `vision: false` vengono automaticamente saltati durante il fallback.
 
@@ -1057,6 +1057,8 @@ Provider noti con API-key:
 | `fireworks` | Fireworks AI |
 | `kimi` | Kimi (Moonshot) |
 | `zai` / `z.ai` | Z.ai |
+| `opencode` | OpenCode Zen (consumo) |
+| `opencode-go` | OpenCode Go |
 
 Nota `qwen`: `llmproxy` usa automaticamente l'endpoint OpenAI-compatible del Token Plan per le chiavi `sk-sp-...` e continua a usare `dashscope-intl` per le normali chiavi pay-as-you-go. Se vuoi forzare esplicitamente la scelta in configurazione, usa `--plan subscription` oppure `--plan payg`.
 
@@ -1070,7 +1072,10 @@ llmproxy provider:add qwen --api-key sk-qwen-... --model qwen3.7-max --vision fa
 llmproxy provider:add deepseek --api-key sk-... --model deepseek-v4-pro --vision false
 llmproxy provider:add kimi --api-key sk-... --model kimi-k2.6 --vision true
 llmproxy provider:add meta --api-key "$MODEL_API_KEY" --model muse-spark-1.2 --vision true
+llmproxy provider:add opencode-go --api-key "$OPENCODE_GO_API_KEY" --model minimax-m3 --vision false
 ```
+
+OpenCode Go usa il protocollo Anthropic Messages sull'endpoint Go di OpenCode. llmProxy inoltra l'header `x-opencode-session` ricevuto dal client oppure ne genera uno per la richiesta, come richiesto dal servizio per il routing e il prompt caching.
 
 > **Nota (OpenAI `max_tokens`)**: i modelli OpenAI correnti (es. `gpt-5.6-luna`) rifiutano `max_tokens`. llmProxy invia automaticamente `max_completion_tokens` per ogni richiesta e probe del provider `openai`.
 

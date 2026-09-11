@@ -132,6 +132,22 @@ test("getApiKeyProviderRequestUrls returns the OpenCode Go messages endpoint", (
   ]);
 });
 
+test("probeApiKeyProviderModel sends the OpenCode Go session header", async () => {
+  let requestHeaders;
+  const result = await probeApiKeyProviderModel({
+    provider: "opencode-go",
+    apiKey: "sk-opencode-test",
+    model: "minimax-m3",
+    fetchFn: async (_url, options) => {
+      requestHeaders = options.headers;
+      return { ok: true, status: 200 };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(requestHeaders["x-opencode-session"], /^probe-/);
+});
+
 test("getApiKeyProviderRequestUrls returns the NVIDIA chat completions endpoint", () => {
   const urls = getApiKeyProviderRequestUrls({ provider: "nvidia", access_token: "nvapi-test" });
   assert.deepEqual(urls, [

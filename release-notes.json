@@ -1,4 +1,12 @@
 {
+  "0.3.129": {
+    "it": [
+      "Aggiunge il provider API-key `opencode-go` per OpenCode Go, con endpoint Anthropic Messages dedicato e supporto al requisito `x-opencode-session` per routing e prompt caching."
+    ],
+    "en": [
+      "Adds the `opencode-go` API-key provider for OpenCode Go, with its dedicated Anthropic Messages endpoint and support for the required `x-opencode-session` header used for routing and prompt caching."
+    ]
+  },
   "0.3.128": {
     "it": [
       "Rende il payload di `GET /v1/models` conforme allo schema `ModelInfo` di Codex CLI >= 0.152 (tutti i campi obbligatori: `truncation_policy`, `model_messages.instructions_template`, `service_tiers` con `priority`/`flex`, `shell_type`, livelli di reasoning, ecc.): Codex aggiorna il catalogo modelli senza errori di decode `missing field` e senza piu` fallback di metadata lato client.",

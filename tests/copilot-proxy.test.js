@@ -139,6 +139,13 @@ test("getApiKeyProviderRequestUrls routes OpenCode Go chat models to chat comple
   ]);
 });
 
+test("getApiKeyProviderRequestUrls routes OpenCode Go Responses models to responses", () => {
+  const urls = getApiKeyProviderRequestUrls({ provider: "opencode-go", access_token: "sk-opencode-test" }, undefined, "muse-spark-1.3-contributor");
+  assert.deepEqual(urls, [
+    "https://opencode.ai/zen/go/v1/responses",
+  ]);
+});
+
 test("probeApiKeyProviderModel sends the OpenCode Go session header", async () => {
   let requestHeaders;
   const result = await probeApiKeyProviderModel({

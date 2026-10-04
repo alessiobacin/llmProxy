@@ -39,8 +39,9 @@ services:
       LLMPROXY_API_KEY: "proxy-local"
       LLMPROXY_HOME: "/home/node/.local/share/llmProxy"
       LLMPROXY_METERING_SINK: "dblayer"
-      LLMPROXY_METERING_INLINE: "1"
-      LLMPROXY_INFERENCE_INFO_INLINE: "1"
+      LLMPROXY_METERING_INLINE: "0"
+      LLMPROXY_INFERENCE_INFO_INLINE: "0"
+      LLMPROXY_PROVIDER_CREDIT_INLINE: "0"
       LLMPROXY_INTENT_ESCALATION: "5"
       LLMPROXY_INTENT_ESCALATION_GAP: "8"
       # db-layer is a Docker sibling service; use the service name as hostname

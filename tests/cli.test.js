@@ -3596,9 +3596,9 @@ test("windows persistent install script resolves the global cmd wrapper explicit
   });
   assert.match(script, /\$tmpdir = Join-Path/);
   assert.match(script, /& llmproxy service:stop 2>\$null \| Out-Null/);
-  assert.match(script, /npm pack \$packageRoot --pack-destination \$tmpdir/);
+  assert.match(script, /Invoke-Npm -NpmArgs @\('pack', \$packageRoot, '--pack-destination', \$tmpdir\)/);
   assert.match(script, /\$packageFile = Get-ChildItem \(Join-Path \$tmpdir '\*\.tgz'\)/);
-  assert.match(script, /npm install -g \$packageFile 2>&1/);
+  assert.match(script, /Invoke-Npm -NpmArgs @\('install', '-g', \$packageFile\)/);
   assert.match(script, /function Resolve-LlmproxyGlobalBin\(\[string\]\$Prefix\)/);
   assert.match(script, /Join-Path \$Prefix "llmproxy\.cmd"/);
   assert.match(script, /\$globalBin = Resolve-LlmproxyGlobalBin \$npmPrefix/);
